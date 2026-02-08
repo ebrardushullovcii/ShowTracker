@@ -1,4 +1,4 @@
-import { Link } from "expo-router";
+import { Link, useRouter } from "expo-router";
 import { useState } from "react";
 import { Text, TextInput, View } from "react-native";
 import { useAuthActions } from "@convex-dev/auth/react";
@@ -7,6 +7,7 @@ import { ScreenWrapper } from "@/components/ScreenWrapper";
 
 export default function LoginScreen() {
   const { signIn } = useAuthActions();
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -27,10 +28,13 @@ export default function LoginScreen() {
         password,
       });
 
-      if (!result.signingIn) {
-        setError("Invalid credentials.");
+      if (result.signingIn) {
+        router.replace("/");
+        return;
       }
+      setError("Invalid credentials.");
     } catch (authError) {
+      console.error("Login failed", authError);
       setError(
         authError instanceof Error ? authError.message : "Failed to sign in."
       );
@@ -43,8 +47,14 @@ export default function LoginScreen() {
     setIsPending(true);
     setError(null);
     try {
-      await signIn("anonymous");
+      const result = await signIn("anonymous");
+      if (result.signingIn) {
+        router.replace("/");
+        return;
+      }
+      setError("Failed to continue as guest.");
     } catch (authError) {
+      console.error("Anonymous login failed", authError);
       setError(
         authError instanceof Error
           ? authError.message

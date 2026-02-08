@@ -1,4 +1,4 @@
-import { Link } from "expo-router";
+import { Link, useRouter } from "expo-router";
 import { useState } from "react";
 import { Text, TextInput, View } from "react-native";
 import { useAuthActions } from "@convex-dev/auth/react";
@@ -7,6 +7,7 @@ import { ScreenWrapper } from "@/components/ScreenWrapper";
 
 export default function RegisterScreen() {
   const { signIn } = useAuthActions();
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -33,10 +34,13 @@ export default function RegisterScreen() {
         password,
       });
 
-      if (!result.signingIn) {
-        setError("Failed to create account.");
+      if (result.signingIn) {
+        router.replace("/");
+        return;
       }
+      setError("Failed to create account.");
     } catch (authError) {
+      console.error("Register failed", authError);
       setError(
         authError instanceof Error
           ? authError.message
