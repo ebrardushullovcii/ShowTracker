@@ -40,6 +40,12 @@ export type AniListScheduleResult = {
   };
 };
 
+export type AniListMediaByIdResult = {
+  data: {
+    Media: AniListMedia | null;
+  };
+};
+
 export type AniListAiringSchedule = {
   id: number;
   airingAt: number;
@@ -210,4 +216,34 @@ export async function getAniListAiringSchedule(
 
   setCached(cacheKey, data, cacheTtlMs);
   return data;
+}
+
+export async function getAniListMediaById(id: number) {
+  const cacheKey = `anilist-media:${id}`;
+  const cached = getCached<AniListMediaByIdResult>(cacheKey);
+  if (cached) {
+    return cached.data.Media;
+  }
+
+  const data = await request<AniListMediaByIdResult>(
+    `query ($id: Int) {
+      Media(id: $id, type: ANIME) {
+        id
+        title { romaji english native }
+        description
+        coverImage { large extraLarge }
+        bannerImage
+        genres
+        status
+        episodes
+        duration
+        averageScore
+        startDate { year month day }
+      }
+    }`,
+    { id }
+  );
+
+  setCached(cacheKey, data, cacheTtlMs);
+  return data.data.Media;
 }

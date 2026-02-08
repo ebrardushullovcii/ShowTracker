@@ -17,7 +17,7 @@ export type TmdbSearchResult = {
 
 export type TmdbMedia = {
   id: number;
-  media_type?: "tv" | "movie";
+  media_type?: "tv" | "movie" | "person";
   name?: string;
   title?: string;
   overview?: string;
