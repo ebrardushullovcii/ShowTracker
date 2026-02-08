@@ -14,20 +14,33 @@ export const tokenStorage: TokenStorage = {
     if (Platform.OS === "web") {
       return getWebStorage()?.getItem(key) ?? null;
     }
-    return SecureStore.getItemAsync(key);
+    try {
+      return await SecureStore.getItemAsync(key);
+    } catch (error) {
+      console.error("SecureStore getItem failed", error);
+      return null;
+    }
   },
   async setItem(key, value) {
     if (Platform.OS === "web") {
       getWebStorage()?.setItem(key, value);
       return;
     }
-    await SecureStore.setItemAsync(key, value);
+    try {
+      await SecureStore.setItemAsync(key, value);
+    } catch (error) {
+      console.error("SecureStore setItem failed", error);
+    }
   },
   async removeItem(key) {
     if (Platform.OS === "web") {
       getWebStorage()?.removeItem(key);
       return;
     }
-    await SecureStore.deleteItemAsync(key);
+    try {
+      await SecureStore.deleteItemAsync(key);
+    } catch (error) {
+      console.error("SecureStore removeItem failed", error);
+    }
   },
 };

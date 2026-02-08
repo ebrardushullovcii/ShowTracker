@@ -1,4 +1,6 @@
 import { getCached, setCached } from "@/lib/api/cache";
+import { normalizeTmdbEpisode } from "@/lib/api/normalize";
+import type { NormalizedEpisode } from "@/lib/api/types";
 
 const tmdbBaseUrl =
   process.env.EXPO_PUBLIC_TMDB_BASE_URL ?? "https://api.themoviedb.org/3";
@@ -64,8 +66,6 @@ export type TmdbEpisode = {
   air_date?: string | null;
   runtime?: number | null;
 };
-
-export type TmdbEpisodeDetails = TmdbEpisode;
 
 function assertApiKey() {
   if (!tmdbApiKey) {
@@ -181,8 +181,9 @@ export async function getTmdbEpisodeDetails(
   id: number,
   seasonNumber: number,
   episodeNumber: number
-) {
-  return request<TmdbEpisodeDetails>(
+): Promise<NormalizedEpisode> {
+  const response = await request<TmdbEpisode>(
     `/tv/${id}/season/${seasonNumber}/episode/${episodeNumber}`
   );
+  return normalizeTmdbEpisode(response);
 }

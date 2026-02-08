@@ -9,11 +9,16 @@ export default function ProfileScreen() {
   const { signOut } = useAuthActions();
   const { isAuthenticated } = useConvexAuth();
   const [isSigningOut, setIsSigningOut] = useState(false);
+  const [signOutError, setSignOutError] = useState<string | null>(null);
 
   const handleSignOut = async () => {
+    setSignOutError(null);
     setIsSigningOut(true);
     try {
       await signOut();
+    } catch (error) {
+      console.error("Sign out failed", error);
+      setSignOutError("Could not sign out. Please try again.");
     } finally {
       setIsSigningOut(false);
     }
@@ -38,6 +43,11 @@ export default function ProfileScreen() {
           onPress={handleSignOut}
           disabled={!isAuthenticated || isSigningOut}
         />
+        {signOutError ? (
+          <Text className="text-sm text-red-500 dark:text-red-400">
+            {signOutError}
+          </Text>
+        ) : null}
       </View>
     </ScreenWrapper>
   );
