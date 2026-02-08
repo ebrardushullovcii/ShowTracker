@@ -1,7 +1,24 @@
+import { useState } from "react";
 import { Text, View } from "react-native";
+import { useConvexAuth } from "convex/react";
+import { useAuthActions } from "@convex-dev/auth/react";
+import { Button } from "@/components/Button";
 import { ScreenWrapper } from "@/components/ScreenWrapper";
 
 export default function ProfileScreen() {
+  const { signOut } = useAuthActions();
+  const { isAuthenticated } = useConvexAuth();
+  const [isSigningOut, setIsSigningOut] = useState(false);
+
+  const handleSignOut = async () => {
+    setIsSigningOut(true);
+    try {
+      await signOut();
+    } finally {
+      setIsSigningOut(false);
+    }
+  };
+
   return (
     <ScreenWrapper>
       <View className="gap-3">
@@ -16,6 +33,11 @@ export default function ProfileScreen() {
             User stats and settings components will live here.
           </Text>
         </View>
+        <Button
+          label={isSigningOut ? "Signing out..." : "Sign out"}
+          onPress={handleSignOut}
+          disabled={!isAuthenticated || isSigningOut}
+        />
       </View>
     </ScreenWrapper>
   );

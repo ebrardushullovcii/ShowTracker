@@ -65,6 +65,8 @@ export type TmdbEpisode = {
   runtime?: number | null;
 };
 
+export type TmdbEpisodeDetails = TmdbEpisode;
+
 function assertApiKey() {
   if (!tmdbApiKey) {
     throw new Error("Missing EXPO_PUBLIC_TMDB_API_KEY");
@@ -88,7 +90,7 @@ async function request<T>(path: string, params?: Record<string, string | number>
   const parseResponseBody = async (response: Response) => {
     try {
       return await response.json();
-    } catch (error) {
+    } catch {
       return await response.text();
     }
   };
@@ -173,4 +175,14 @@ export async function getTmdbShowDetails(
 
 export async function getTmdbSeasonDetails(id: number, seasonNumber: number) {
   return request<TmdbSeasonDetails>(`/tv/${id}/season/${seasonNumber}`);
+}
+
+export async function getTmdbEpisodeDetails(
+  id: number,
+  seasonNumber: number,
+  episodeNumber: number
+) {
+  return request<TmdbEpisodeDetails>(
+    `/tv/${id}/season/${seasonNumber}/episode/${episodeNumber}`
+  );
 }
