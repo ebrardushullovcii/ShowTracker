@@ -1,9 +1,7 @@
 language: en-US
 tone_instructions: >-
   Be direct and concise. Focus on correctness, performance, and security.
-  Flag real issues, not style nitpicks. This is a React Native + Convex project
-  built by AI agents — pay extra attention to API key leaks, missing error handling,
-  and Convex anti-patterns.
+  Flag real issues, not style nitpicks. Watch for API key leaks and Convex anti-patterns.
 early_access: true
 enable_free_tier: true
 
