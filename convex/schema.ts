@@ -16,9 +16,15 @@ export default defineSchema({
     tokenIdentifier: v.optional(v.string()),
     createdAt: v.optional(v.number()),
   })
-    .index("email", ["email", "_creationTime"])
-    .index("phone", ["phone", "_creationTime"])
+    .index("email", ["email"])
+    .index("phone", ["phone"])
     .index("by_tokenIdentifier", ["tokenIdentifier"]),
+  authRefreshTokens: defineTable({
+    sessionId: v.id("authSessions"),
+    expirationTime: v.number(),
+    firstUsedTime: v.optional(v.number()),
+    parentRefreshTokenId: v.optional(v.id("authRefreshTokens")),
+  }).index("sessionId", ["sessionId"]),
   shows: defineTable({
     tmdbId: v.optional(v.number()),
     anilistId: v.optional(v.number()),
