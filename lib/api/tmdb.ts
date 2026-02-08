@@ -1,4 +1,10 @@
 import { getCached, setCached } from "@/lib/api/cache";
+import type { NormalizedSeason, NormalizedShow } from "@/lib/api/types";
+import {
+  normalizeTmdbMedia,
+  normalizeTmdbSeason,
+  normalizeTmdbShowDetails,
+} from "@/lib/api/normalize";
 
 const tmdbBaseUrl =
   process.env.EXPO_PUBLIC_TMDB_BASE_URL ?? "https://api.themoviedb.org/3";
@@ -140,9 +146,9 @@ export async function searchTmdb(
   query: string,
   mediaType: "multi" | "tv" | "movie" = "multi",
   page = 1
-) {
+): Promise<NormalizedShow[]> {
   const cacheKey = `tmdb-search:${mediaType}:${query}:${page}`;
-  const cached = getCached<TmdbSearchResult>(cacheKey);
+  const cached = getCached<NormalizedShow[]>(cacheKey);
   if (cached) {
     return cached;
   }
@@ -151,33 +157,42 @@ export async function searchTmdb(
     page,
     include_adult: "false",
   });
-  setCached(cacheKey, data, cacheTtlMs);
-  return data;
+  const normalized = data.results.map(normalizeTmdbMedia);
+  setCached(cacheKey, normalized, cacheTtlMs);
+  return normalized;
 }
 
 export async function getTrendingTmdb(
   mediaType: "all" | "tv" | "movie" = "all",
   timeWindow: "day" | "week" = "week"
-) {
+): Promise<NormalizedShow[]> {
   const cacheKey = `tmdb-trending:${mediaType}:${timeWindow}`;
-  const cached = getCached<TmdbSearchResult>(cacheKey);
+  const cached = getCached<NormalizedShow[]>(cacheKey);
   if (cached) {
     return cached;
   }
   const data = await request<TmdbSearchResult>(
     `/trending/${mediaType}/${timeWindow}`
   );
-  setCached(cacheKey, data, cacheTtlMs);
-  return data;
+  const normalized = data.results.map(normalizeTmdbMedia);
+  setCached(cacheKey, normalized, cacheTtlMs);
+  return normalized;
 }
 
 export async function getTmdbShowDetails(
   mediaType: "tv" | "movie",
   id: number
-) {
-  return request<TmdbShowDetails>(`/${mediaType}/${id}`);
+): Promise<NormalizedShow> {
+  const details = await request<TmdbShowDetails>(`/${mediaType}/${id}`);
+  return normalizeTmdbShowDetails(mediaType, details);
 }
 
-export async function getTmdbSeasonDetails(id: number, seasonNumber: number) {
-  return request<TmdbSeasonDetails>(`/tv/${id}/season/${seasonNumber}`);
+export async function getTmdbSeasonDetails(
+  id: number,
+  seasonNumber: number
+): Promise<NormalizedSeason> {
+  const season = await request<TmdbSeasonDetails>(
+    `/tv/${id}/season/${seasonNumber}`
+  );
+  return normalizeTmdbSeason(season);
 }
