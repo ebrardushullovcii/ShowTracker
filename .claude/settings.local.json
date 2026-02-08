@@ -30,7 +30,21 @@
       "Bash(gh api:*)",
       "Bash(git init:*)",
       "Bash(git config:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nInitial repo setup: agent context, docs, rules, and skills\n\nSet up ShowTracker repository for AI-agent-driven development:\n- AGENTS.md \\(universal agent instructions\\) + CLAUDE.md \\(Claude-specific\\)\n- docs/PLAN.md, ARCHITECTURE.md, TECH_STACK.md, API_REFERENCE.md\n- PROGRESS.md for status tracking\n- Agent rules in .claude/rules/, .cursor/rules/, .agents/rules/\n- 18 skills installed across all agent directories \\(Expo, Convex, RN, React, TS, testing\\)\n- .gitignore for Expo + Convex + env\n\nCo-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git branch:*)",
+      "Bash(gh repo create:*)",
+      "Bash(1 <<'EOF'\n{\n  \"name\": \"Protect main branch\",\n  \"target\": \"branch\",\n  \"enforcement\": \"active\",\n  \"conditions\": {\n    \"ref_name\": {\n      \"include\": [\"refs/heads/main\"],\n      \"exclude\": []\n    }\n  },\n  \"rules\": [\n    {\n      \"type\": \"pull_request\",\n      \"parameters\": {\n        \"required_approving_review_count\": 0,\n        \"dismiss_stale_reviews_on_push\": true,\n        \"require_code_owner_review\": false,\n        \"require_last_push_approval\": false,\n        \"required_review_thread_resolution\": false\n      }\n    },\n    {\n      \"type\": \"deletion\"\n    },\n    {\n      \"type\": \"non_fast_forward\"\n    }\n  ],\n  \"bypass_actors\": [\n    {\n      \"actor_id\": 5,\n      \"actor_type\": \"RepositoryRole\",\n      \"bypass_mode\": \"always\"\n    }\n  ]\n}\nEOF)",
+      "Bash(1 <<'EOF'\n{\n  \"allow_squash_merge\": true,\n  \"allow_merge_commit\": false,\n  \"allow_rebase_merge\": false,\n  \"delete_branch_on_merge\": true,\n  \"has_issues\": true,\n  \"has_projects\": true,\n  \"has_wiki\": false\n}\nEOF)",
+      "Bash(1 <<'EOF'\n{\n  \"names\": [\"expo\", \"react-native\", \"convex\", \"nativewind\", \"typescript\", \"show-tracker\", \"anime-tracker\", \"movie-tracker\", \"tmdb\", \"anilist\"]\n}\nEOF)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nAdd git workflow rules: branch+PR only, no auto-commits\n\n- All changes must go through feature branches and PRs\n- Agents must never commit unless user explicitly asks\n- CodeRabbit reviews all PRs before merge\n- Branch protection enforced on main \\(squash merge only\\)\n\nCo-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git push:*)",
+      "WebFetch(domain:docs.coderabbit.ai)",
+      "WebFetch(domain:coderabbit.ai)",
+      "Bash(git checkout:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nAdd CodeRabbit configuration for automated PR reviews\n\nConfigure CodeRabbit with project-specific review instructions:\n- Path-based rules for convex/, lib/api/, app/, components/, store/\n- Enforces Convex auth validation, typed API responses, NativeWind usage\n- Flags hardcoded API keys, missing error handling, raw API leaks\n- Auto-review on all PRs to main, skip WIP/draft PRs\n- Filters out skills directories and lock files from review\n- Assertive review profile with change-request workflow\n- Labels: expo, convex, api, ui, docs\n\nCo-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(gh pr create:*)",
+      "Bash(git commit:*)"
     ]
   }
 }
