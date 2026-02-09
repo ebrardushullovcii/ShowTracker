@@ -130,6 +130,20 @@ function buildTrackingArgs(show: NormalizedShow | null) {
   return "skip" as const;
 }
 
+function countWatchedEpisodesForSeason(
+  seasonNumber: number,
+  watchedEpisodeKeys: Set<string>
+) {
+  let count = 0;
+  const seasonPrefix = `${seasonNumber}:`;
+  for (const key of watchedEpisodeKeys) {
+    if (key.startsWith(seasonPrefix)) {
+      count += 1;
+    }
+  }
+  return count;
+}
+
 export default function ShowDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const parsedId = useMemo(() => parseShowRouteId(id), [id]);
@@ -149,6 +163,7 @@ export default function ShowDetailScreen() {
   const [seasonActionLoading, setSeasonActionLoading] =
     useState<SeasonActionState>({});
   const [isAddingToWatchlist, setIsAddingToWatchlist] = useState(false);
+  const [isMarkingShow, setIsMarkingShow] = useState(false);
   const [trackingError, setTrackingError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -191,6 +206,7 @@ export default function ShowDetailScreen() {
       setWatchedEpisodeKeys(new Set());
       setPendingEpisodeKeys({});
       setSeasonActionLoading({});
+      setIsMarkingShow(false);
 
       try {
         if (parsedId.source === "tmdb") {
@@ -279,6 +295,56 @@ export default function ShowDetailScreen() {
     }
   };
 
+  const resolveSeasonEpisodes = async (season: NormalizedSeason) => {
+    if (season.episodes?.length) {
+      return season.episodes;
+    }
+
+    if (!parsedId || parsedId.source !== "tmdb" || parsedId.mediaType !== "tv") {
+      return season.episodes ?? [];
+    }
+
+    if (seasonLoading[season.seasonNumber]) {
+      return season.episodes ?? [];
+    }
+
+    setSeasonLoading((prev) => ({ ...prev, [season.seasonNumber]: true }));
+    setSeasonErrors((prev) => ({ ...prev, [season.seasonNumber]: null }));
+
+    try {
+      const seasonDetails = await getTmdbSeasonDetails(
+        parsedId.externalId,
+        season.seasonNumber
+      );
+      const normalizedSeason = normalizeTmdbSeason(seasonDetails);
+      const mergedSeason: NormalizedSeason = {
+        ...season,
+        ...normalizedSeason,
+        episodeCount:
+          normalizedSeason.episodeCount ??
+          season.episodeCount ??
+          normalizedSeason.episodes?.length,
+      };
+
+      setSeasons((prev) =>
+        prev.map((entry) =>
+          entry.seasonNumber === season.seasonNumber ? mergedSeason : entry
+        )
+      );
+
+      return mergedSeason.episodes ?? [];
+    } catch (seasonError) {
+      console.error("Failed to load season details", seasonError);
+      setSeasonErrors((prev) => ({
+        ...prev,
+        [season.seasonNumber]: "Could not load episodes for this season.",
+      }));
+      return null;
+    } finally {
+      setSeasonLoading((prev) => ({ ...prev, [season.seasonNumber]: false }));
+    }
+  };
+
   const handleToggleEpisodeWatched = async (episode: NormalizedEpisode) => {
     if (!show) {
       return;
@@ -341,8 +407,13 @@ export default function ShowDetailScreen() {
       return;
     }
 
-    const episodes = season.episodes ?? [];
-    if (!episodes.length || seasonActionLoading[season.seasonNumber]) {
+    if (seasonActionLoading[season.seasonNumber] || isMarkingShow) {
+      return;
+    }
+
+    const episodes = await resolveSeasonEpisodes(season);
+    if (!episodes?.length) {
+      setTrackingError("Episode list is not available for this season yet.");
       return;
     }
 
@@ -379,61 +450,122 @@ export default function ShowDetailScreen() {
     }
   };
 
+  const handleMarkShowWatched = async () => {
+    if (!show) {
+      return;
+    }
+
+    if (!canTrackShow) {
+      setTrackingError("This title cannot be tracked yet.");
+      return;
+    }
+
+    if (!seasons.length || isMarkingShow) {
+      return;
+    }
+
+    setIsMarkingShow(true);
+    setTrackingError(null);
+
+    const seasonPayloads: { seasonNumber: number; episodes: NormalizedEpisode[] }[] =
+      [];
+
+    try {
+      for (const season of seasons) {
+        const episodes = await resolveSeasonEpisodes(season);
+        if (!episodes?.length) {
+          continue;
+        }
+        seasonPayloads.push({
+          seasonNumber: season.seasonNumber,
+          episodes,
+        });
+      }
+
+      if (!seasonPayloads.length) {
+        setTrackingError("Episode list is not available for this show yet.");
+        return;
+      }
+
+      setSeasonActionLoading((prev) => {
+        const next = { ...prev };
+        for (const payload of seasonPayloads) {
+          next[payload.seasonNumber] = true;
+        }
+        return next;
+      });
+
+      setWatchedEpisodeKeys((prev) => {
+        const next = new Set(prev);
+        for (const payload of seasonPayloads) {
+          for (const episode of payload.episodes) {
+            next.add(`${episode.seasonNumber}:${episode.episodeNumber}`);
+          }
+        }
+        return next;
+      });
+
+      for (const payload of seasonPayloads) {
+        await markSeasonWatched({
+          show: buildShowPayload(show),
+          season: payload.seasonNumber,
+          episodes: payload.episodes.map((episode) => ({
+            episode: episode.episodeNumber,
+            runtime: episode.runtime,
+          })),
+        });
+      }
+    } catch (mutationError) {
+      console.error("Failed to mark full show watched", mutationError);
+      setTrackingError("Could not mark the full show as watched.");
+    } finally {
+      setSeasonActionLoading((prev) => {
+        const next = { ...prev };
+        for (const payload of seasonPayloads) {
+          next[payload.seasonNumber] = false;
+        }
+        return next;
+      });
+      setIsMarkingShow(false);
+    }
+  };
+
   const toggleSeason = async (seasonNumber: number) => {
     const willExpand = !expandedSeasons[seasonNumber];
     setExpandedSeasons((prev) => ({ ...prev, [seasonNumber]: willExpand }));
 
-    if (!willExpand || !parsedId || parsedId.source !== "tmdb") {
-      return;
-    }
-
-    if (parsedId.mediaType !== "tv") {
+    if (!willExpand) {
       return;
     }
 
     const season = seasons.find((entry) => entry.seasonNumber === seasonNumber);
-    if (season?.episodes || seasonLoading[seasonNumber]) {
+    if (!season || season.episodes || seasonLoading[seasonNumber]) {
       return;
     }
 
-    setSeasonLoading((prev) => ({ ...prev, [seasonNumber]: true }));
-    setSeasonErrors((prev) => ({ ...prev, [seasonNumber]: null }));
-
-    try {
-      const seasonDetails = await getTmdbSeasonDetails(
-        parsedId.externalId,
-        seasonNumber
-      );
-      const normalizedSeason = normalizeTmdbSeason(seasonDetails);
-      setSeasons((prev) =>
-        prev.map((entry) =>
-          entry.seasonNumber === seasonNumber
-            ? {
-                ...entry,
-                ...normalizedSeason,
-                episodeCount:
-                  normalizedSeason.episodeCount ??
-                  entry.episodeCount ??
-                  normalizedSeason.episodes?.length,
-              }
-            : entry
-        )
-      );
-    } catch (seasonError) {
-      console.error("Failed to load season details", seasonError);
-      setSeasonErrors((prev) => ({
-        ...prev,
-        [seasonNumber]: "Could not load episodes for this season.",
-      }));
-    } finally {
-      setSeasonLoading((prev) => ({ ...prev, [seasonNumber]: false }));
-    }
+    await resolveSeasonEpisodes(season);
   };
 
   const watchlistLabel =
     tracking?.inWatchlist && tracking.status
       ? `In Watchlist (${tracking.status.replaceAll("_", " ")})`
       : "Add to Watchlist";
+  const watchedEpisodesCount = watchedEpisodeKeys.size;
+  const totalEpisodesCount = useMemo(() => {
+    if (show?.totalEpisodes) {
+      return show.totalEpisodes;
+    }
+    const inferred = seasons.reduce((sum, season) => {
+      return sum + (season.episodeCount ?? season.episodes?.length ?? 0);
+    }, 0);
+    return inferred > 0 ? inferred : null;
+  }, [seasons, show?.totalEpisodes]);
+  const watchProgressPercent = totalEpisodesCount
+    ? Math.min(100, Math.round((watchedEpisodesCount / totalEpisodesCount) * 100))
+    : 0;
+  const isShowFullyWatched =
+    totalEpisodesCount !== null && watchedEpisodesCount >= totalEpisodesCount;
+  const hasSeasonActions = seasons.length > 0;
 
   return (
     <ScreenWrapper>
@@ -521,30 +653,75 @@ export default function ShowDetailScreen() {
                     <Badge label={`${show.totalEpisodes} episodes`} />
                   ) : null}
                 </View>
-                <Pressable
-                  onPress={() => {
-                    void handleAddToWatchlist();
-                  }}
-                  disabled={
-                    !canTrackShow ||
-                    isAddingToWatchlist ||
-                    Boolean(tracking?.inWatchlist)
-                  }
-                  className={`mt-2 flex-row items-center justify-center gap-2 rounded-xl border px-4 py-3 ${
-                    tracking?.inWatchlist
-                      ? "border-emerald-500/50 bg-emerald-500/15"
-                      : "border-brand-primary/60 bg-brand-primary/15"
-                  } ${
-                    !canTrackShow || isAddingToWatchlist ? "opacity-70" : ""
-                  }`}
-                >
-                  {isAddingToWatchlist ? (
-                    <ActivityIndicator size="small" color="#5b7cfa" />
+                <View className="mt-1 rounded-xl border border-brand-surface/55 bg-brand-light-background/75 px-3 py-3 dark:bg-brand-background/50">
+                  <View className="mb-2 flex-row items-center justify-between">
+                    <Text className="text-[11px] font-semibold uppercase tracking-[1.3px] text-slate-500 dark:text-slate-300">
+                      Watch Progress
+                    </Text>
+                    <Text className="text-xs font-semibold text-brand-light-text dark:text-brand-text">
+                      {totalEpisodesCount
+                        ? `${watchedEpisodesCount}/${totalEpisodesCount}`
+                        : watchedEpisodesCount}{" "}
+                      eps
+                    </Text>
+                  </View>
+                  <View className="h-2 overflow-hidden rounded-full bg-brand-surface/70">
+                    <View
+                      className="h-full rounded-full bg-brand-primary"
+                      style={{ width: `${watchProgressPercent}%` }}
+                    />
+                  </View>
+                </View>
+                <View className="mt-1 flex-row gap-2">
+                  <Pressable
+                    onPress={() => {
+                      void handleAddToWatchlist();
+                    }}
+                    disabled={
+                      !canTrackShow ||
+                      isAddingToWatchlist ||
+                      Boolean(tracking?.inWatchlist)
+                    }
+                    className={`flex-1 flex-row items-center justify-center gap-2 rounded-xl border px-4 py-3 ${
+                      tracking?.inWatchlist
+                        ? "border-emerald-500/50 bg-emerald-500/15"
+                        : "border-brand-primary/60 bg-brand-primary/15"
+                    } ${
+                      !canTrackShow || isAddingToWatchlist ? "opacity-70" : ""
+                    }`}
+                  >
+                    {isAddingToWatchlist ? (
+                      <ActivityIndicator size="small" color="#5b7cfa" />
+                    ) : null}
+                    <Text className="text-sm font-semibold text-brand-light-text dark:text-brand-text">
+                      {isAddingToWatchlist ? "Adding..." : watchlistLabel}
+                    </Text>
+                  </Pressable>
+                  {hasSeasonActions ? (
+                    <Pressable
+                      onPress={() => {
+                        void handleMarkShowWatched();
+                      }}
+                      disabled={!canTrackShow || isMarkingShow}
+                      className={`min-w-[130px] flex-row items-center justify-center gap-2 rounded-xl border border-brand-primary/65 bg-brand-primary/20 px-4 py-3 ${
+                        !canTrackShow || isMarkingShow ? "opacity-70" : ""
+                      }`}
+                    >
+                      {isMarkingShow ? (
+                        <ActivityIndicator size="small" color="#5b7cfa" />
+                      ) : (
+                        <Text className="text-sm font-bold text-brand-primary">✓</Text>
+                      )}
+                      <Text className="text-sm font-semibold text-brand-light-text dark:text-brand-text">
+                        {isMarkingShow
+                          ? "Marking..."
+                          : isShowFullyWatched
+                            ? "Show Watched"
+                            : "Mark Show"}
+                      </Text>
+                    </Pressable>
                   ) : null}
-                  <Text className="text-sm font-semibold text-brand-light-text dark:text-brand-text">
-                    {isAddingToWatchlist ? "Adding..." : watchlistLabel}
-                  </Text>
-                </Pressable>
+                </View>
                 {tracking?.inWatchlist ? (
                   <Text className="text-xs text-slate-500 dark:text-slate-300">
                     Added to your list without marking episodes watched.
@@ -577,30 +754,71 @@ export default function ShowDetailScreen() {
                 const seasonError = seasonErrors[season.seasonNumber];
                 const episodes = season.episodes ?? [];
                 const isMarkingSeason = !!seasonActionLoading[season.seasonNumber];
+                const seasonEpisodeCount = season.episodeCount ?? episodes.length;
+                const seasonWatchedCount = countWatchedEpisodesForSeason(
+                  season.seasonNumber,
+                  watchedEpisodeKeys
+                );
+                const isSeasonFullyWatched =
+                  seasonEpisodeCount > 0 && seasonWatchedCount >= seasonEpisodeCount;
 
                 return (
                   <View
                     key={seasonKey}
                     className="overflow-hidden rounded-2xl border border-brand-surface/55 bg-brand-light-surface dark:bg-brand-surface/55"
                   >
-                    <Pressable
-                      className="flex-row items-center justify-between px-4 py-4"
-                      onPress={() => {
-                        void toggleSeason(season.seasonNumber);
-                      }}
-                    >
-                      <View>
+                    <View className="flex-row items-center gap-3 px-4 py-4">
+                      <Pressable
+                        className="flex-1"
+                        onPress={() => {
+                          void toggleSeason(season.seasonNumber);
+                        }}
+                      >
                         <Text className="text-base font-semibold text-brand-light-text dark:text-brand-text">
                           {season.name ?? `Season ${season.seasonNumber}`}
                         </Text>
                         <Text className="text-xs text-slate-500 dark:text-slate-400">
-                          {season.episodeCount ?? episodes.length} episodes
+                          {seasonEpisodeCount
+                            ? `${seasonEpisodeCount} episodes`
+                            : "Episode count unavailable"}{" "}
+                          · {seasonWatchedCount} watched
                         </Text>
-                      </View>
-                      <Text className="text-lg text-brand-primary">
-                        {expanded ? "−" : "+"}
-                      </Text>
-                    </Pressable>
+                      </Pressable>
+                      <Pressable
+                        onPress={() => {
+                          void handleMarkSeasonWatched(season);
+                        }}
+                        disabled={isMarkingSeason || isSeasonLoading || isMarkingShow}
+                        className={`min-w-[110px] flex-row items-center justify-center gap-2 rounded-lg border border-brand-primary/55 bg-brand-primary/10 px-3 py-2 ${
+                          isMarkingSeason || isSeasonLoading || isMarkingShow
+                            ? "opacity-75"
+                            : ""
+                        }`}
+                      >
+                        {isMarkingSeason ? (
+                          <ActivityIndicator size="small" color="#5b7cfa" />
+                        ) : (
+                          <Text className="text-xs font-bold text-brand-primary">✓</Text>
+                        )}
+                        <Text className="text-xs font-semibold text-brand-light-text dark:text-brand-text">
+                          {isMarkingSeason
+                            ? "Updating"
+                            : isSeasonFullyWatched
+                              ? "Watched"
+                              : "Watch all"}
+                        </Text>
+                      </Pressable>
+                      <Pressable
+                        className="h-9 w-9 items-center justify-center rounded-full border border-brand-surface/65 bg-brand-light-background/70 dark:bg-brand-background/45"
+                        onPress={() => {
+                          void toggleSeason(season.seasonNumber);
+                        }}
+                      >
+                        <Text className="text-lg text-brand-primary">
+                          {expanded ? "−" : "+"}
+                        </Text>
+                      </Pressable>
+                    </View>
 
                     {expanded ? (
                       <View className="border-t border-brand-surface/50 px-4 py-3">
@@ -623,32 +841,16 @@ export default function ShowDetailScreen() {
                           </Text>
                         ) : null}
 
-                        {!isSeasonLoading && !seasonError && episodes.length ? (
-                          <Pressable
-                            className="mb-3 flex-row items-center justify-center gap-2 rounded-xl border border-brand-primary/55 bg-brand-primary/10 px-3 py-2"
-                            onPress={() => {
-                              void handleMarkSeasonWatched(season);
-                            }}
-                            disabled={isMarkingSeason}
-                          >
-                            {isMarkingSeason ? (
-                              <ActivityIndicator size="small" color="#5b7cfa" />
-                            ) : (
-                              <Text className="text-sm font-bold text-brand-primary">✓</Text>
-                            )}
-                            <Text className="text-sm font-semibold text-brand-light-text dark:text-brand-text">
-                              {isMarkingSeason
-                                ? "Updating season..."
-                                : "Mark Season Watched"}
-                            </Text>
-                          </Pressable>
-                        ) : null}
-
                         <View className="gap-2">
                           {episodes.map((episode) => {
                             const key = `${episode.seasonNumber}:${episode.episodeNumber}`;
                             const watched = watchedEpisodeKeys.has(key);
                             const isUpdatingEpisode = !!pendingEpisodeKeys[key];
+                            const episodeStatus = isUpdatingEpisode
+                              ? "Saving..."
+                              : watched
+                                ? "Watched"
+                                : "Not watched";
 
                             return (
                               <Pressable
@@ -657,13 +859,24 @@ export default function ShowDetailScreen() {
                                   void handleToggleEpisodeWatched(episode);
                                 }}
                                 disabled={isUpdatingEpisode}
-                                className={`rounded-xl border px-3 py-3 ${
-                                  watched
-                                    ? "border-emerald-400/60 bg-emerald-500/10"
-                                    : "border-brand-surface/60 bg-brand-light-background dark:bg-brand-background/50"
-                                } ${isUpdatingEpisode ? "opacity-80" : ""}`}
+                                className={`rounded-2xl border border-brand-surface/60 bg-brand-light-background/80 px-3 py-3 dark:bg-brand-background/45 ${
+                                  isUpdatingEpisode ? "opacity-80" : ""
+                                }`}
                               >
-                                <View className="flex-row items-start justify-between gap-3">
+                                <View className="flex-row items-start gap-3">
+                                  {episode.stillUrl ? (
+                                    <Image
+                                      source={{ uri: episode.stillUrl }}
+                                      className="h-16 w-24 rounded-xl border border-brand-surface/60"
+                                      resizeMode="cover"
+                                    />
+                                  ) : (
+                                    <View className="h-16 w-16 items-center justify-center rounded-xl border border-brand-surface/65 bg-brand-surface/60">
+                                      <Text className="text-xs font-semibold text-slate-500 dark:text-slate-300">
+                                        E{String(episode.episodeNumber).padStart(2, "0")}
+                                      </Text>
+                                    </View>
+                                  )}
                                   <View className="flex-1">
                                     <Text className="text-xs uppercase tracking-[1.2px] text-slate-500 dark:text-slate-400">
                                       S{String(episode.seasonNumber).padStart(2, "0")}
@@ -683,9 +896,20 @@ export default function ShowDetailScreen() {
                                         {episode.overview}
                                       </Text>
                                     ) : null}
+                                    <Text
+                                      className={`mt-1 text-[11px] font-semibold uppercase tracking-[1.2px] ${
+                                        isUpdatingEpisode
+                                          ? "text-brand-primary"
+                                          : watched
+                                            ? "text-emerald-500"
+                                            : "text-slate-500 dark:text-slate-300"
+                                      }`}
+                                    >
+                                      {episodeStatus}
+                                    </Text>
                                   </View>
                                   <View
-                                    className={`h-6 w-6 items-center justify-center rounded-full border ${
+                                    className={`mt-1 h-7 w-7 items-center justify-center rounded-full border ${
                                       watched
                                         ? "border-emerald-400 bg-emerald-500"
                                         : "border-slate-400/70"
@@ -695,7 +919,7 @@ export default function ShowDetailScreen() {
                                       <ActivityIndicator size="small" color="#ffffff" />
                                     ) : (
                                       <Text
-                                        className={`text-xs font-bold ${
+                                        className={`text-sm font-black ${
                                           watched ? "text-white" : "text-transparent"
                                         }`}
                                       >
