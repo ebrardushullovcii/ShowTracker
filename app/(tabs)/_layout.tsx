@@ -1,134 +1,134 @@
 import { Feather, Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { Tabs } from "expo-router";
-import {
-  Pressable,
-  Text,
-  View,
-  type PressableProps,
-} from "react-native";
+import { Platform, View, useWindowDimensions } from "react-native";
 import { useColorScheme } from "nativewind";
+import { DESKTOP_TAB_RAIL_BREAKPOINT } from "@/constants/navigation";
 
-function SearchTabButton({
-  onPress,
-  accessibilityState,
+function MobileSearchTabIcon({
+  focused,
+  tintColor,
 }: {
-  onPress?: PressableProps["onPress"];
-  accessibilityState?: { selected?: boolean };
+  focused: boolean;
+  tintColor: string;
 }) {
-  const selected = accessibilityState?.selected;
-
   return (
-    <Pressable
-      onPress={onPress}
-      className="-mt-6 h-16 w-16 items-center justify-center rounded-full border-2 border-brand-surface bg-brand-primary"
-      accessibilityRole="button"
-      accessibilityLabel="Search"
+    <View
+      className={`h-11 w-11 items-center justify-center rounded-full border-2 ${
+        focused
+          ? "border-brand-frame bg-brand-primary"
+          : "border-brand-frame/50 bg-brand-light-background dark:border-brand-surface/75 dark:bg-brand-background/80"
+      }`}
     >
-      <Feather name="search" size={22} color="#fff8ef" />
-      <Text className="mt-0.5 text-[10px] font-semibold uppercase tracking-[1.2px] text-white/90">
-        {selected ? "Search" : "Find"}
-      </Text>
-    </Pressable>
+      <Feather name="search" size={20} color={focused ? "#fff8ef" : tintColor} />
+      <View
+        className={`absolute -bottom-1 h-1.5 w-1.5 rounded-full bg-brand-accent ${
+          focused ? "opacity-100" : "opacity-0"
+        }`}
+      />
+    </View>
   );
 }
 
 export default function TabsLayout() {
   const { colorScheme } = useColorScheme();
+  const { width } = useWindowDimensions();
   const isDark = colorScheme === "dark";
+  const isDesktopRemote =
+    Platform.OS === "web" && width >= DESKTOP_TAB_RAIL_BREAKPOINT;
 
   return (
-    <Tabs
-      screenOptions={{
-        headerShown: false,
-        tabBarHideOnKeyboard: true,
-        tabBarStyle: {
-          backgroundColor: isDark ? "#19140f" : "#f9f0df",
-          borderTopColor: isDark ? "#30271b" : "#2f2618",
-          borderTopWidth: 2,
-          height: 84,
-          paddingBottom: 12,
-          paddingTop: 8,
-        },
-        tabBarActiveTintColor: "#cf5d3f",
-        tabBarInactiveTintColor: isDark ? "#e6d5b8" : "#4f3e27",
-        tabBarLabelStyle: {
-          fontSize: 11,
-          textTransform: "uppercase",
-          letterSpacing: 1.2,
-          fontWeight: "700",
-        },
-      }}
-    >
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: "Home",
-          tabBarIcon: ({ color, focused }) => (
-            <Ionicons
-              name={focused ? "home" : "home-outline"}
-              size={20}
-              color={color}
-            />
-          ),
+    <View className="flex-1" style={{ backgroundColor: isDark ? "#0f141d" : "#e9ddca" }}>
+      <Tabs
+        screenOptions={{
+          headerShown: false,
+          tabBarHideOnKeyboard: true,
+          tabBarStyle: isDesktopRemote
+            ? {
+                display: "none",
+              }
+            : {
+                backgroundColor: isDark ? "#121b27" : "#f7efe1",
+                borderTopColor: isDark ? "#283444" : "#4f3c27",
+                borderTopWidth: 2,
+                borderTopLeftRadius: 0,
+                borderTopRightRadius: 0,
+                height: 76,
+                paddingBottom: 8,
+                paddingTop: 7,
+                marginHorizontal: 0,
+              },
+          tabBarActiveTintColor: "#d16042",
+          tabBarInactiveTintColor: isDark ? "#c0cfdf" : "#5b4730",
+          tabBarLabelStyle: {
+            fontSize: 10,
+            textTransform: "uppercase",
+            letterSpacing: 1.1,
+            fontWeight: "700",
+          },
         }}
-      />
-      <Tabs.Screen
-        name="discover"
-        options={{
-          title: "Discover",
-          tabBarIcon: ({ color, focused }) => (
-            <MaterialCommunityIcons
-              name={focused ? "television-classic" : "television-classic-off"}
-              size={20}
-              color={color}
-            />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="search"
-        options={{
-          title: "",
-          tabBarLabel: "",
-          tabBarIcon: () => null,
-          tabBarButton: (props) => (
-            <View className="w-[88px] items-center justify-center">
-              <SearchTabButton
-                onPress={props.onPress}
-                accessibilityState={props.accessibilityState}
+      >
+        <Tabs.Screen
+          name="index"
+          options={{
+            title: "Home",
+            tabBarIcon: ({ color, focused }) => (
+              <Ionicons name={focused ? "home" : "home-outline"} size={20} color={color} />
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="discover"
+          options={{
+            title: "Discover",
+            tabBarIcon: ({ color, focused }) => (
+              <MaterialCommunityIcons
+                name={focused ? "television-classic" : "television-classic-off"}
+                size={20}
+                color={color}
               />
-            </View>
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="profile"
-        options={{
-          title: "Profile",
-          tabBarIcon: ({ color, focused }) => (
-            <Ionicons
-              name={focused ? "person" : "person-outline"}
-              size={20}
-              color={color}
-            />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="extra"
-        options={{
-          title: "More",
-          tabBarIcon: ({ color, focused }) => (
-            <Ionicons
-              name={focused ? "grid" : "grid-outline"}
-              size={20}
-              color={color}
-            />
-          ),
-        }}
-      />
-      <Tabs.Screen name="watchlist" options={{ href: null }} />
-      <Tabs.Screen name="schedule" options={{ href: null }} />
-    </Tabs>
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="search"
+          options={{
+            title: "Search",
+            tabBarLabel: "",
+            tabBarIcon: ({ focused, color }) => (
+              <MobileSearchTabIcon focused={focused} tintColor={color} />
+            ),
+            tabBarItemStyle: {
+              justifyContent: "center",
+              alignItems: "center",
+              paddingTop: 0,
+            },
+          }}
+        />
+        <Tabs.Screen
+          name="profile"
+          options={{
+            title: "Profile",
+            tabBarIcon: ({ color, focused }) => (
+              <Ionicons
+                name={focused ? "person" : "person-outline"}
+                size={20}
+                color={color}
+              />
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="extra"
+          options={{
+            title: "More",
+            tabBarIcon: ({ color, focused }) => (
+              <Ionicons name={focused ? "grid" : "grid-outline"} size={20} color={color} />
+            ),
+          }}
+        />
+        <Tabs.Screen name="watchlist" options={{ href: null }} />
+        <Tabs.Screen name="schedule" options={{ href: null }} />
+      </Tabs>
+    </View>
   );
 }

@@ -28,64 +28,74 @@ export default function ProfileScreen() {
 
   return (
     <ScreenWrapper>
-      <View className="pb-10">
-        <Text className="mb-3 px-1 font-serif text-2xl font-bold text-brand-light-text dark:text-brand-text">
-          Profile
-        </Text>
+      <View className="pb-0">
+        <View className="mb-3 flex-row items-center justify-between px-1">
+          <Text className="text-[10px] font-bold uppercase tracking-[1.5px] text-brand-ink-soft dark:text-[#d8c8ab]">
+            Profile
+          </Text>
+          <Text className="text-[10px] font-semibold uppercase tracking-[1.4px] text-brand-ink-soft dark:text-[#d8c8ab]">
+            Preferences
+          </Text>
+        </View>
 
-        <View className="mb-4 rounded-2xl border-2 border-brand-surface/65 bg-brand-light-surface px-4 py-4 dark:bg-brand-surface/75">
-          <Text className="font-serif text-xl font-semibold text-brand-light-text dark:text-brand-text">
+        <View className="mb-4 rounded-2xl border-2 border-brand-frame/55 bg-brand-light-surface px-4 py-4 dark:border-brand-surface/75 dark:bg-brand-surface/75">
+          <Text className="font-serif text-xl font-semibold text-brand-ink dark:text-brand-text">
             Appearance
           </Text>
-          <Text className="mt-1 text-sm leading-6 text-[#5d4b33] dark:text-[#ebdabc]">
+          <Text className="mt-1 text-sm leading-6 text-brand-ink-soft dark:text-[#e2d7c1]">
             Pick a theme. Changes apply immediately.
           </Text>
 
           <View className="mt-3 flex-row gap-2">
             <Pressable
+              testID="theme-light"
               onPress={() => setColorScheme("light")}
               className={`flex-1 items-center rounded-xl border-2 px-3 py-2 ${
                 colorScheme === "light"
                   ? "border-brand-primary bg-brand-primary"
-                  : "border-brand-surface/55 bg-[#fffaf0] dark:bg-brand-background/55"
+                  : "border-brand-frame/45 bg-[#fffaf0] dark:border-brand-surface/65 dark:bg-brand-background/55"
               }`}
             >
               <Text
                 className={`text-xs font-bold uppercase tracking-[1.2px] ${
                   colorScheme === "light"
                     ? "text-white"
-                    : "text-brand-light-text dark:text-brand-text"
+                    : "text-brand-ink dark:text-brand-text"
                 }`}
               >
                 Light
               </Text>
             </Pressable>
             <Pressable
+              testID="theme-dark"
               onPress={() => setColorScheme("dark")}
               className={`flex-1 items-center rounded-xl border-2 px-3 py-2 ${
                 colorScheme === "dark"
                   ? "border-brand-primary bg-brand-primary"
-                  : "border-brand-surface/55 bg-[#fffaf0] dark:bg-brand-background/55"
+                  : "border-brand-frame/45 bg-[#fffaf0] dark:border-brand-surface/65 dark:bg-brand-background/55"
               }`}
             >
               <Text
                 className={`text-xs font-bold uppercase tracking-[1.2px] ${
                   colorScheme === "dark"
                     ? "text-white"
-                    : "text-brand-light-text dark:text-brand-text"
+                    : "text-brand-ink dark:text-brand-text"
                 }`}
               >
                 Dark
               </Text>
             </Pressable>
           </View>
+          <Text className="mt-2 text-[11px] uppercase tracking-[1.2px] text-brand-ink-soft dark:text-[#d8c8ab]">
+            Active mode: {colorScheme ?? "system"}
+          </Text>
         </View>
 
-        <View className="mb-4 rounded-2xl border-2 border-brand-surface/65 bg-brand-light-surface px-4 py-4 dark:bg-brand-surface/75">
-          <Text className="font-serif text-xl font-semibold text-brand-light-text dark:text-brand-text">
+        <View className="mb-4 rounded-2xl border-2 border-brand-frame/55 bg-brand-light-surface px-4 py-4 dark:border-brand-surface/75 dark:bg-brand-surface/75">
+          <Text className="font-serif text-xl font-semibold text-brand-ink dark:text-brand-text">
             Current Status
           </Text>
-          <Text className="mt-1 text-sm leading-6 text-[#5d4b33] dark:text-[#ebdabc]">
+          <Text className="mt-1 text-sm leading-6 text-brand-ink-soft dark:text-[#e2d7c1]">
             {isAuthenticated
               ? "Signed in and synced with Convex."
               : "Not authenticated."}

@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Image,
   Platform,
   ScrollView,
   Text,
@@ -9,9 +8,9 @@ import {
   Pressable,
   useWindowDimensions,
 } from "react-native";
-import { Link } from "expo-router";
 import { MediaPosterCard } from "@/components/MediaPosterCard";
 import { ScreenWrapper } from "@/components/ScreenWrapper";
+import { getTabContentWidth } from "@/constants/navigation";
 import { getTrendingAniList } from "@/lib/api/anilist";
 import { normalizeAniListMedia, normalizeTmdbMedia } from "@/lib/api/normalize";
 import { getTrendingTmdb } from "@/lib/api/tmdb";
@@ -57,7 +56,7 @@ function DiscoverTabs({
   onChange: (next: DiscoverTab) => void;
 }) {
   return (
-    <View className="mb-4 flex-row rounded-2xl border-2 border-brand-surface/70 bg-brand-light-surface p-1 dark:bg-brand-surface/75">
+    <View className="mb-3 flex-row rounded-2xl border-2 border-brand-frame/55 bg-brand-light-surface p-1 dark:border-brand-surface/75 dark:bg-brand-surface/75">
       {([
         { key: "tv", label: "TV Shows" },
         { key: "anime", label: "Anime" },
@@ -73,14 +72,14 @@ function DiscoverTabs({
             }`}
           >
             <Text
-              className={`text-[11px] font-bold uppercase tracking-[1.2px] ${
-                active
-                  ? "text-white"
-                  : "text-brand-light-text dark:text-brand-text"
-              }`}
-            >
-              {tab.label}
-            </Text>
+            className={`text-[11px] font-bold uppercase tracking-[1.2px] ${
+              active
+                ? "text-white"
+                : "text-brand-ink dark:text-brand-text"
+            }`}
+          >
+            {tab.label}
+          </Text>
           </Pressable>
         );
       })}
@@ -92,24 +91,39 @@ function getGridColumnCount(width: number, isWeb: boolean) {
   if (!isWeb) {
     return 2;
   }
+  if (width >= 1800) {
+    return 8;
+  }
   if (width >= 1500) {
+    return 7;
+  }
+  if (width >= 1260) {
+    return 6;
+  }
+  if (width >= 1040) {
     return 5;
   }
-  if (width >= 1200) {
-    return 4;
-  }
   if (width >= 920) {
-    return 3;
+    return 4;
   }
   return 2;
 }
 
 function getGridItemWidth(columns: number) {
+  if (columns === 8) {
+    return "11.8%";
+  }
+  if (columns === 7) {
+    return "13.7%";
+  }
+  if (columns === 6) {
+    return "15.8%";
+  }
   if (columns === 5) {
     return "19%";
   }
   if (columns === 4) {
-    return "23.5%";
+    return "23.6%";
   }
   if (columns === 3) {
     return "31.8%";
@@ -121,6 +135,7 @@ export default function DiscoverScreen() {
   const [activeTab, setActiveTab] = useState<DiscoverTab>("tv");
   const { width } = useWindowDimensions();
   const isWeb = Platform.OS === "web";
+  const contentWidth = getTabContentWidth(width, isWeb);
   const [tvState, setTvState] = useState<SectionState>(initialSectionState);
   const [animeState, setAnimeState] = useState<SectionState>(initialSectionState);
   const [movieState, setMovieState] = useState<SectionState>(initialSectionState);
@@ -215,85 +230,30 @@ export default function DiscoverScreen() {
   }, [activeTab, animeState, movieState, tvState]);
 
   const panelTitle =
-    activeTab === "anime"
-      ? "Anime Heat"
-      : activeTab === "movie"
-        ? "Movie Momentum"
-        : "TV Broadcast";
-
-  const panelSubtitle =
-    activeTab === "anime"
-      ? "Community favorites airing now"
-      : activeTab === "movie"
-        ? "Box office picks and crowd favorites"
-        : "Series with current buzz";
-  const columns = getGridColumnCount(width, isWeb);
+    activeTab === "anime" ? "Anime" : activeTab === "movie" ? "Movies" : "TV";
+  const columns = getGridColumnCount(contentWidth, isWeb);
   const gridItemWidth = getGridItemWidth(columns);
-  const showFeature = isWeb && width >= 980 && activeState.items.length > 0;
-  const featureItem = showFeature ? activeState.items[0] : null;
-  const gridItems = showFeature ? activeState.items.slice(1) : activeState.items;
+  const showOverview = isWeb && contentWidth >= 1660;
 
   return (
     <ScreenWrapper>
       <ScrollView showsVerticalScrollIndicator={false}>
-        <View className="pb-10">
-          <Text className="mb-3 px-1 font-serif text-2xl font-bold text-brand-light-text dark:text-brand-text">
-            Discover
-          </Text>
+        <View className="pb-0">
+          <View className="mb-3 flex-row items-center justify-between px-1">
+            <Text className="text-[10px] font-bold uppercase tracking-[1.5px] text-brand-ink-soft dark:text-[#d8c8ab]">
+              Discovery desk
+            </Text>
+            <Text className="text-[10px] font-semibold uppercase tracking-[1.4px] text-brand-ink-soft dark:text-[#d8c8ab]">
+              {panelTitle}
+            </Text>
+          </View>
 
           <DiscoverTabs value={activeTab} onChange={setActiveTab} />
 
-          <Text className="mb-3 px-1 text-[11px] font-semibold uppercase tracking-[1.2px] text-[#5d4b33] dark:text-[#ebdabc]">
-            {panelTitle} · {panelSubtitle}
-          </Text>
-
-          {featureItem ? (
-            <Link
-              href={{
-                pathname: "/show/[id]",
-                params: { id: createShowRouteId(featureItem) },
-              }}
-              asChild
-            >
-              <Pressable className="mb-5 overflow-hidden rounded-[26px] border-2 border-brand-surface bg-brand-light-surface dark:bg-brand-surface/80">
-                <View className="h-56">
-                  {featureItem.backdropUrl || featureItem.posterUrl ? (
-                    <Image
-                      source={{
-                        uri: featureItem.backdropUrl ?? featureItem.posterUrl ?? "",
-                      }}
-                      className="h-full w-full"
-                      resizeMode="cover"
-                    />
-                  ) : (
-                    <View className="h-full w-full bg-brand-surface/30" />
-                  )}
-                  <View className="absolute inset-0 bg-black/35" />
-                  <View className="absolute left-4 top-4 rounded-full border border-white/40 bg-black/35 px-3 py-1">
-                    <Text className="text-[10px] font-bold uppercase tracking-[1.2px] text-white">
-                      Front Page Pick
-                    </Text>
-                  </View>
-                  <View className="absolute bottom-0 left-0 right-0 border-t border-white/20 bg-black/55 px-5 py-4">
-                    <Text className="font-serif text-3xl font-bold text-white">
-                      {featureItem.title}
-                    </Text>
-                    <Text
-                      className="mt-1 text-sm leading-6 text-white/90"
-                      numberOfLines={2}
-                    >
-                      {featureItem.overview ?? "Open details to view full synopsis."}
-                    </Text>
-                  </View>
-                </View>
-              </Pressable>
-            </Link>
-          ) : null}
-
           {activeState.isLoading ? (
-            <View className="items-center gap-2 rounded-2xl border-2 border-brand-surface/60 bg-brand-light-surface/80 py-8 dark:bg-brand-surface/70">
+            <View className="items-center gap-2 rounded-2xl border-2 border-brand-frame/50 bg-brand-light-surface/80 py-8 dark:border-brand-surface/65 dark:bg-brand-surface/70">
               <ActivityIndicator size="small" color="#cf5d3f" />
-              <Text className="text-xs font-semibold uppercase tracking-[1.2px] text-[#5d4b33] dark:text-[#ebdabc]">
+              <Text className="text-xs font-semibold uppercase tracking-[1.2px] text-brand-ink-soft dark:text-[#d8c8ab]">
                 Loading trending titles
               </Text>
             </View>
@@ -307,8 +267,8 @@ export default function DiscoverScreen() {
             </View>
           ) : null}
 
-          <View className="flex-row flex-wrap justify-between gap-y-5">
-            {gridItems.map((item, index) => (
+          <View className="flex-row flex-wrap justify-between gap-y-4">
+            {activeState.items.map((item, index) => (
               <MediaPosterCard
                 key={`${item.id}-${activeTab}-${index}`}
                 show={item}
@@ -319,15 +279,15 @@ export default function DiscoverScreen() {
                 rank={index < 3 ? index + 1 : undefined}
                 className={isWeb ? "" : "w-[48%]"}
                 containerStyle={isWeb ? { width: gridItemWidth } : undefined}
-                posterClassName={isWeb ? "h-72" : "h-64"}
-                showOverview={isWeb && width >= 1280}
+                posterClassName={isWeb ? "h-56" : "h-64"}
+                showOverview={showOverview}
               />
             ))}
           </View>
 
           {!activeState.isLoading && !activeState.error && !activeState.items.length ? (
-            <View className="mt-5 rounded-2xl border-2 border-brand-surface/60 bg-brand-light-surface px-4 py-5 dark:bg-brand-surface/70">
-              <Text className="text-sm text-[#5d4b33] dark:text-[#ebdabc]">
+            <View className="mt-5 rounded-2xl border-2 border-brand-frame/50 bg-brand-light-surface px-4 py-5 dark:border-brand-surface/65 dark:bg-brand-surface/70">
+              <Text className="text-sm text-brand-ink-soft dark:text-[#e2d7c1]">
                 No discovery data available right now.
               </Text>
             </View>

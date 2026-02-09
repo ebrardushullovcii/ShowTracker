@@ -6,13 +6,18 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        "brand-background": "#16120d",
-        "brand-surface": "#2f2618",
-        "brand-primary": "#cf5d3f",
-        "brand-text": "#f7e9d0",
-        "brand-light-background": "#f3ead8",
-        "brand-light-surface": "#fff7e8",
-        "brand-light-text": "#2b2114"
+        "brand-background": "#0f141d",
+        "brand-surface": "#222a37",
+        "brand-primary": "#d16042",
+        "brand-text": "#f7efe2",
+        "brand-light-background": "#e9ddca",
+        "brand-light-surface": "#f8f0e2",
+        "brand-light-text": "#251c13",
+        "brand-ink": "#2e2316",
+        "brand-ink-soft": "#6f5e4b",
+        "brand-frame": "#2b2115",
+        "brand-frame-light": "#d8c5a7",
+        "brand-accent": "#2fb8ae",
       }
     },
   },

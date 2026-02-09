@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Image,
   Platform,
   Pressable,
   ScrollView,
@@ -10,9 +9,9 @@ import {
   View,
   useWindowDimensions,
 } from "react-native";
-import { Link } from "expo-router";
 import { MediaPosterCard } from "@/components/MediaPosterCard";
 import { ScreenWrapper } from "@/components/ScreenWrapper";
+import { getTabContentWidth } from "@/constants/navigation";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { searchAniList } from "@/lib/api/anilist";
 import { searchJikan } from "@/lib/api/jikan";
@@ -50,19 +49,34 @@ function getGridColumnCount(width: number, isWeb: boolean) {
   if (!isWeb) {
     return 2;
   }
+  if (width >= 1800) {
+    return 8;
+  }
   if (width >= 1500) {
+    return 7;
+  }
+  if (width >= 1260) {
+    return 6;
+  }
+  if (width >= 1040) {
     return 5;
   }
-  if (width >= 1200) {
-    return 4;
-  }
   if (width >= 920) {
-    return 3;
+    return 4;
   }
   return 2;
 }
 
 function getGridItemWidth(columns: number) {
+  if (columns === 8) {
+    return "11.8%";
+  }
+  if (columns === 7) {
+    return "13.7%";
+  }
+  if (columns === 6) {
+    return "15.8%";
+  }
   if (columns === 5) {
     return "19%";
   }
@@ -79,6 +93,7 @@ export default function SearchScreen() {
   const [query, setQuery] = useState("");
   const { width } = useWindowDimensions();
   const isWeb = Platform.OS === "web";
+  const contentWidth = getTabContentWidth(width, isWeb);
   const [filter, setFilter] = useState<SearchFilter>("all");
   const debouncedQuery = useDebouncedValue(query, 350);
   const [results, setResults] = useState<NormalizedShow[]>([]);
@@ -178,29 +193,31 @@ export default function SearchScreen() {
     }
     return `${results.length} result${results.length === 1 ? "" : "s"}`;
   }, [debouncedQuery, isLoading, results.length]);
-  const columns = getGridColumnCount(width, isWeb);
+  const columns = getGridColumnCount(contentWidth, isWeb);
   const gridItemWidth = getGridItemWidth(columns);
-  const showFeature =
-    isWeb && width >= 980 && Boolean(debouncedQuery.trim()) && results.length > 0;
-  const featureItem = showFeature ? results[0] : null;
-  const gridItems = showFeature ? results.slice(1) : results;
+  const showOverview = isWeb && contentWidth >= 1660;
 
   return (
     <ScreenWrapper>
       <ScrollView showsVerticalScrollIndicator={false}>
-        <View className="pb-10">
-          <Text className="mb-3 px-1 font-serif text-2xl font-bold text-brand-light-text dark:text-brand-text">
-            Search
-          </Text>
+        <View className="pb-0">
+          <View className="mb-3 flex-row items-center justify-between px-1">
+            <Text className="text-[10px] font-bold uppercase tracking-[1.5px] text-brand-ink-soft dark:text-[#d8c8ab]">
+              Search desk
+            </Text>
+            <Text className="text-[10px] font-semibold uppercase tracking-[1.4px] text-brand-ink-soft dark:text-[#d8c8ab]">
+              Cross-source
+            </Text>
+          </View>
 
-          <View className="mb-4 rounded-2xl border-2 border-brand-surface/70 bg-brand-light-surface p-4 dark:bg-brand-surface/75">
+          <View className="mb-4 rounded-2xl border-2 border-brand-frame/55 bg-brand-light-surface p-4 dark:border-brand-surface/75 dark:bg-brand-surface/75">
             <TextInput
               value={query}
               onChangeText={setQuery}
               placeholder="Search shows, anime, movies..."
-              placeholderTextColor="#857861"
+              placeholderTextColor="#7a6650"
               autoCapitalize="none"
-              className="rounded-xl border-2 border-brand-surface/55 bg-[#fffaf0] px-4 py-3 text-base text-brand-light-text dark:bg-brand-background/70 dark:text-brand-text"
+              className="rounded-xl border-2 border-brand-frame/45 bg-[#fffaf0] px-4 py-3 text-base text-brand-ink dark:border-brand-surface/70 dark:bg-brand-background/70 dark:text-brand-text"
             />
             <View className="mt-3 flex-row flex-wrap gap-2">
               {filterOptions.map((option) => {
@@ -212,14 +229,14 @@ export default function SearchScreen() {
                     className={`rounded-full border-2 px-4 py-2 ${
                       active
                         ? "border-brand-primary bg-brand-primary"
-                        : "border-brand-surface/55 bg-brand-light-background dark:bg-brand-background/65"
+                        : "border-brand-frame/45 bg-brand-light-background dark:border-brand-surface/65 dark:bg-brand-background/65"
                     }`}
                   >
                     <Text
                       className={`text-[11px] font-bold uppercase tracking-[1.2px] ${
                         active
                           ? "text-white"
-                          : "text-brand-light-text dark:text-brand-text"
+                          : "text-brand-ink dark:text-brand-text"
                       }`}
                     >
                       {option.label}
@@ -231,7 +248,7 @@ export default function SearchScreen() {
           </View>
 
           <View className="mb-3 flex-row items-center justify-between">
-            <Text className="text-[11px] font-semibold uppercase tracking-[1.2px] text-[#5d4b33] dark:text-[#ebdabc]">
+            <Text className="text-[11px] font-semibold uppercase tracking-[1.2px] text-brand-ink-soft dark:text-[#d8c8ab]">
               {resultLabel}
             </Text>
             {isLoading ? <ActivityIndicator size="small" color="#cf5d3f" /> : null}
@@ -245,51 +262,8 @@ export default function SearchScreen() {
             </View>
           ) : null}
 
-          {featureItem ? (
-            <Link
-              href={{
-                pathname: "/show/[id]",
-                params: { id: createShowRouteId(featureItem) },
-              }}
-              asChild
-            >
-              <Pressable className="mb-5 overflow-hidden rounded-[26px] border-2 border-brand-surface bg-brand-light-surface dark:bg-brand-surface/80">
-                <View className="h-52">
-                  {featureItem.backdropUrl || featureItem.posterUrl ? (
-                    <Image
-                      source={{
-                        uri: featureItem.backdropUrl ?? featureItem.posterUrl ?? "",
-                      }}
-                      className="h-full w-full"
-                      resizeMode="cover"
-                    />
-                  ) : (
-                    <View className="h-full w-full bg-brand-surface/35" />
-                  )}
-                  <View className="absolute inset-0 bg-black/40" />
-                  <View className="absolute left-4 top-4 rounded-full border border-white/40 bg-black/35 px-3 py-1">
-                    <Text className="text-[10px] font-bold uppercase tracking-[1.2px] text-white">
-                      Lead Result
-                    </Text>
-                  </View>
-                  <View className="absolute bottom-0 left-0 right-0 border-t border-white/20 bg-black/55 px-5 py-4">
-                    <Text className="font-serif text-2xl font-bold text-white">
-                      {featureItem.title}
-                    </Text>
-                    <Text
-                      className="mt-1 text-sm leading-6 text-white/90"
-                      numberOfLines={2}
-                    >
-                      {featureItem.overview ?? "Open details to view full synopsis."}
-                    </Text>
-                  </View>
-                </View>
-              </Pressable>
-            </Link>
-          ) : null}
-
-          <View className="flex-row flex-wrap justify-between gap-y-5">
-            {gridItems.map((item) => (
+          <View className="flex-row flex-wrap justify-between gap-y-4">
+            {results.map((item) => (
               <MediaPosterCard
                 key={`${item.id}-${item.mediaType}`}
                 show={item}
@@ -299,23 +273,23 @@ export default function SearchScreen() {
                 }}
                 className={isWeb ? "" : "w-[48%]"}
                 containerStyle={isWeb ? { width: gridItemWidth } : undefined}
-                posterClassName={isWeb ? "h-72" : "h-64"}
-                showOverview={isWeb && width >= 1280}
+                posterClassName={isWeb ? "h-56" : "h-64"}
+                showOverview={showOverview}
               />
             ))}
           </View>
 
           {!results.length && !isLoading && debouncedQuery.trim() ? (
-            <View className="mt-6 rounded-2xl border-2 border-brand-surface/60 bg-brand-light-surface px-4 py-5 dark:bg-brand-surface/70">
-              <Text className="text-sm text-[#5d4b33] dark:text-[#ebdabc]">
+            <View className="mt-6 rounded-2xl border-2 border-brand-frame/50 bg-brand-light-surface px-4 py-5 dark:border-brand-surface/65 dark:bg-brand-surface/70">
+              <Text className="text-sm text-brand-ink-soft dark:text-[#e2d7c1]">
                 Try a broader keyword or switch the filter.
               </Text>
             </View>
           ) : null}
 
           {!debouncedQuery.trim() ? (
-            <View className="mt-6 rounded-2xl border-2 border-brand-surface/60 bg-brand-light-surface px-4 py-5 dark:bg-brand-surface/70">
-              <Text className="text-sm text-[#5d4b33] dark:text-[#ebdabc]">
+            <View className="mt-6 rounded-2xl border-2 border-brand-frame/50 bg-brand-light-surface px-4 py-5 dark:border-brand-surface/65 dark:bg-brand-surface/70">
+              <Text className="text-sm text-brand-ink-soft dark:text-[#e2d7c1]">
                 Suggestions: “The Last of Us”, “Frieren”, “Oppenheimer”
               </Text>
             </View>

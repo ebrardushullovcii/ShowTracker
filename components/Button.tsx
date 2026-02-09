@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { Pressable, Text, View } from "react-native";
 
 const baseClasses =
-  "items-center justify-center rounded-xl border-2 border-brand-surface bg-brand-primary px-5 py-3";
+  "items-center justify-center rounded-xl border-2 border-brand-frame/70 bg-brand-primary px-5 py-3 dark:border-brand-surface/85";
 const textClasses = "text-xs font-bold uppercase tracking-[1.2px] text-white";
 
 type ButtonProps = {

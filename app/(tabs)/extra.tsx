@@ -4,13 +4,15 @@ import { ScreenWrapper } from "@/components/ScreenWrapper";
 export default function ExtraScreen() {
   return (
     <ScreenWrapper>
-      <View className="pb-10">
-        <Text className="mb-3 px-1 font-serif text-2xl font-bold text-brand-light-text dark:text-brand-text">
-          More
-        </Text>
-        <Text className="px-1 text-sm leading-6 text-[#5d4b33] dark:text-[#ebdabc]">
-          Placeholder tab for upcoming tools and actions.
-        </Text>
+      <View className="pb-0">
+        <View className="rounded-2xl border-2 border-brand-frame/55 bg-brand-light-surface px-4 py-5 dark:border-brand-surface/75 dark:bg-brand-surface/75">
+          <Text className="font-serif text-2xl font-bold text-brand-ink dark:text-brand-text">
+            More
+          </Text>
+          <Text className="mt-2 text-sm leading-6 text-brand-ink-soft dark:text-[#e2d7c1]">
+            Reserved for future tools.
+          </Text>
+        </View>
       </View>
     </ScreenWrapper>
   );
