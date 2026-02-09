@@ -2,10 +2,44 @@ import { getCached, setCached } from "@/lib/api/cache";
 import { normalizeTmdbEpisode } from "@/lib/api/normalize";
 import type { NormalizedEpisode } from "@/lib/api/types";
 
-const tmdbBaseUrl =
-  process.env.EXPO_PUBLIC_TMDB_BASE_URL ?? "https://api.themoviedb.org/3";
-const tmdbApiKey = process.env.EXPO_PUBLIC_TMDB_API_KEY;
-const tmdbReadAccessToken = process.env.EXPO_PUBLIC_TMDB_READ_ACCESS_TOKEN;
+function normalizeTmdbBaseUrl(input?: string) {
+  const fallback = "https://api.themoviedb.org/3";
+  if (!input?.trim()) {
+    return fallback;
+  }
+
+  const trimmed = input.trim().replace(/\/+$/, "");
+
+  try {
+    const parsed = new URL(trimmed);
+    const isTmdbHost = parsed.hostname === "api.themoviedb.org";
+    const hasVersionPath = parsed.pathname === "/3";
+    if (isTmdbHost && !hasVersionPath) {
+      parsed.pathname = "/3";
+      return parsed.toString().replace(/\/+$/, "");
+    }
+    return parsed.toString().replace(/\/+$/, "");
+  } catch {
+    return fallback;
+  }
+}
+
+function sanitizeCredential(value?: string) {
+  if (!value) {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.startsWith("your_")) {
+    return undefined;
+  }
+  return trimmed;
+}
+
+const tmdbBaseUrl = normalizeTmdbBaseUrl(process.env.EXPO_PUBLIC_TMDB_BASE_URL);
+const tmdbApiKey = sanitizeCredential(process.env.EXPO_PUBLIC_TMDB_API_KEY);
+const tmdbReadAccessToken = sanitizeCredential(
+  process.env.EXPO_PUBLIC_TMDB_READ_ACCESS_TOKEN
+);
 
 const cacheTtlMs = 15 * 60 * 1000;
 
@@ -92,7 +126,8 @@ async function request<T>(path: string, params?: Record<string, string | number>
   const url = buildUrl(path, params);
   const maxAttempts = 4;
   const baseDelayMs = 500;
-  const headers: HeadersInit = tmdbReadAccessToken
+  // Prefer API key query auth when available to avoid browser preflight/CORS issues.
+  const headers: HeadersInit = !tmdbApiKey && tmdbReadAccessToken
     ? {
         Authorization: `Bearer ${tmdbReadAccessToken}`,
       }
