@@ -1,7 +1,7 @@
 import { Text, View } from "react-native";
 import { ScreenWrapper } from "@/components/ScreenWrapper";
 
-export default function ExtraScreen() {
+export function ExtraScreen() {
   return (
     <ScreenWrapper>
       <View className="pb-0">
@@ -17,3 +17,5 @@ export default function ExtraScreen() {
     </ScreenWrapper>
   );
 }
+
+export default ExtraScreen;

@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Image,
   NativeScrollEvent,
   NativeSyntheticEvent,
   Platform,
@@ -13,6 +12,7 @@ import {
   type StyleProp,
   type ViewStyle,
 } from "react-native";
+import { Image } from "expo-image";
 import { Link } from "expo-router";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -22,7 +22,7 @@ import { getTabContentWidth } from "@/constants/navigation";
 type HomeTab = "shows" | "movies";
 
 type DashboardItem = {
-  id: string;
+  id: string | null;
   title: string;
   mediaType: "tv" | "anime" | "movie";
   status: "watching" | "paused" | "dropped" | "completed" | "plan_to_watch";
@@ -310,7 +310,11 @@ function getRouteId(item: DashboardItem) {
 }
 
 function getItemKey(item: DashboardItem) {
-  return getRouteId(item) ?? item.id;
+  return (
+    getRouteId(item) ??
+    item.id ??
+    `${item.mediaType}:${item.title}:${item.firstAired ?? "unknown"}`
+  );
 }
 
 function formatStatus(status: DashboardItem["status"]) {
@@ -437,7 +441,7 @@ function DashboardCard({
           <Image
             source={{ uri: item.posterUrl }}
             className="h-full w-full"
-            resizeMode="cover"
+            contentFit="cover"
           />
         ) : (
           <View className="h-full w-full bg-brand-surface/25" />

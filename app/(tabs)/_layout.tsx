@@ -118,7 +118,7 @@ export default function TabsLayout() {
           }}
         />
         <Tabs.Screen
-          name="extra"
+          name="Extra"
           options={{
             title: "More",
             tabBarIcon: ({ color, focused }) => (

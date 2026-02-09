@@ -57,8 +57,8 @@ const REMOTE_ITEMS: RemoteItem[] = [
   {
     key: "more",
     label: "More",
-    href: "/extra",
-    isActive: (pathname) => pathname.startsWith("/extra"),
+    href: "/Extra",
+    isActive: (pathname) => pathname.startsWith("/Extra"),
     renderIcon: (focused, color) => (
       <Ionicons name={focused ? "grid" : "grid-outline"} size={20} color={color} />
     ),

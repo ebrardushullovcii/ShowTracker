@@ -746,13 +746,13 @@ export function ShowDetailScreen() {
       <PageBackButton fallbackHref="/" />
 
       <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={{ paddingTop: 44, paddingBottom: 12 }}
+        className="flex-1"
         showsVerticalScrollIndicator={false}
         bounces={false}
         alwaysBounceVertical={false}
         overScrollMode="never"
       >
+        <View className="pb-3 pt-11">
         {isLoading ? (
           <View className="items-center gap-3 py-24">
             <ActivityIndicator size="large" color="#d16042" />
@@ -1186,6 +1186,7 @@ export function ShowDetailScreen() {
             </View>
           </View>
         ) : null}
+        </View>
       </ScrollView>
     </ScreenWrapper>
   );

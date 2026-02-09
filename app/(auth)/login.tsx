@@ -6,7 +6,7 @@ import { Button } from "@/components/Button";
 import { PageBackButton } from "@/components/PageBackButton";
 import { ScreenWrapper } from "@/components/ScreenWrapper";
 
-export default function LoginScreen() {
+export function LoginScreen() {
   const { signIn } = useAuthActions();
   const router = useRouter();
   const [email, setEmail] = useState("");
@@ -124,3 +124,5 @@ export default function LoginScreen() {
     </ScreenWrapper>
   );
 }
+
+export default LoginScreen;

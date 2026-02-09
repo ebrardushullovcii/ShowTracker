@@ -1,4 +1,10 @@
-import { mutation, query } from "@/convex/_generated/server";
+import {
+  mutation,
+  query,
+  type MutationCtx,
+  type QueryCtx,
+} from "@/convex/_generated/server";
+import type { Doc } from "@/convex/_generated/dataModel";
 import { v } from "convex/values";
 import { auth } from "@/convex/auth";
 
@@ -40,7 +46,28 @@ function hasLookupArgs(args: {
   );
 }
 
-async function getCurrentUserId(ctx: any) {
+function getExternalShowId(show: {
+  tmdbId?: number | null;
+  anilistId?: number | null;
+  tvmazeId?: number | null;
+  imdbId?: string | null;
+}) {
+  if (typeof show.tmdbId === "number") {
+    return String(show.tmdbId);
+  }
+  if (typeof show.anilistId === "number") {
+    return String(show.anilistId);
+  }
+  if (typeof show.tvmazeId === "number") {
+    return String(show.tvmazeId);
+  }
+  if (typeof show.imdbId === "string" && show.imdbId.trim()) {
+    return show.imdbId;
+  }
+  return null;
+}
+
+async function getCurrentUserId(ctx: QueryCtx | MutationCtx) {
   const userId = await auth.getUserId(ctx);
   if (!userId) {
     throw new Error("Unauthorized");
@@ -49,7 +76,7 @@ async function getCurrentUserId(ctx: any) {
 }
 
 async function findShowByLookup(
-  ctx: any,
+  ctx: QueryCtx | MutationCtx,
   args: {
     tmdbId?: number;
     anilistId?: number;
@@ -60,9 +87,7 @@ async function findShowByLookup(
     typeof args.tmdbId === "number"
       ? await ctx.db
           .query("shows")
-          .withIndex("by_tmdbId", (q: any) =>
-            q.eq("tmdbId", args.tmdbId as number)
-          )
+          .withIndex("by_tmdbId", (q) => q.eq("tmdbId", args.tmdbId))
           .unique()
       : null;
   if (byTmdb) {
@@ -73,9 +98,7 @@ async function findShowByLookup(
     typeof args.anilistId === "number"
       ? await ctx.db
           .query("shows")
-          .withIndex("by_anilistId", (q: any) =>
-            q.eq("anilistId", args.anilistId as number)
-          )
+          .withIndex("by_anilistId", (q) => q.eq("anilistId", args.anilistId))
           .unique()
       : null;
   if (byAniList) {
@@ -86,9 +109,7 @@ async function findShowByLookup(
     typeof args.tvmazeId === "number"
       ? await ctx.db
           .query("shows")
-          .withIndex("by_tvmazeId", (q: any) =>
-            q.eq("tvmazeId", args.tvmazeId as number)
-          )
+          .withIndex("by_tvmazeId", (q) => q.eq("tvmazeId", args.tvmazeId))
           .unique()
       : null;
 
@@ -96,7 +117,7 @@ async function findShowByLookup(
 }
 
 async function ensureShow(
-  ctx: any,
+  ctx: MutationCtx,
   args: {
     tmdbId?: number;
     anilistId?: number;
@@ -116,7 +137,7 @@ async function ensureShow(
     firstAired?: string;
     lastUpdated: number;
   }
-) {
+  ): Promise<Doc<"shows">["_id"]> {
   const existing = await findShowByLookup(ctx, args);
   if (existing) {
     await ctx.db.patch(existing._id, args);
@@ -129,7 +150,8 @@ export const upsertShow = mutation({
   args: showInput,
   handler: async (ctx, args) => {
     await getCurrentUserId(ctx);
-    return ensureShow(ctx, args);
+    await ensureShow(ctx, args);
+    return getExternalShowId(args);
   },
 });
 
@@ -169,7 +191,7 @@ export const getUserShowTracking = query({
       .collect();
 
     return {
-      showId: show._id,
+      showId: getExternalShowId(show),
       inWatchlist: userShow !== null,
       status: userShow?.status ?? null,
       watchedEpisodeKeys: watchedEpisodes.map(
@@ -220,7 +242,7 @@ export const getHomeDashboard = query({
             : null;
 
         return {
-          id: show._id,
+          id: getExternalShowId(show),
           title: show.title,
           mediaType: show.mediaType,
           status: userShow.status,

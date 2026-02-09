@@ -3,12 +3,12 @@ import {
   ActivityIndicator,
   Platform,
   Pressable,
-  ScrollView,
   Text,
   TextInput,
   View,
   useWindowDimensions,
 } from "react-native";
+import { FlashList } from "@shopify/flash-list";
 import { MediaPosterCard } from "@/components/MediaPosterCard";
 import { ScreenWrapper } from "@/components/ScreenWrapper";
 import { getTabContentWidth } from "@/constants/navigation";
@@ -199,103 +199,109 @@ export function SearchScreen() {
 
   return (
     <ScreenWrapper>
-      <ScrollView showsVerticalScrollIndicator={false}>
-        <View className="pb-0">
-          <View className="mb-3 flex-row items-center justify-between px-1">
-            <Text className="text-[10px] font-bold uppercase tracking-[1.5px] text-brand-ink-soft dark:text-[#d8c8ab]">
-              Search desk
-            </Text>
-            <Text className="text-[10px] font-semibold uppercase tracking-[1.4px] text-brand-ink-soft dark:text-[#d8c8ab]">
-              Cross-source
-            </Text>
-          </View>
+      <FlashList
+        data={results}
+        key={`search-grid-${isWeb ? columns : 2}`}
+        numColumns={isWeb ? columns : 2}
+        keyExtractor={(item) => `${item.id}-${item.mediaType}`}
+        estimatedItemSize={isWeb ? 360 : 330}
+        showsVerticalScrollIndicator={false}
+        renderItem={({ item }) => (
+          <MediaPosterCard
+            show={item}
+            href={{
+              pathname: "/show/[id]",
+              params: { id: createShowRouteId(item) },
+            }}
+            className={isWeb ? "w-full" : "w-full"}
+            containerStyle={isWeb ? { width: gridItemWidth } : undefined}
+            posterClassName={isWeb ? "h-56" : "h-64"}
+            showOverview={showOverview}
+          />
+        )}
+        ListHeaderComponent={
+          <View className="pb-0">
+            <View className="mb-3 flex-row items-center justify-between px-1">
+              <Text className="text-[10px] font-bold uppercase tracking-[1.5px] text-brand-ink-soft dark:text-[#d8c8ab]">
+                Search desk
+              </Text>
+              <Text className="text-[10px] font-semibold uppercase tracking-[1.4px] text-brand-ink-soft dark:text-[#d8c8ab]">
+                Cross-source
+              </Text>
+            </View>
 
-          <View className="mb-4 rounded-2xl border-2 border-brand-frame/55 bg-brand-light-surface p-4 dark:border-brand-surface/75 dark:bg-brand-surface/75">
-            <TextInput
-              value={query}
-              onChangeText={setQuery}
-              placeholder="Search shows, anime, movies..."
-              placeholderTextColor="#7a6650"
-              autoCapitalize="none"
-              className="rounded-xl border-2 border-brand-frame/45 bg-[#fffaf0] px-4 py-3 text-base text-brand-ink dark:border-brand-surface/70 dark:bg-brand-background/70 dark:text-brand-text"
-            />
-            <View className="mt-3 flex-row flex-wrap gap-2">
-              {filterOptions.map((option) => {
-                const active = option.key === filter;
-                return (
-                  <Pressable
-                    key={option.key}
-                    onPress={() => setFilter(option.key)}
-                    className={`rounded-full border-2 px-4 py-2 ${
-                      active
-                        ? "border-brand-primary bg-brand-primary"
-                        : "border-brand-frame/45 bg-brand-light-background dark:border-brand-surface/65 dark:bg-brand-background/65"
-                    }`}
-                  >
-                    <Text
-                      className={`text-[11px] font-bold uppercase tracking-[1.2px] ${
+            <View className="mb-4 rounded-2xl border-2 border-brand-frame/55 bg-brand-light-surface p-4 dark:border-brand-surface/75 dark:bg-brand-surface/75">
+              <TextInput
+                value={query}
+                onChangeText={setQuery}
+                placeholder="Search shows, anime, movies..."
+                placeholderTextColor="#7a6650"
+                autoCapitalize="none"
+                className="rounded-xl border-2 border-brand-frame/45 bg-[#fffaf0] px-4 py-3 text-base text-brand-ink dark:border-brand-surface/70 dark:bg-brand-background/70 dark:text-brand-text"
+              />
+              <View className="mt-3 flex-row flex-wrap gap-2">
+                {filterOptions.map((option) => {
+                  const active = option.key === filter;
+                  return (
+                    <Pressable
+                      key={option.key}
+                      onPress={() => setFilter(option.key)}
+                      className={`rounded-full border-2 px-4 py-2 ${
                         active
-                          ? "text-white"
-                          : "text-brand-ink dark:text-brand-text"
+                          ? "border-brand-primary bg-brand-primary"
+                          : "border-brand-frame/45 bg-brand-light-background dark:border-brand-surface/65 dark:bg-brand-background/65"
                       }`}
                     >
-                      {option.label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
+                      <Text
+                        className={`text-[11px] font-bold uppercase tracking-[1.2px] ${
+                          active
+                            ? "text-white"
+                            : "text-brand-ink dark:text-brand-text"
+                        }`}
+                      >
+                        {option.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
             </View>
-          </View>
 
-          <View className="mb-3 flex-row items-center justify-between">
-            <Text className="text-[11px] font-semibold uppercase tracking-[1.2px] text-brand-ink-soft dark:text-[#d8c8ab]">
-              {resultLabel}
-            </Text>
-            {isLoading ? <ActivityIndicator size="small" color="#cf5d3f" /> : null}
-          </View>
-
-          {error ? (
-            <View className="mb-4 rounded-2xl border-2 border-amber-500/40 bg-amber-500/10 p-3">
-              <Text className="text-sm text-amber-700 dark:text-amber-300">
-                {error}
+            <View className="mb-3 flex-row items-center justify-between">
+              <Text className="text-[11px] font-semibold uppercase tracking-[1.2px] text-brand-ink-soft dark:text-[#d8c8ab]">
+                {resultLabel}
               </Text>
+              {isLoading ? <ActivityIndicator size="small" color="#cf5d3f" /> : null}
             </View>
-          ) : null}
 
-          <View className="flex-row flex-wrap justify-between gap-y-4">
-            {results.map((item) => (
-              <MediaPosterCard
-                key={`${item.id}-${item.mediaType}`}
-                show={item}
-                href={{
-                  pathname: "/show/[id]",
-                  params: { id: createShowRouteId(item) },
-                }}
-                className={isWeb ? "" : "w-[48%]"}
-                containerStyle={isWeb ? { width: gridItemWidth } : undefined}
-                posterClassName={isWeb ? "h-56" : "h-64"}
-                showOverview={showOverview}
-              />
-            ))}
+            {error ? (
+              <View className="mb-4 rounded-2xl border-2 border-amber-500/40 bg-amber-500/10 p-3">
+                <Text className="text-sm text-amber-700 dark:text-amber-300">
+                  {error}
+                </Text>
+              </View>
+            ) : null}
           </View>
-
-          {!results.length && !isLoading && debouncedQuery.trim() ? (
-            <View className="mt-6 rounded-2xl border-2 border-brand-frame/50 bg-brand-light-surface px-4 py-5 dark:border-brand-surface/65 dark:bg-brand-surface/70">
-              <Text className="text-sm text-brand-ink-soft dark:text-[#e2d7c1]">
-                Try a broader keyword or switch the filter.
-              </Text>
-            </View>
-          ) : null}
-
-          {!debouncedQuery.trim() ? (
-            <View className="mt-6 rounded-2xl border-2 border-brand-frame/50 bg-brand-light-surface px-4 py-5 dark:border-brand-surface/65 dark:bg-brand-surface/70">
-              <Text className="text-sm text-brand-ink-soft dark:text-[#e2d7c1]">
-                Suggestions: “The Last of Us”, “Frieren”, “Oppenheimer”
-              </Text>
-            </View>
-          ) : null}
-        </View>
-      </ScrollView>
+        }
+        ListEmptyComponent={
+          !isLoading ? (
+            !debouncedQuery.trim() ? (
+              <View className="mt-2 rounded-2xl border-2 border-brand-frame/50 bg-brand-light-surface px-4 py-5 dark:border-brand-surface/65 dark:bg-brand-surface/70">
+                <Text className="text-sm text-brand-ink-soft dark:text-[#e2d7c1]">
+                  Suggestions: “The Last of Us”, “Frieren”, “Oppenheimer”
+                </Text>
+              </View>
+            ) : (
+              <View className="mt-2 rounded-2xl border-2 border-brand-frame/50 bg-brand-light-surface px-4 py-5 dark:border-brand-surface/65 dark:bg-brand-surface/70">
+                <Text className="text-sm text-brand-ink-soft dark:text-[#e2d7c1]">
+                  Try a broader keyword or switch the filter.
+                </Text>
+              </View>
+            )
+          ) : null
+        }
+        ListFooterComponent={<View className="h-4" />}
+      />
     </ScreenWrapper>
   );
 }

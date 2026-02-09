@@ -16,6 +16,7 @@
   "dependencies": {
     "@convex-dev/auth": "^0.0.36",
     "@expo/vector-icons": "~14.0.4",
+    "@shopify/flash-list": "^1.7.6",
     "convex": "^1.14.4",
     "expo": "^52.0.0",
     "expo-asset": "~11.0.5",
@@ -38,7 +39,7 @@
     "zustand": "^4.5.2"
   },
   "devDependencies": {
-    "@playwright/test": "^1.58.2",
+    "@playwright/test": "^1.58.0",
     "@types/react": "~18.3.12",
     "eslint": "^8.57.1",
     "eslint-config-expo": "~8.0.1",
