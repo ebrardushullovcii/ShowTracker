@@ -111,7 +111,9 @@ function assertTmdbCredentials() {
 }
 
 function buildUrl(path: string, params: Record<string, string | number> = {}) {
-  const url = new URL(path, tmdbBaseUrl);
+  const normalizedPath = path.replace(/^\/+/, "");
+  const base = tmdbBaseUrl.replace(/\/+$/, "");
+  const url = new URL(`${base}/${normalizedPath}`);
   if (tmdbApiKey) {
     url.searchParams.set("api_key", tmdbApiKey);
   }
