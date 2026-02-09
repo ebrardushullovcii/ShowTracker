@@ -752,7 +752,7 @@ export function ShowDetailScreen() {
         alwaysBounceVertical={false}
         overScrollMode="never"
       >
-        <View className="pb-3 pt-11">
+        <View className="pb-3 pt-0">
         {isLoading ? (
           <View className="items-center gap-3 py-24">
             <ActivityIndicator size="large" color="#d16042" />

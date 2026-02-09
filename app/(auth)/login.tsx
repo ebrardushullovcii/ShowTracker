@@ -1,18 +1,21 @@
 import { Link, useRouter } from "expo-router";
 import { useState } from "react";
-import { Text, TextInput, View } from "react-native";
+import { Platform, Text, TextInput, View, useWindowDimensions } from "react-native";
 import { useAuthActions } from "@convex-dev/auth/react";
 import { Button } from "@/components/Button";
-import { PageBackButton } from "@/components/PageBackButton";
 import { ScreenWrapper } from "@/components/ScreenWrapper";
+import { DESKTOP_TAB_RAIL_BREAKPOINT } from "@/constants/navigation";
 
 export function LoginScreen() {
   const { signIn } = useAuthActions();
   const router = useRouter();
+  const { width } = useWindowDimensions();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isPending, setIsPending] = useState(false);
+  const isDesktopAuth =
+    Platform.OS === "web" && width >= DESKTOP_TAB_RAIL_BREAKPOINT;
 
   const handleSignIn = async () => {
     if (!email.trim() || !password) {
@@ -68,9 +71,7 @@ export function LoginScreen() {
 
   return (
     <ScreenWrapper contentClassName="pt-6">
-      <View className="gap-4 pt-12">
-        <PageBackButton fallbackHref="/" />
-
+      <View className={`gap-4 ${isDesktopAuth ? "pt-4" : "pt-12"}`}>
         <View className="rounded-[24px] border-2 border-brand-frame/55 bg-brand-light-surface px-5 py-4 dark:border-brand-surface/75 dark:bg-brand-surface/85">
           <Text className="mt-1 font-serif text-4xl font-bold text-brand-ink dark:text-brand-text">
             Sign In

@@ -10,7 +10,9 @@
     "start:clear": "expo start --clear",
     "lint": "expo lint",
     "ui:inspect": "node scripts/ui-inspect.mjs",
+    "ui:inspect:quick": "UI_INSPECT_PRESET=quick node scripts/ui-inspect.mjs",
     "ui:inspect:headed": "PW_HEADLESS=false node scripts/ui-inspect.mjs",
+    "ui:inspect:quick:headed": "UI_INSPECT_PRESET=quick PW_HEADLESS=false node scripts/ui-inspect.mjs",
     "ui:inspect:open": "npx playwright open http://localhost:8081"
   },
   "dependencies": {

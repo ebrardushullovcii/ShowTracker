@@ -16,7 +16,7 @@ function MobileSearchTabIcon({
       className={`h-11 w-11 items-center justify-center rounded-full border-2 ${
         focused
           ? "border-brand-frame bg-brand-primary"
-          : "border-brand-frame/50 bg-brand-light-background dark:border-brand-surface/75 dark:bg-brand-background/80"
+          : "border-brand-frame/50 bg-brand-light-background dark:border-[#6c5140] dark:bg-[#2d211a]"
       }`}
     >
       <Feather name="search" size={20} color={focused ? "#fff8ef" : tintColor} />
@@ -47,8 +47,8 @@ export default function TabsLayout() {
                 display: "none",
               }
             : {
-                backgroundColor: isDark ? "#121b27" : "#f7efe1",
-                borderTopColor: isDark ? "#283444" : "#4f3c27",
+                backgroundColor: isDark ? "#2a1f18" : "#f7efe1",
+                borderTopColor: isDark ? "#6a4f3d" : "#4f3c27",
                 borderTopWidth: 2,
                 borderTopLeftRadius: 0,
                 borderTopRightRadius: 0,
@@ -57,8 +57,8 @@ export default function TabsLayout() {
                 paddingTop: 7,
                 marginHorizontal: 0,
               },
-          tabBarActiveTintColor: "#d16042",
-          tabBarInactiveTintColor: isDark ? "#c0cfdf" : "#5b4730",
+          tabBarActiveTintColor: "#e26f48",
+          tabBarInactiveTintColor: isDark ? "#d1bba6" : "#5b4730",
           tabBarLabelStyle: {
             fontSize: 10,
             textTransform: "uppercase",

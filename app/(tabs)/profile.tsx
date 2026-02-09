@@ -30,10 +30,10 @@ export default function ProfileScreen() {
     <ScreenWrapper>
       <View className="pb-0">
         <View className="mb-3 flex-row items-center justify-between px-1">
-          <Text className="text-[10px] font-bold uppercase tracking-[1.5px] text-brand-ink-soft dark:text-[#d8c8ab]">
+          <Text className="pt-[4px] text-[10px] font-bold uppercase tracking-[1.5px] text-brand-ink-soft dark:text-[#d8c8ab]">
             Profile
           </Text>
-          <Text className="text-[10px] font-semibold uppercase tracking-[1.4px] text-brand-ink-soft dark:text-[#d8c8ab]">
+          <Text className="pt-[4px] text-[10px] font-semibold uppercase tracking-[1.4px] text-brand-ink-soft dark:text-[#d8c8ab]">
             Preferences
           </Text>
         </View>
