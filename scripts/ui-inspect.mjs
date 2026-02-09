@@ -137,10 +137,19 @@ function getRouteReadyCues(route) {
 }
 
 function sanitizeRoute(route) {
-  if (route === "/") {
+  const baseRoute = route.split(/[?#]/, 1)[0] ?? "";
+  if (!baseRoute || baseRoute === "/") {
     return "home";
   }
-  return route.replaceAll("/", "_").replace(/^_+/, "");
+
+  const sanitized = baseRoute
+    .replaceAll("/", "_")
+    .replace(/^_+/, "")
+    .replace(/[^a-zA-Z0-9_-]/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_+|_+$/g, "");
+
+  return sanitized || "home";
 }
 
 function buildSummary(findings) {

@@ -115,6 +115,36 @@ async function findShowByLookup(
   return byTvMaze;
 }
 
+async function ensureShowRecordId(
+  ctx: MutationCtx,
+  args: {
+    tmdbId?: number;
+    anilistId?: number;
+    tvmazeId?: number;
+    imdbId?: string;
+    mediaType: "tv" | "anime" | "movie";
+    title: string;
+    overview?: string;
+    posterUrl?: string;
+    backdropUrl?: string;
+    genres?: string[];
+    status?: string;
+    totalEpisodes?: number;
+    totalSeasons?: number;
+    episodeRuntime?: number;
+    rating?: number;
+    firstAired?: string;
+    lastUpdated: number;
+  }
+): Promise<Doc<"shows">["_id"]> {
+  const existing = await findShowByLookup(ctx, args);
+  if (existing) {
+    await ctx.db.patch(existing._id, args);
+    return existing._id;
+  }
+  return ctx.db.insert("shows", args);
+}
+
 async function ensureShow(
   ctx: MutationCtx,
   args: {
@@ -136,21 +166,16 @@ async function ensureShow(
     firstAired?: string;
     lastUpdated: number;
   }
-  ): Promise<Doc<"shows">["_id"]> {
-  const existing = await findShowByLookup(ctx, args);
-  if (existing) {
-    await ctx.db.patch(existing._id, args);
-    return existing._id;
-  }
-  return ctx.db.insert("shows", args);
+) {
+  await ensureShowRecordId(ctx, args);
+  return getExternalShowId(args);
 }
 
 export const upsertShow = mutation({
   args: showInput,
   handler: async (ctx, args) => {
     await getCurrentUserId(ctx);
-    await ensureShow(ctx, args);
-    return getExternalShowId(args);
+    return ensureShow(ctx, args);
   },
 });
 
@@ -295,8 +320,7 @@ export const addToWatchlist = mutation({
   args: showInput,
   handler: async (ctx, args) => {
     const userId = await getCurrentUserId(ctx);
-    const showId = await ensureShow(ctx, args);
-    const externalShowId = getExternalShowId(args);
+    const showId = await ensureShowRecordId(ctx, args);
 
     const existing = await ctx.db
       .query("userShows")
@@ -304,7 +328,7 @@ export const addToWatchlist = mutation({
       .unique();
 
     if (existing) {
-      return { showId: externalShowId, status: existing.status };
+      return { status: existing.status };
     }
 
     await ctx.db.insert("userShows", {
@@ -314,7 +338,7 @@ export const addToWatchlist = mutation({
       addedAt: Date.now(),
     });
 
-    return { showId: externalShowId, status: "plan_to_watch" as const };
+    return { status: "plan_to_watch" as const };
   },
 });
 
@@ -327,7 +351,7 @@ export const toggleEpisodeWatched = mutation({
   },
   handler: async (ctx, args) => {
     const userId = await getCurrentUserId(ctx);
-    const showId = await ensureShow(ctx, args.show);
+    const showId = await ensureShowRecordId(ctx, args.show);
 
     let userShow = await ctx.db
       .query("userShows")
@@ -416,7 +440,7 @@ export const markSeasonWatched = mutation({
   },
   handler: async (ctx, args) => {
     const userId = await getCurrentUserId(ctx);
-    const showId = await ensureShow(ctx, args.show);
+    const showId = await ensureShowRecordId(ctx, args.show);
     const now = Date.now();
 
     let userShow = await ctx.db

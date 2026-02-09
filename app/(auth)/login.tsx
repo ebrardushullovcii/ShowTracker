@@ -1,4 +1,4 @@
-import { Link, useRouter } from "expo-router";
+import { Link, type Href, useRouter } from "expo-router";
 import { useState } from "react";
 import { Platform, Text, TextInput, View, useWindowDimensions } from "react-native";
 import { useAuthActions } from "@convex-dev/auth/react";
@@ -17,6 +17,70 @@ export function LoginScreen() {
   const isDesktopAuth =
     Platform.OS === "web" && width >= DESKTOP_TAB_RAIL_BREAKPOINT;
 
+  const handleAuthResult = (
+    result: Awaited<ReturnType<typeof signIn>>,
+    messages: {
+      verificationRequired: string;
+      authenticationFailed: string;
+      fallback: string;
+    }
+  ) => {
+    const authResult = result as Record<string, unknown>;
+
+    const redirectValue = authResult.redirect;
+    if (redirectValue instanceof URL || typeof redirectValue === "string") {
+      const redirectTarget = redirectValue.toString();
+      if (Platform.OS === "web" && typeof window !== "undefined") {
+        window.location.href = redirectTarget;
+      } else {
+        router.replace(redirectTarget as Href);
+      }
+      return;
+    }
+
+    if (authResult.signingIn === true) {
+      router.replace("/");
+      return;
+    }
+
+    const verificationRequired =
+      authResult.started === true ||
+      authResult.verificationRequired === true ||
+      authResult.requiresVerification === true ||
+      authResult.emailVerificationRequired === true ||
+      authResult.requiresEmailVerification === true ||
+      authResult.confirmationRequired === true ||
+      authResult.requiresConfirmation === true ||
+      authResult.needsConfirmation === true;
+    if (verificationRequired) {
+      setError(messages.verificationRequired);
+      return;
+    }
+
+    const rawFailureSignal =
+      (typeof authResult.errorCode === "string" && authResult.errorCode) ||
+      (typeof authResult.reason === "string" && authResult.reason) ||
+      (typeof authResult.error === "string" && authResult.error) ||
+      (typeof authResult.status === "string" && authResult.status) ||
+      "";
+    const failureSignal = rawFailureSignal.toLowerCase();
+    const authFailed =
+      authResult.failed === true ||
+      authResult.success === false ||
+      authResult.authenticationFailed === true ||
+      authResult.invalidCredentials === true ||
+      failureSignal.includes("invalid") ||
+      failureSignal.includes("credential") ||
+      failureSignal.includes("unauthorized") ||
+      failureSignal.includes("auth_failed");
+    if (authFailed) {
+      setError(messages.authenticationFailed);
+      return;
+    }
+
+    setError(messages.fallback);
+  };
+
   const handleSignIn = async () => {
     if (!email.trim() || !password) {
       setError("Email and password are required.");
@@ -31,12 +95,12 @@ export function LoginScreen() {
         email: email.trim().toLowerCase(),
         password,
       });
-
-      if (result.signingIn) {
-        router.replace("/");
-        return;
-      }
-      setError("Invalid credentials.");
+      handleAuthResult(result, {
+        verificationRequired:
+          "Please verify your email before completing sign in.",
+        authenticationFailed: "Invalid credentials.",
+        fallback: "Sign in needs an additional verification step.",
+      });
     } catch (authError) {
       console.error("Login failed", authError);
       setError(
@@ -52,11 +116,12 @@ export function LoginScreen() {
     setError(null);
     try {
       const result = await signIn("anonymous");
-      if (result.signingIn) {
-        router.replace("/");
-        return;
-      }
-      setError("Failed to continue as guest.");
+      handleAuthResult(result, {
+        verificationRequired:
+          "Guest sign in needs confirmation before continuing.",
+        authenticationFailed: "Failed to continue as guest.",
+        fallback: "Guest sign in could not be completed yet.",
+      });
     } catch (authError) {
       console.error("Anonymous login failed", authError);
       setError(

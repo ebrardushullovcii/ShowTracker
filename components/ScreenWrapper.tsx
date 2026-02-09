@@ -29,8 +29,6 @@ export function ScreenWrapper({
     "flex-1 rounded-[18px] border border-[#8d8277] bg-[#e8e1d4]/95 px-4 pb-0 pt-0 dark:border-[#5b4638] dark:bg-[#130f0c]/95";
   const mobileContentClasses =
     "flex-1 rounded-[17px] border border-brand-frame/45 bg-brand-light-surface/95 px-2.5 pb-0 pt-0 dark:border-brand-surface dark:bg-brand-background/90";
-  const mobileOuterFrameStyle = { borderWidth: 2, padding: 2 };
-  const mobileInnerFrameStyle = { borderWidth: 1, padding: 2 };
 
   return (
     <SafeAreaView className={`${baseClasses} ${className ?? ""}`.trim()}>
@@ -106,14 +104,8 @@ export function ScreenWrapper({
             </View>
           </>
         ) : (
-          <View
-            className="flex-1 overflow-hidden rounded-[24px] border-[3px] border-brand-frame/75 bg-brand-frame/80 p-1.5 dark:border-brand-frame-light/30 dark:bg-[#17202d]"
-            style={mobileOuterFrameStyle}
-          >
-            <View
-              className="flex-1 overflow-hidden rounded-[20px] border-2 border-brand-frame-light/70 bg-brand-light-background/95 p-1 dark:border-brand-surface/85 dark:bg-[#121b27]"
-              style={mobileInnerFrameStyle}
-            >
+          <View className="flex-1 overflow-hidden rounded-[24px] border-[3px] border-brand-frame/75 bg-brand-frame/80 p-1.5 dark:border-brand-frame-light/30 dark:bg-[#17202d]">
+            <View className="flex-1 overflow-hidden rounded-[20px] border-2 border-brand-frame-light/70 bg-brand-light-background/95 p-1 dark:border-brand-surface/85 dark:bg-[#121b27]">
               <View className={`${mobileContentClasses} ${contentClassName ?? ""}`.trim()}>
                 {children}
               </View>

@@ -1,11 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  NativeScrollEvent,
-  NativeSyntheticEvent,
   Platform,
   Pressable,
-  ScrollView,
   Text,
   View,
   useWindowDimensions,
@@ -14,6 +11,7 @@ import {
 } from "react-native";
 import { Image } from "expo-image";
 import { Link } from "expo-router";
+import { FlashList } from "@shopify/flash-list";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { ScreenWrapper } from "@/components/ScreenWrapper";
@@ -47,7 +45,7 @@ type HomeDashboardItem = DashboardItem & {
 
 const TMDB_POSTER_BASE = "https://image.tmdb.org/t/p/w500";
 const TMDB_BACKDROP_BASE = "https://image.tmdb.org/t/p/w780";
-const TODAY_TS = new Date("2026-02-09T00:00:00.000Z").getTime();
+const TODAY_TS = Date.now();
 
 const DEMO_SHOW_ITEMS: HomeDashboardItem[] = [
   {
@@ -297,7 +295,11 @@ const DEMO_MOVIE_ITEMS: HomeDashboardItem[] = [
 
 function getRouteId(item: DashboardItem) {
   if (typeof item.tmdbId === "number") {
-    if (item.mediaType === "tv" || item.mediaType === "movie") {
+    if (
+      item.mediaType === "tv" ||
+      item.mediaType === "movie" ||
+      item.mediaType === "anime"
+    ) {
       return `tmdb:${item.mediaType}:${item.tmdbId}`;
     }
   }
@@ -602,6 +604,17 @@ export function HomeScreen() {
     }
     return (columns - (visibleItems.length % columns)) % columns;
   }, [columns, isWeb, visibleItems.length]);
+  const visibleRows = useMemo(() => {
+    if (!visibleItems.length) {
+      return [] as HomeDashboardItem[][];
+    }
+
+    const rows: HomeDashboardItem[][] = [];
+    for (let index = 0; index < visibleItems.length; index += columns) {
+      rows.push(visibleItems.slice(index, index + columns));
+    }
+    return rows;
+  }, [columns, visibleItems]);
 
   const loadMoreItems = () => {
     if (!hasMore || isLoadingMore || isLoading) {
@@ -614,106 +627,106 @@ export function HomeScreen() {
     }, 140);
   };
 
-  const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    if (!hasMore || isLoadingMore || isLoading) {
-      return;
-    }
-
-    const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
-    const distanceToBottom =
-      contentSize.height - (contentOffset.y + layoutMeasurement.height);
-
-    if (distanceToBottom < 260) {
-      loadMoreItems();
-    }
-  };
-
   return (
     <ScreenWrapper>
-      <ScrollView
+      <FlashList
+        data={visibleRows}
+        key={`home-grid-${activeTab}-${columns}`}
+        keyExtractor={(row, rowIndex) =>
+          row.length
+            ? row.map((entry) => getItemKey(entry)).join("|")
+            : `home-row-${rowIndex}`
+        }
+        estimatedItemSize={isWeb ? (showOverview ? 440 : 400) : 360}
         showsVerticalScrollIndicator={false}
-        onScroll={handleScroll}
-        scrollEventThrottle={16}
-      >
-        <View className="pb-0">
-          <View className="mb-3 flex-row items-center justify-between px-1">
-            <Text className="pt-[4px] text-[10px] font-bold uppercase tracking-[1.5px] text-brand-ink-soft dark:text-[#d8c8ab]">
-              Watch board
-            </Text>
-            <Text className="pt-[4px] text-[10px] font-semibold uppercase tracking-[1.4px] text-brand-ink-soft dark:text-[#d8c8ab]">
-              {activeTab === "shows" ? "TV + anime" : "movies"}
-            </Text>
+        onEndReached={loadMoreItems}
+        onEndReachedThreshold={0.4}
+        ListHeaderComponent={
+          <View className="pb-0">
+            <View className="mb-3 flex-row items-center justify-between px-1">
+              <Text className="pt-[4px] text-[10px] font-bold uppercase tracking-[1.5px] text-brand-ink-soft dark:text-[#d8c8ab]">
+                Watch board
+              </Text>
+              <Text className="pt-[4px] text-[10px] font-semibold uppercase tracking-[1.4px] text-brand-ink-soft dark:text-[#d8c8ab]">
+                {activeTab === "shows" ? "TV + anime" : "movies"}
+              </Text>
+            </View>
+
+            <SegmentTabs value={activeTab} onChange={setActiveTab} />
+
+            {isLoading ? (
+              <View className="items-center gap-2 rounded-2xl border-2 border-brand-frame/50 bg-brand-light-surface/80 py-8 dark:border-brand-surface/65 dark:bg-brand-surface/70">
+                <ActivityIndicator size="small" color="#cf5d3f" />
+                <Text className="text-xs font-semibold uppercase tracking-[1.2px] text-brand-ink-soft dark:text-[#d8c8ab]">
+                  Loading your dashboard
+                </Text>
+              </View>
+            ) : null}
+
+            {!isLoading && usingDemoItems ? (
+              <View className="mb-3 rounded-xl border border-brand-frame/40 bg-brand-light-surface/70 px-3 py-2.5 dark:border-brand-surface/60 dark:bg-brand-surface/60">
+                <Text className="text-[11px] leading-5 text-brand-ink-soft dark:text-[#d8c8ab]">
+                  Showing sample titles to preview layout density. Add your real titles from
+                  Discover and this list automatically shifts to your actual library.
+                </Text>
+              </View>
+            ) : null}
+
+            {!isLoading && !activeItems.length ? (
+              <View className="rounded-2xl border-2 border-brand-frame/50 bg-brand-light-surface px-4 py-5 dark:border-brand-surface/65 dark:bg-brand-surface/70">
+                <Text className="font-serif text-lg font-semibold text-brand-ink dark:text-brand-text">
+                  {activeTab === "shows"
+                    ? "No active shows yet"
+                    : "No queued movies yet"}
+                </Text>
+                <Text className="mt-1 text-sm leading-6 text-brand-ink-soft dark:text-[#e2d7c1]">
+                  {activeTab === "shows"
+                    ? "Start tracking episodes from any show detail page and they will appear here."
+                    : "Add movies to your watchlist and they will appear here as your queue."}
+                </Text>
+              </View>
+            ) : null}
           </View>
-
-          <SegmentTabs value={activeTab} onChange={setActiveTab} />
-
-          {isLoading ? (
-            <View className="items-center gap-2 rounded-2xl border-2 border-brand-frame/50 bg-brand-light-surface/80 py-8 dark:border-brand-surface/65 dark:bg-brand-surface/70">
-              <ActivityIndicator size="small" color="#cf5d3f" />
-              <Text className="text-xs font-semibold uppercase tracking-[1.2px] text-brand-ink-soft dark:text-[#d8c8ab]">
-                Loading your dashboard
-              </Text>
-            </View>
-          ) : null}
-
-          {!isLoading && usingDemoItems ? (
-            <View className="mb-3 rounded-xl border border-brand-frame/40 bg-brand-light-surface/70 px-3 py-2.5 dark:border-brand-surface/60 dark:bg-brand-surface/60">
-              <Text className="text-[11px] leading-5 text-brand-ink-soft dark:text-[#d8c8ab]">
-                Showing sample titles to preview layout density. Add your real titles from
-                Discover and this list automatically shifts to your actual library.
-              </Text>
-            </View>
-          ) : null}
-
-          {!isLoading && !activeItems.length ? (
-            <View className="rounded-2xl border-2 border-brand-frame/50 bg-brand-light-surface px-4 py-5 dark:border-brand-surface/65 dark:bg-brand-surface/70">
-              <Text className="font-serif text-lg font-semibold text-brand-ink dark:text-brand-text">
-                {activeTab === "shows"
-                  ? "No active shows yet"
-                  : "No queued movies yet"}
-              </Text>
-              <Text className="mt-1 text-sm leading-6 text-brand-ink-soft dark:text-[#e2d7c1]">
-                {activeTab === "shows"
-                  ? "Start tracking episodes from any show detail page and they will appear here."
-                  : "Add movies to your watchlist and they will appear here as your queue."}
-              </Text>
-            </View>
-          ) : null}
-
-          {!isLoading && activeItems.length ? (
-            <View className="flex-row flex-wrap justify-between">
-              {visibleItems.map((item) => (
-                <DashboardCard
-                  key={getItemKey(item)}
-                  item={item}
-                  isWeb={isWeb}
-                  showOverview={showOverview}
-                  containerStyle={{ width: cardWidth }}
-                />
-              ))}
-              {Array.from({ length: desktopFillerCount }).map((_, index) => (
-                <View
-                  key={`home-fill-${index}`}
-                  className="mb-4 opacity-0"
-                  style={{ width: cardWidth, pointerEvents: "none" }}
-                />
-              ))}
-            </View>
-          ) : null}
-
-          {!isLoading && hasMore ? (
-            <View className="items-center pb-4 pt-1">
-              <ActivityIndicator
-                size="small"
-                color={isLoadingMore ? "#cf5d3f" : "#8e7455"}
+        }
+        renderItem={({ item: row, index }) => (
+          <View className="flex-row flex-wrap justify-between">
+            {row.map((item) => (
+              <DashboardCard
+                key={getItemKey(item)}
+                item={item}
+                isWeb={isWeb}
+                showOverview={showOverview}
+                containerStyle={{ width: cardWidth }}
               />
-              <Text className="mt-1 text-[11px] uppercase tracking-[1.1px] text-brand-ink-soft dark:text-[#d8c8ab]">
-                {isLoadingMore ? "Loading more titles..." : "Scroll for more"}
-              </Text>
-            </View>
-          ) : null}
-        </View>
-      </ScrollView>
+            ))}
+            {index === visibleRows.length - 1
+              ? Array.from({ length: desktopFillerCount }).map((_, fillerIndex) => (
+                  <View
+                    key={`home-fill-${fillerIndex}`}
+                    className="mb-4 opacity-0"
+                    style={{ width: cardWidth, pointerEvents: "none" }}
+                  />
+                ))
+              : null}
+          </View>
+        )}
+        ListFooterComponent={
+          <View>
+            {!isLoading && hasMore ? (
+              <View className="items-center pb-4 pt-1">
+                <ActivityIndicator
+                  size="small"
+                  color={isLoadingMore ? "#cf5d3f" : "#8e7455"}
+                />
+                <Text className="mt-1 text-[11px] uppercase tracking-[1.1px] text-brand-ink-soft dark:text-[#d8c8ab]">
+                  {isLoadingMore ? "Loading more titles..." : "Scroll for more"}
+                </Text>
+              </View>
+            ) : null}
+            <View className="h-1" />
+          </View>
+        }
+      />
     </ScreenWrapper>
   );
 }

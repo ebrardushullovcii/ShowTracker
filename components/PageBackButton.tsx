@@ -107,8 +107,7 @@ export function PageBackButton({
           isDark
             ? "border-[#5a4538] bg-[#1a130f]/75"
             : "border-[#b8aa99] bg-[#f4ebde]/72"
-        }`}
-        style={Platform.OS === "web" ? ({ cursor: "pointer", userSelect: "none" } as never) : undefined}
+        } web:cursor-pointer web:select-none`}
       >
         <View
           className={`h-9 flex-row items-center gap-1.5 rounded-full border px-3.5 ${
