@@ -6,7 +6,7 @@ import { Button } from "@/components/Button";
 import { PageBackButton } from "@/components/PageBackButton";
 import { ScreenWrapper } from "@/components/ScreenWrapper";
 
-export default function RegisterScreen() {
+export function RegisterScreen() {
   const { signIn } = useAuthActions();
   const router = useRouter();
   const [email, setEmail] = useState("");
@@ -16,8 +16,18 @@ export default function RegisterScreen() {
   const [isPending, setIsPending] = useState(false);
 
   const handleRegister = async () => {
-    if (!email.trim() || !password || !confirmPassword) {
-      setError("Email and password are required.");
+    if (!email.trim()) {
+      setError("Email is required.");
+      return;
+    }
+
+    if (!password) {
+      setError("Password is required.");
+      return;
+    }
+
+    if (!confirmPassword) {
+      setError("Password confirmation is required.");
       return;
     }
 
@@ -35,7 +45,7 @@ export default function RegisterScreen() {
         password,
       });
 
-      if (result.signingIn) {
+      if (result) {
         router.replace("/");
         return;
       }
@@ -112,3 +122,5 @@ export default function RegisterScreen() {
     </ScreenWrapper>
   );
 }
+
+export default RegisterScreen;

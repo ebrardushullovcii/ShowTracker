@@ -61,8 +61,12 @@ export function parseShowRouteId(value: string | null | undefined): ShowRouteId 
     return null;
   }
 
-  const parsedId = Number(externalId);
-  if (!Number.isFinite(parsedId)) {
+  if (!/^\d+$/.test(externalId)) {
+    return null;
+  }
+
+  const parsedId = Number.parseInt(externalId, 10);
+  if (!Number.isInteger(parsedId) || parsedId <= 0) {
     return null;
   }
 

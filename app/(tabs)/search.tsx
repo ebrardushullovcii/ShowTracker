@@ -89,7 +89,7 @@ function getGridItemWidth(columns: number) {
   return "48%";
 }
 
-export default function SearchScreen() {
+export function SearchScreen() {
   const [query, setQuery] = useState("");
   const { width } = useWindowDimensions();
   const isWeb = Platform.OS === "web";
@@ -299,3 +299,5 @@ export default function SearchScreen() {
     </ScreenWrapper>
   );
 }
+
+export default SearchScreen;

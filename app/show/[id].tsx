@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Image,
   Platform,
   Pressable,
   ScrollView,
@@ -9,6 +8,7 @@ import {
   View,
   useWindowDimensions,
 } from "react-native";
+import { Image } from "expo-image";
 import { useLocalSearchParams } from "expo-router";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -18,7 +18,6 @@ import { Badge } from "@/components/Badge";
 import { getAniListMediaById } from "@/lib/api/anilist";
 import { getJikanAnime } from "@/lib/api/jikan";
 import {
-  normalizeAniListMedia,
   normalizeTmdbSeason,
   normalizeTmdbShowDetails,
 } from "@/lib/api/normalize";
@@ -299,7 +298,7 @@ function cleanRichText(value?: string | null) {
     .trim();
 }
 
-export default function ShowDetailScreen() {
+export function ShowDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const parsedId = useMemo(() => parseShowRouteId(id), [id]);
   const { width } = useWindowDimensions();
@@ -391,14 +390,13 @@ export default function ShowDetailScreen() {
         }
 
         if (parsedId.source === "anilist") {
-          const media = await getAniListMediaById(parsedId.externalId);
+          const normalized = await getAniListMediaById(parsedId.externalId);
           if (isCancelled) {
             return;
           }
-          if (!media) {
+          if (!normalized) {
             throw new Error("Anime not found.");
           }
-          const normalized = normalizeAniListMedia(media);
           setShow(normalized);
           setSeasons(createAnimeSeason(normalized.totalEpisodes));
           return;
@@ -782,7 +780,7 @@ export default function ShowDetailScreen() {
                 <Image
                   source={{ uri: show.backdropUrl }}
                   className="h-64 w-full"
-                  resizeMode="cover"
+                  contentFit="cover"
                 />
               ) : (
                 <View className="h-64 w-full bg-brand-surface/60" />
@@ -817,7 +815,7 @@ export default function ShowDetailScreen() {
                   <Image
                     source={{ uri: show.posterUrl }}
                     className="h-full w-full"
-                    resizeMode="cover"
+                    contentFit="cover"
                   />
                 ) : (
                   <View className="h-full w-full items-center justify-center px-3">
@@ -1098,7 +1096,7 @@ export default function ShowDetailScreen() {
                                     <Image
                                       source={{ uri: episode.stillUrl }}
                                       className="h-16 w-24 rounded-xl border border-brand-frame/45 dark:border-brand-surface/65"
-                                      resizeMode="cover"
+                                      contentFit="cover"
                                     />
                                   ) : (
                                     <View className="h-16 w-16 items-center justify-center rounded-xl border border-brand-frame/45 bg-brand-surface/60 dark:border-brand-surface/65">
@@ -1192,3 +1190,5 @@ export default function ShowDetailScreen() {
     </ScreenWrapper>
   );
 }
+
+export default ShowDetailScreen;

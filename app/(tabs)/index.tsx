@@ -522,7 +522,7 @@ function DashboardCard({
   );
 }
 
-export default function HomeScreen() {
+export function HomeScreen() {
   const [activeTab, setActiveTab] = useState<HomeTab>("shows");
   const [visibleCount, setVisibleCount] = useState(8);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -713,3 +713,5 @@ export default function HomeScreen() {
     </ScreenWrapper>
   );
 }
+
+export default HomeScreen;

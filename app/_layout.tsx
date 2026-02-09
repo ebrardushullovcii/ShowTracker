@@ -15,7 +15,7 @@ import {
 import { convex } from "@/lib/convex/client";
 import { tokenStorage } from "@/lib/auth/token-storage";
 
-export default function RootLayout() {
+export function RootLayout() {
   const { colorScheme } = useColorScheme();
   const { width } = useWindowDimensions();
   const isDark = colorScheme === "dark";
@@ -39,3 +39,5 @@ export default function RootLayout() {
     </ConvexAuthProvider>
   );
 }
+
+export default RootLayout;

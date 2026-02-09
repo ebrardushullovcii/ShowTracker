@@ -1,7 +1,7 @@
 import type { Href } from "expo-router";
 import { Link } from "expo-router";
+import { Image } from "expo-image";
 import {
-  Image,
   Pressable,
   Text,
   View,
@@ -11,7 +11,7 @@ import {
 import type { NormalizedShow } from "@/lib/api/types";
 import { Badge } from "@/components/Badge";
 
-type MediaPosterCardProps = {
+interface MediaPosterCardProps {
   show: NormalizedShow;
   href: Href;
   rank?: number;
@@ -19,7 +19,7 @@ type MediaPosterCardProps = {
   posterClassName?: string;
   containerStyle?: StyleProp<ViewStyle>;
   showOverview?: boolean;
-};
+}
 
 const mediaTypeLabel: Record<NormalizedShow["mediaType"], string> = {
   tv: "TV",
@@ -49,7 +49,7 @@ export function MediaPosterCard({
             <Image
               source={{ uri: show.posterUrl }}
               className="h-full w-full"
-              resizeMode="cover"
+              contentFit="cover"
             />
           ) : (
             <View className="h-full w-full items-center justify-center bg-brand-surface/20 px-3">

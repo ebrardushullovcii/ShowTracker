@@ -4,27 +4,14 @@ import { authTables } from "@convex-dev/auth/server";
 
 export default defineSchema({
   ...authTables,
-  users: defineTable({
-    name: v.optional(v.string()),
-    image: v.optional(v.string()),
-    email: v.optional(v.string()),
-    emailVerificationTime: v.optional(v.number()),
-    phone: v.optional(v.string()),
-    phoneVerificationTime: v.optional(v.number()),
-    isAnonymous: v.optional(v.boolean()),
+  userProfiles: defineTable({
+    userId: v.id("users"),
     avatarUrl: v.optional(v.string()),
     tokenIdentifier: v.optional(v.string()),
     createdAt: v.optional(v.number()),
   })
-    .index("email", ["email"])
-    .index("phone", ["phone"])
+    .index("by_userId", ["userId"])
     .index("by_tokenIdentifier", ["tokenIdentifier"]),
-  authRefreshTokens: defineTable({
-    sessionId: v.id("authSessions"),
-    expirationTime: v.number(),
-    firstUsedTime: v.optional(v.number()),
-    parentRefreshTokenId: v.optional(v.id("authRefreshTokens")),
-  }).index("sessionId", ["sessionId"]),
   shows: defineTable({
     tmdbId: v.optional(v.number()),
     anilistId: v.optional(v.number()),
