@@ -80,6 +80,11 @@ export type TmdbShowDetails = {
   first_air_date?: string;
   release_date?: string;
   imdb_id?: string | null;
+  seasons?: {
+    season_number: number;
+    name?: string;
+    episode_count?: number;
+  }[];
 };
 
 export type TmdbSeasonDetails = {
