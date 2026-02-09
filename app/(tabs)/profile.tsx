@@ -29,14 +29,9 @@ export default function ProfileScreen() {
   return (
     <ScreenWrapper>
       <View className="pb-10">
-        <View className="mb-5 rounded-[28px] border-2 border-brand-surface bg-brand-light-surface px-5 py-4 dark:bg-brand-surface/80">
-          <Text className="font-serif text-3xl font-bold leading-9 text-brand-light-text dark:text-brand-text">
-            Profile
-          </Text>
-          <Text className="mt-1 text-sm leading-6 text-[#5d4b33] dark:text-[#ebdabc]">
-            Account and appearance
-          </Text>
-        </View>
+        <Text className="mb-3 px-1 font-serif text-2xl font-bold text-brand-light-text dark:text-brand-text">
+          Profile
+        </Text>
 
         <View className="mb-4 rounded-2xl border-2 border-brand-surface/65 bg-brand-light-surface px-4 py-4 dark:bg-brand-surface/75">
           <Text className="font-serif text-xl font-semibold text-brand-light-text dark:text-brand-text">

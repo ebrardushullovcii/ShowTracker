@@ -189,14 +189,9 @@ export default function SearchScreen() {
     <ScreenWrapper>
       <ScrollView showsVerticalScrollIndicator={false}>
         <View className="pb-10">
-          <View className="mb-5 rounded-[28px] border-2 border-brand-surface bg-brand-light-surface px-5 py-4 dark:bg-brand-surface/80">
-            <Text className="font-serif text-3xl font-bold leading-9 text-brand-light-text dark:text-brand-text">
-              Search
-            </Text>
-            <Text className="mt-1 text-sm leading-6 text-[#5d4b33] dark:text-[#ebdabc]">
-              Find a title
-            </Text>
-          </View>
+          <Text className="mb-3 px-1 font-serif text-2xl font-bold text-brand-light-text dark:text-brand-text">
+            Search
+          </Text>
 
           <View className="mb-4 rounded-2xl border-2 border-brand-surface/70 bg-brand-light-surface p-4 dark:bg-brand-surface/75">
             <TextInput
