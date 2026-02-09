@@ -112,7 +112,7 @@ function DashboardCard({ item }: { item: DashboardItem }) {
           />
         ) : (
           <View className="h-full w-full items-center justify-center px-2">
-            <Text className="text-center text-[11px] font-semibold uppercase tracking-[1px] text-slate-600 dark:text-slate-300">
+            <Text className="text-center text-[11px] font-semibold uppercase tracking-[1px] text-[#5d4b33] dark:text-[#ebdabc]">
               No Art
             </Text>
           </View>
@@ -127,7 +127,7 @@ function DashboardCard({ item }: { item: DashboardItem }) {
           >
             {item.title}
           </Text>
-          <Text className="mt-1 text-[11px] uppercase tracking-[1.2px] text-slate-500 dark:text-slate-300">
+          <Text className="mt-1 text-[11px] uppercase tracking-[1.2px] text-[#5d4b33] dark:text-[#ebdabc]">
             {item.mediaType === "anime"
               ? "Anime"
               : item.mediaType === "tv"
@@ -161,7 +161,7 @@ function DashboardCard({ item }: { item: DashboardItem }) {
               ) : null}
             </>
           )}
-          <Text className="text-[11px] uppercase tracking-[1.1px] text-slate-500 dark:text-slate-300">
+          <Text className="text-[11px] uppercase tracking-[1.1px] text-[#5d4b33] dark:text-[#ebdabc]">
             Active {formatActivity(item.lastActivityAt)}
           </Text>
         </View>
@@ -207,15 +207,12 @@ export default function HomeScreen() {
     <ScreenWrapper>
       <ScrollView showsVerticalScrollIndicator={false}>
         <View className="pb-10">
-          <View className="mb-4 rounded-[28px] border-2 border-brand-surface bg-brand-light-surface px-5 py-5 dark:bg-brand-surface/80">
-            <Text className="text-[11px] font-bold uppercase tracking-[1.8px] text-brand-primary">
+          <View className="mb-5 rounded-[28px] border-2 border-brand-surface bg-brand-light-surface px-5 py-4 dark:bg-brand-surface/80">
+            <Text className="font-serif text-3xl font-bold leading-9 text-brand-light-text dark:text-brand-text">
               Home
             </Text>
-            <Text className="mt-1 font-serif text-3xl font-bold leading-9 text-brand-light-text dark:text-brand-text">
-              Tonight&apos;s Queue
-            </Text>
-            <Text className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">
-              A paper-like guide to what is next in your watch stack.
+            <Text className="mt-1 text-sm leading-6 text-[#5d4b33] dark:text-[#ebdabc]">
+              Active queue
             </Text>
           </View>
 
@@ -224,7 +221,7 @@ export default function HomeScreen() {
           {isLoading ? (
             <View className="items-center gap-2 rounded-2xl border-2 border-brand-surface/60 bg-brand-light-surface/80 py-8 dark:bg-brand-surface/70">
               <ActivityIndicator size="small" color="#cf5d3f" />
-              <Text className="text-xs font-semibold uppercase tracking-[1.2px] text-slate-500 dark:text-slate-300">
+              <Text className="text-xs font-semibold uppercase tracking-[1.2px] text-[#5d4b33] dark:text-[#ebdabc]">
                 Loading your dashboard
               </Text>
             </View>
@@ -237,7 +234,7 @@ export default function HomeScreen() {
                   ? "No active shows yet"
                   : "No queued movies yet"}
               </Text>
-              <Text className="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-300">
+              <Text className="mt-1 text-sm leading-6 text-[#5d4b33] dark:text-[#ebdabc]">
                 {activeTab === "shows"
                   ? "Start tracking episodes from any show detail page and they will appear here."
                   : "Add movies to your watchlist and they will appear here as your queue."}

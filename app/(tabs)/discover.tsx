@@ -191,15 +191,12 @@ export default function DiscoverScreen() {
     <ScreenWrapper>
       <ScrollView showsVerticalScrollIndicator={false}>
         <View className="pb-10">
-          <View className="mb-4 rounded-[28px] border-2 border-brand-surface bg-brand-light-surface px-5 py-5 dark:bg-brand-surface/80">
-            <Text className="text-[11px] font-bold uppercase tracking-[1.8px] text-brand-primary">
+          <View className="mb-5 rounded-[28px] border-2 border-brand-surface bg-brand-light-surface px-5 py-4 dark:bg-brand-surface/80">
+            <Text className="font-serif text-3xl font-bold leading-9 text-brand-light-text dark:text-brand-text">
               Discover
             </Text>
-            <Text className="mt-1 font-serif text-3xl font-bold leading-9 text-brand-light-text dark:text-brand-text">
-              Weekend TV Guide
-            </Text>
-            <Text className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">
-              Flip through trends by medium and pick your next binge.
+            <Text className="mt-1 text-sm leading-6 text-[#5d4b33] dark:text-[#ebdabc]">
+              Browse by media type
             </Text>
           </View>
 
@@ -209,7 +206,7 @@ export default function DiscoverScreen() {
             <Text className="font-serif text-2xl font-semibold text-brand-light-text dark:text-brand-text">
               {panelTitle}
             </Text>
-            <Text className="mt-1 text-xs uppercase tracking-[1.2px] text-slate-500 dark:text-slate-300">
+            <Text className="mt-1 text-xs uppercase tracking-[1.2px] text-[#5d4b33] dark:text-[#ebdabc]">
               {panelSubtitle}
             </Text>
           </View>
@@ -217,7 +214,7 @@ export default function DiscoverScreen() {
           {activeState.isLoading ? (
             <View className="items-center gap-2 rounded-2xl border-2 border-brand-surface/60 bg-brand-light-surface/80 py-8 dark:bg-brand-surface/70">
               <ActivityIndicator size="small" color="#cf5d3f" />
-              <Text className="text-xs font-semibold uppercase tracking-[1.2px] text-slate-500 dark:text-slate-300">
+              <Text className="text-xs font-semibold uppercase tracking-[1.2px] text-[#5d4b33] dark:text-[#ebdabc]">
                 Loading trending titles
               </Text>
             </View>
@@ -249,7 +246,7 @@ export default function DiscoverScreen() {
 
           {!activeState.isLoading && !activeState.error && !activeState.items.length ? (
             <View className="mt-5 rounded-2xl border-2 border-brand-surface/60 bg-brand-light-surface px-4 py-5 dark:bg-brand-surface/70">
-              <Text className="text-sm text-slate-600 dark:text-slate-300">
+              <Text className="text-sm text-[#5d4b33] dark:text-[#ebdabc]">
                 No discovery data available right now.
               </Text>
             </View>

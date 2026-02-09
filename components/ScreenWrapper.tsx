@@ -5,7 +5,7 @@ import { View } from "react-native";
 const baseClasses =
   "flex-1 bg-brand-light-background dark:bg-brand-background";
 const contentClasses =
-  "flex-1 rounded-[28px] border-2 border-brand-surface/65 bg-brand-light-background/95 px-4 py-3 dark:border-brand-surface dark:bg-brand-background/92";
+  "m-3 flex-1 rounded-[32px] border-2 border-brand-surface/70 bg-brand-light-background/95 px-5 pb-4 pt-6 dark:border-brand-surface dark:bg-brand-background/92";
 
 interface ScreenWrapperProps extends PropsWithChildren {
   className?: string;

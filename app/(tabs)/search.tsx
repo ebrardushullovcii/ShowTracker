@@ -148,15 +148,12 @@ export default function SearchScreen() {
     <ScreenWrapper>
       <ScrollView showsVerticalScrollIndicator={false}>
         <View className="pb-10">
-          <View className="mb-4 rounded-[28px] border-2 border-brand-surface bg-brand-light-surface px-5 py-5 dark:bg-brand-surface/80">
-            <Text className="text-[11px] font-bold uppercase tracking-[1.8px] text-brand-primary">
+          <View className="mb-5 rounded-[28px] border-2 border-brand-surface bg-brand-light-surface px-5 py-4 dark:bg-brand-surface/80">
+            <Text className="font-serif text-3xl font-bold leading-9 text-brand-light-text dark:text-brand-text">
               Search
             </Text>
-            <Text className="mt-1 font-serif text-3xl font-bold leading-9 text-brand-light-text dark:text-brand-text">
-              Catalog Desk
-            </Text>
-            <Text className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">
-              Pull titles from TV, anime, and movies in one place.
+            <Text className="mt-1 text-sm leading-6 text-[#5d4b33] dark:text-[#ebdabc]">
+              Find a title
             </Text>
           </View>
 
@@ -198,7 +195,7 @@ export default function SearchScreen() {
           </View>
 
           <View className="mb-3 flex-row items-center justify-between">
-            <Text className="text-[11px] font-semibold uppercase tracking-[1.2px] text-slate-500 dark:text-slate-300">
+            <Text className="text-[11px] font-semibold uppercase tracking-[1.2px] text-[#5d4b33] dark:text-[#ebdabc]">
               {resultLabel}
             </Text>
             {isLoading ? <ActivityIndicator size="small" color="#cf5d3f" /> : null}
@@ -229,7 +226,7 @@ export default function SearchScreen() {
 
           {!results.length && !isLoading && debouncedQuery.trim() ? (
             <View className="mt-6 rounded-2xl border-2 border-brand-surface/60 bg-brand-light-surface px-4 py-5 dark:bg-brand-surface/70">
-              <Text className="text-sm text-slate-600 dark:text-slate-300">
+              <Text className="text-sm text-[#5d4b33] dark:text-[#ebdabc]">
                 Try a broader keyword or switch the filter.
               </Text>
             </View>
@@ -237,7 +234,7 @@ export default function SearchScreen() {
 
           {!debouncedQuery.trim() ? (
             <View className="mt-6 rounded-2xl border-2 border-brand-surface/60 bg-brand-light-surface px-4 py-5 dark:bg-brand-surface/70">
-              <Text className="text-sm text-slate-600 dark:text-slate-300">
+              <Text className="text-sm text-[#5d4b33] dark:text-[#ebdabc]">
                 Suggestions: “The Last of Us”, “Frieren”, “Oppenheimer”
               </Text>
             </View>

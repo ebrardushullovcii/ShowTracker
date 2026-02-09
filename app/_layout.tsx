@@ -1,7 +1,7 @@
 import "../global.css";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { useColorScheme } from "react-native";
+import { useColorScheme } from "nativewind";
 import { ConvexAuthProvider } from "@convex-dev/auth/react";
 import { AuthGate } from "@/components/AuthGate";
 import { ThemeProvider } from "@/components/ThemeProvider";
@@ -9,7 +9,7 @@ import { convex } from "@/lib/convex/client";
 import { tokenStorage } from "@/lib/auth/token-storage";
 
 export default function RootLayout() {
-  const colorScheme = useColorScheme();
+  const { colorScheme } = useColorScheme();
 
   return (
     <ConvexAuthProvider client={convex} storage={tokenStorage}>

@@ -54,15 +54,12 @@ export default function RegisterScreen() {
   return (
     <ScreenWrapper contentClassName="justify-center">
       <View className="gap-4">
-        <View className="rounded-[28px] border-2 border-brand-surface bg-brand-light-surface px-5 py-5 dark:bg-brand-surface/85">
-          <Text className="text-[11px] font-bold uppercase tracking-[1.8px] text-brand-primary">
-            ShowTracker
-          </Text>
+        <View className="rounded-[28px] border-2 border-brand-surface bg-brand-light-surface px-5 py-4 dark:bg-brand-surface/85">
           <Text className="mt-1 font-serif text-4xl font-bold text-brand-light-text dark:text-brand-text">
-            Create Account
+            Register
           </Text>
-          <Text className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">
-            Build your own watch archive and sync it in real time.
+          <Text className="mt-1 text-sm leading-6 text-[#5d4b33] dark:text-[#ebdabc]">
+            Create your account
           </Text>
         </View>
 

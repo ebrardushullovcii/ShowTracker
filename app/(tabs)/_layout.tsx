@@ -3,10 +3,10 @@ import { Tabs } from "expo-router";
 import {
   Pressable,
   Text,
-  useColorScheme,
   View,
   type PressableProps,
 } from "react-native";
+import { useColorScheme } from "nativewind";
 
 function SearchTabButton({
   onPress,
@@ -33,7 +33,8 @@ function SearchTabButton({
 }
 
 export default function TabsLayout() {
-  const isDark = useColorScheme() === "dark";
+  const { colorScheme } = useColorScheme();
+  const isDark = colorScheme === "dark";
 
   return (
     <Tabs
@@ -41,7 +42,7 @@ export default function TabsLayout() {
         headerShown: false,
         tabBarHideOnKeyboard: true,
         tabBarStyle: {
-          backgroundColor: isDark ? "#19140f" : "#f6eedf",
+          backgroundColor: isDark ? "#19140f" : "#f9f0df",
           borderTopColor: isDark ? "#30271b" : "#2f2618",
           borderTopWidth: 2,
           height: 84,
@@ -49,7 +50,7 @@ export default function TabsLayout() {
           paddingTop: 8,
         },
         tabBarActiveTintColor: "#cf5d3f",
-        tabBarInactiveTintColor: isDark ? "#c5b79e" : "#6f6047",
+        tabBarInactiveTintColor: isDark ? "#e6d5b8" : "#4f3e27",
         tabBarLabelStyle: {
           fontSize: 11,
           textTransform: "uppercase",
@@ -107,6 +108,19 @@ export default function TabsLayout() {
           tabBarIcon: ({ color, focused }) => (
             <Ionicons
               name={focused ? "person" : "person-outline"}
+              size={20}
+              color={color}
+            />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="extra"
+        options={{
+          title: "More",
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons
+              name={focused ? "grid" : "grid-outline"}
               size={20}
               color={color}
             />
