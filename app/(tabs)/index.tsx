@@ -1,8 +1,7 @@
 import { useEffect, useState } from "react";
-import { ActivityIndicator, ScrollView, Text, View } from "react-native";
+import { ScrollView, Text, View } from "react-native";
 import { MediaPosterCard } from "@/components/MediaPosterCard";
 import { ScreenWrapper } from "@/components/ScreenWrapper";
-import { Badge } from "@/components/Badge";
 import { getTrendingAniList } from "@/lib/api/anilist";
 import { normalizeAniListMedia, normalizeTmdbMedia } from "@/lib/api/normalize";
 import { getTrendingTmdb } from "@/lib/api/tmdb";
@@ -188,31 +187,6 @@ export default function DiscoveryScreen() {
     <ScreenWrapper>
       <ScrollView showsVerticalScrollIndicator={false}>
         <View className="pb-10">
-          <View className="relative mb-8 overflow-hidden rounded-[30px] border border-brand-surface/60 bg-brand-surface/85 px-5 py-6">
-            <View className="absolute -right-20 -top-16 h-56 w-56 rounded-full bg-brand-primary/20" />
-            <View className="absolute -left-24 bottom-[-90] h-56 w-56 rounded-full bg-cyan-400/10" />
-            <Badge
-              label="Phase 3"
-              className="mb-3 self-start border-white/40 bg-white/10"
-              textClassName="text-white"
-            />
-            <Text className="text-3xl font-black tracking-tight text-white">
-              Discover Your Next Obsession
-            </Text>
-            <Text className="mt-2 max-w-[90%] text-sm leading-6 text-slate-300">
-              Real-time trending lanes for TV, anime, and movies with instant
-              deep dives into details.
-            </Text>
-            {isLoading ? (
-              <View className="mt-4 flex-row items-center gap-2">
-                <ActivityIndicator size="small" color="#94a3b8" />
-                <Text className="text-xs uppercase tracking-[1.2px] text-slate-400">
-                  Loading live trends
-                </Text>
-              </View>
-            ) : null}
-          </View>
-
           <DiscoveryRow
             title="Trending TV"
             subtitle="Freshly buzzing series"
