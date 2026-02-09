@@ -56,6 +56,7 @@ Build a fast, minimal show tracker that lets users: discover trending shows/anim
 - Never bypass Convex for data that needs to sync — all user data goes through Convex
 - Never use StyleSheet.create — always use NativeWind className
 - Never push directly to main — always use a branch + PR
+- User runs their own frontend/backend server instances: never start/restart local app/backend servers (e.g., `npx expo start`, `npx convex dev`) unless the user explicitly asks, or it is mandatory to validate a required fix.
 
 ## Detailed Docs
 - See docs/PLAN.md for implementation phases and feature breakdown

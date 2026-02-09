@@ -5,7 +5,8 @@
   "private": true,
   "scripts": {
     "start": "expo start",
-    "start:web": "expo start --web",
+    "start:web": "env -u CI expo start --web",
+    "start:web:clear": "env -u CI expo start --web --clear",
     "start:clear": "expo start --clear",
     "lint": "expo lint"
   },

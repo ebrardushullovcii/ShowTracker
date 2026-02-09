@@ -36,8 +36,5 @@ Phase 3: Core Screens (Discovery, Search, Show Detail) (in progress)
 
 ## Future Ideas / Backlog
 - Notifications for new episodes (push notifications)
-- Social features (share lists with friends)
 - Import from TVTime/Trakt
 - Recommendations based on watch history
-- Multi-language support
-- Widget for mobile home screen showing next episodes
