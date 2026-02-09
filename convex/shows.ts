@@ -1,9 +1,8 @@
 import {
   mutation,
   query,
-  type MutationCtx,
-  type QueryCtx,
 } from "@/convex/_generated/server";
+import type { MutationCtx, QueryCtx } from "@/convex/_generated/server.js";
 import type { Doc } from "@/convex/_generated/dataModel";
 import { v } from "convex/values";
 import { auth } from "@/convex/auth";
@@ -297,6 +296,7 @@ export const addToWatchlist = mutation({
   handler: async (ctx, args) => {
     const userId = await getCurrentUserId(ctx);
     const showId = await ensureShow(ctx, args);
+    const externalShowId = getExternalShowId(args);
 
     const existing = await ctx.db
       .query("userShows")
@@ -304,7 +304,7 @@ export const addToWatchlist = mutation({
       .unique();
 
     if (existing) {
-      return { showId, status: existing.status };
+      return { showId: externalShowId, status: existing.status };
     }
 
     await ctx.db.insert("userShows", {
@@ -314,7 +314,7 @@ export const addToWatchlist = mutation({
       addedAt: Date.now(),
     });
 
-    return { showId, status: "plan_to_watch" as const };
+    return { showId: externalShowId, status: "plan_to_watch" as const };
   },
 });
 

@@ -45,7 +45,7 @@ export function RegisterScreen() {
         password,
       });
 
-      if (result) {
+      if (result.signingIn) {
         router.replace("/");
         return;
       }
