@@ -1,5 +1,16 @@
 import { useMemo, useState } from "react";
-import { ActivityIndicator, Image, Pressable, ScrollView, Text, View } from "react-native";
+import {
+  ActivityIndicator,
+  Image,
+  Platform,
+  Pressable,
+  ScrollView,
+  Text,
+  View,
+  useWindowDimensions,
+  type StyleProp,
+  type ViewStyle,
+} from "react-native";
 import { Link } from "expo-router";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -97,12 +108,35 @@ function SegmentTabs({
   );
 }
 
-function DashboardCard({ item }: { item: DashboardItem }) {
+function getHomeCardWidth(width: number) {
+  if (width >= 1650) {
+    return "31.8%";
+  }
+  if (width >= 1100) {
+    return "48%";
+  }
+  return "100%";
+}
+
+function DashboardCard({
+  item,
+  isWeb,
+  containerStyle,
+}: {
+  item: DashboardItem;
+  isWeb: boolean;
+  containerStyle?: StyleProp<ViewStyle>;
+}) {
   const routeId = getRouteId(item);
   const isMovie = item.mediaType === "movie";
 
   const content = (
-    <View className="mb-3 flex-row gap-3 rounded-2xl border-2 border-brand-surface/70 bg-brand-light-surface px-3 py-3 dark:bg-brand-surface/75">
+    <View
+      className={`mb-3 flex-row gap-3 rounded-2xl border-2 border-brand-surface/70 bg-brand-light-surface px-3 py-3 dark:bg-brand-surface/75 ${
+        isWeb ? "min-h-[170px]" : ""
+      }`}
+      style={containerStyle}
+    >
       <View className="h-24 w-16 overflow-hidden rounded-xl border border-brand-surface/60 bg-brand-surface/20">
         {item.posterUrl ? (
           <Image
@@ -135,6 +169,14 @@ function DashboardCard({ item }: { item: DashboardItem }) {
                 : "Movie"}{" "}
             · {formatStatus(item.status)}
           </Text>
+          {isWeb && item.overview ? (
+            <Text
+              className="mt-1 text-[12px] leading-5 text-[#5d4b33] dark:text-[#ebdabc]"
+              numberOfLines={2}
+            >
+              {item.overview}
+            </Text>
+          ) : null}
         </View>
 
         <View className="mt-2 gap-1">
@@ -192,6 +234,8 @@ function DashboardCard({ item }: { item: DashboardItem }) {
 
 export default function HomeScreen() {
   const [activeTab, setActiveTab] = useState<HomeTab>("shows");
+  const { width } = useWindowDimensions();
+  const isWeb = Platform.OS === "web";
   const dashboard = useQuery(api.shows.getHomeDashboard, {});
 
   const activeItems = useMemo(() => {
@@ -202,6 +246,8 @@ export default function HomeScreen() {
   }, [activeTab, dashboard]);
 
   const isLoading = dashboard === undefined;
+  const showDesktopGrid = isWeb && width >= 1100;
+  const cardWidth = getHomeCardWidth(width);
 
   return (
     <ScreenWrapper>
@@ -243,9 +289,14 @@ export default function HomeScreen() {
           ) : null}
 
           {!isLoading && activeItems.length ? (
-            <View>
+            <View className="flex-row flex-wrap justify-between">
               {activeItems.map((item) => (
-                <DashboardCard key={item.id} item={item} />
+                <DashboardCard
+                  key={item.id}
+                  item={item}
+                  isWeb={isWeb}
+                  containerStyle={showDesktopGrid ? { width: cardWidth } : undefined}
+                />
               ))}
             </View>
           ) : null}

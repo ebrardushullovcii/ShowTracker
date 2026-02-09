@@ -1,6 +1,13 @@
 import type { Href } from "expo-router";
 import { Link } from "expo-router";
-import { Image, Pressable, Text, View } from "react-native";
+import {
+  Image,
+  Pressable,
+  Text,
+  View,
+  type StyleProp,
+  type ViewStyle,
+} from "react-native";
 import type { NormalizedShow } from "@/lib/api/types";
 import { Badge } from "@/components/Badge";
 
@@ -10,6 +17,8 @@ type MediaPosterCardProps = {
   rank?: number;
   className?: string;
   posterClassName?: string;
+  containerStyle?: StyleProp<ViewStyle>;
+  showOverview?: boolean;
 };
 
 const mediaTypeLabel: Record<NormalizedShow["mediaType"], string> = {
@@ -24,10 +33,15 @@ export function MediaPosterCard({
   rank,
   className,
   posterClassName,
+  containerStyle,
+  showOverview,
 }: MediaPosterCardProps) {
   return (
     <Link href={href} asChild>
-      <Pressable className={`w-36 ${className ?? ""}`.trim()}>
+      <Pressable
+        className={`w-36 ${className ?? ""}`.trim()}
+        style={containerStyle}
+      >
         <View
           className={`relative overflow-hidden rounded-2xl border-2 border-brand-surface bg-brand-light-surface ${posterClassName ?? "h-56"}`.trim()}
         >
@@ -70,9 +84,17 @@ export function MediaPosterCard({
           >
             {show.title}
           </Text>
-          <Text className="text-[11px] uppercase tracking-[1.2px] text-slate-500 dark:text-slate-300">
+          <Text className="text-[11px] uppercase tracking-[1.2px] text-[#5d4b33] dark:text-[#ebdabc]">
             {show.firstAired?.slice(0, 4) ?? "TBA"}
           </Text>
+          {showOverview && show.overview ? (
+            <Text
+              className="text-[12px] leading-5 text-[#5d4b33] dark:text-[#ebdabc]"
+              numberOfLines={3}
+            >
+              {show.overview}
+            </Text>
+          ) : null}
         </View>
       </Pressable>
     </Link>

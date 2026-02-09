@@ -1,5 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, ScrollView, Text, View, Pressable } from "react-native";
+import {
+  ActivityIndicator,
+  Image,
+  Platform,
+  ScrollView,
+  Text,
+  View,
+  Pressable,
+  useWindowDimensions,
+} from "react-native";
+import { Link } from "expo-router";
 import { MediaPosterCard } from "@/components/MediaPosterCard";
 import { ScreenWrapper } from "@/components/ScreenWrapper";
 import { getTrendingAniList } from "@/lib/api/anilist";
@@ -78,8 +88,39 @@ function DiscoverTabs({
   );
 }
 
+function getGridColumnCount(width: number, isWeb: boolean) {
+  if (!isWeb) {
+    return 2;
+  }
+  if (width >= 1500) {
+    return 5;
+  }
+  if (width >= 1200) {
+    return 4;
+  }
+  if (width >= 920) {
+    return 3;
+  }
+  return 2;
+}
+
+function getGridItemWidth(columns: number) {
+  if (columns === 5) {
+    return "19%";
+  }
+  if (columns === 4) {
+    return "23.5%";
+  }
+  if (columns === 3) {
+    return "31.8%";
+  }
+  return "48%";
+}
+
 export default function DiscoverScreen() {
   const [activeTab, setActiveTab] = useState<DiscoverTab>("tv");
+  const { width } = useWindowDimensions();
+  const isWeb = Platform.OS === "web";
   const [tvState, setTvState] = useState<SectionState>(initialSectionState);
   const [animeState, setAnimeState] = useState<SectionState>(initialSectionState);
   const [movieState, setMovieState] = useState<SectionState>(initialSectionState);
@@ -186,6 +227,11 @@ export default function DiscoverScreen() {
       : activeTab === "movie"
         ? "Box office picks and crowd favorites"
         : "Series with current buzz";
+  const columns = getGridColumnCount(width, isWeb);
+  const gridItemWidth = getGridItemWidth(columns);
+  const showFeature = isWeb && width >= 980 && activeState.items.length > 0;
+  const featureItem = showFeature ? activeState.items[0] : null;
+  const gridItems = showFeature ? activeState.items.slice(1) : activeState.items;
 
   return (
     <ScreenWrapper>
@@ -211,6 +257,49 @@ export default function DiscoverScreen() {
             </Text>
           </View>
 
+          {featureItem ? (
+            <Link
+              href={{
+                pathname: "/show/[id]",
+                params: { id: createShowRouteId(featureItem) },
+              }}
+              asChild
+            >
+              <Pressable className="mb-5 overflow-hidden rounded-[26px] border-2 border-brand-surface bg-brand-light-surface dark:bg-brand-surface/80">
+                <View className="h-56">
+                  {featureItem.backdropUrl || featureItem.posterUrl ? (
+                    <Image
+                      source={{
+                        uri: featureItem.backdropUrl ?? featureItem.posterUrl ?? "",
+                      }}
+                      className="h-full w-full"
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <View className="h-full w-full bg-brand-surface/30" />
+                  )}
+                  <View className="absolute inset-0 bg-black/35" />
+                  <View className="absolute left-4 top-4 rounded-full border border-white/40 bg-black/35 px-3 py-1">
+                    <Text className="text-[10px] font-bold uppercase tracking-[1.2px] text-white">
+                      Front Page Pick
+                    </Text>
+                  </View>
+                  <View className="absolute bottom-0 left-0 right-0 border-t border-white/20 bg-black/55 px-5 py-4">
+                    <Text className="font-serif text-3xl font-bold text-white">
+                      {featureItem.title}
+                    </Text>
+                    <Text
+                      className="mt-1 text-sm leading-6 text-white/90"
+                      numberOfLines={2}
+                    >
+                      {featureItem.overview ?? "Open details to view full synopsis."}
+                    </Text>
+                  </View>
+                </View>
+              </Pressable>
+            </Link>
+          ) : null}
+
           {activeState.isLoading ? (
             <View className="items-center gap-2 rounded-2xl border-2 border-brand-surface/60 bg-brand-light-surface/80 py-8 dark:bg-brand-surface/70">
               <ActivityIndicator size="small" color="#cf5d3f" />
@@ -229,7 +318,7 @@ export default function DiscoverScreen() {
           ) : null}
 
           <View className="flex-row flex-wrap justify-between gap-y-5">
-            {activeState.items.map((item, index) => (
+            {gridItems.map((item, index) => (
               <MediaPosterCard
                 key={`${item.id}-${activeTab}-${index}`}
                 show={item}
@@ -238,8 +327,10 @@ export default function DiscoverScreen() {
                   params: { id: createShowRouteId(item) },
                 }}
                 rank={index < 3 ? index + 1 : undefined}
-                className="w-[48%]"
-                posterClassName="h-64"
+                className={isWeb ? "" : "w-[48%]"}
+                containerStyle={isWeb ? { width: gridItemWidth } : undefined}
+                posterClassName={isWeb ? "h-72" : "h-64"}
+                showOverview={isWeb && width >= 1280}
               />
             ))}
           </View>
