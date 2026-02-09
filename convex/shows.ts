@@ -1,5 +1,6 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
+import { auth } from "./auth";
 
 const showInput = {
   tmdbId: v.optional(v.number()),
@@ -40,23 +41,11 @@ function hasLookupArgs(args: {
 }
 
 async function getCurrentUserId(ctx: any) {
-  const identity = await ctx.auth.getUserIdentity();
-  if (!identity) {
+  const userId = await auth.getUserId(ctx);
+  if (!userId) {
     throw new Error("Unauthorized");
   }
-
-  const user = await ctx.db
-    .query("users")
-    .withIndex("by_tokenIdentifier", (q: any) =>
-      q.eq("tokenIdentifier", identity.tokenIdentifier)
-    )
-    .unique();
-
-  if (!user) {
-    throw new Error("User not found");
-  }
-
-  return user._id;
+  return userId;
 }
 
 async function findShowByLookup(
