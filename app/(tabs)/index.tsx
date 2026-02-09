@@ -21,6 +21,23 @@ const initialSectionState: SectionState = {
   items: [],
 };
 
+function getSectionError(reason: unknown, fallback: string) {
+  if (reason instanceof Error) {
+    return reason.message;
+  }
+
+  if (
+    typeof reason === "object" &&
+    reason !== null &&
+    "status" in reason &&
+    typeof (reason as { status?: unknown }).status === "number"
+  ) {
+    return `${fallback} (TMDB ${(reason as { status: number }).status})`;
+  }
+
+  return fallback;
+}
+
 function DiscoveryRow({
   title,
   subtitle,
@@ -113,7 +130,10 @@ export default function DiscoveryScreen() {
       } else {
         setTvState({
           isLoading: false,
-          error: "Could not load trending TV right now.",
+          error: getSectionError(
+            tvResult.reason,
+            "Could not load trending TV right now."
+          ),
           items: [],
         });
       }
@@ -145,7 +165,10 @@ export default function DiscoveryScreen() {
       } else {
         setMovieState({
           isLoading: false,
-          error: "Could not load popular movies right now.",
+          error: getSectionError(
+            movieResult.reason,
+            "Could not load popular movies right now."
+          ),
           items: [],
         });
       }

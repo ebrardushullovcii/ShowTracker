@@ -5,6 +5,7 @@ import type { NormalizedEpisode } from "@/lib/api/types";
 const tmdbBaseUrl =
   process.env.EXPO_PUBLIC_TMDB_BASE_URL ?? "https://api.themoviedb.org/3";
 const tmdbApiKey = process.env.EXPO_PUBLIC_TMDB_API_KEY;
+const tmdbReadAccessToken = process.env.EXPO_PUBLIC_TMDB_READ_ACCESS_TOKEN;
 
 const cacheTtlMs = 15 * 60 * 1000;
 
@@ -67,15 +68,19 @@ export type TmdbEpisode = {
   runtime?: number | null;
 };
 
-function assertApiKey() {
-  if (!tmdbApiKey) {
-    throw new Error("Missing EXPO_PUBLIC_TMDB_API_KEY");
+function assertTmdbCredentials() {
+  if (!tmdbApiKey && !tmdbReadAccessToken) {
+    throw new Error(
+      "TMDB is not configured. Add EXPO_PUBLIC_TMDB_API_KEY or EXPO_PUBLIC_TMDB_READ_ACCESS_TOKEN to your env."
+    );
   }
 }
 
 function buildUrl(path: string, params: Record<string, string | number> = {}) {
   const url = new URL(path, tmdbBaseUrl);
-  url.searchParams.set("api_key", tmdbApiKey ?? "");
+  if (tmdbApiKey) {
+    url.searchParams.set("api_key", tmdbApiKey);
+  }
   Object.entries(params).forEach(([key, value]) => {
     url.searchParams.set(key, String(value));
   });
@@ -83,10 +88,15 @@ function buildUrl(path: string, params: Record<string, string | number> = {}) {
 }
 
 async function request<T>(path: string, params?: Record<string, string | number>) {
-  assertApiKey();
+  assertTmdbCredentials();
   const url = buildUrl(path, params);
   const maxAttempts = 4;
   const baseDelayMs = 500;
+  const headers: HeadersInit = tmdbReadAccessToken
+    ? {
+        Authorization: `Bearer ${tmdbReadAccessToken}`,
+      }
+    : {};
   const parseResponseBody = async (response: Response) => {
     try {
       return await response.json();
@@ -101,7 +111,7 @@ async function request<T>(path: string, params?: Record<string, string | number>
   };
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-    const response = await fetch(url.toString());
+    const response = await fetch(url.toString(), { headers });
     if (response.ok) {
       return (await response.json()) as T;
     }
