@@ -97,11 +97,10 @@ export default function SearchScreen() {
         return;
       }
 
-      const fulfilledResults = settled
-        .filter(
-          (entry): entry is PromiseFulfilledResult<NormalizedShow[]> =>
-            entry.status === "fulfilled"
-        );
+      const fulfilledResults = settled.filter(
+        (entry): entry is PromiseFulfilledResult<NormalizedShow[]> =>
+          entry.status === "fulfilled"
+      );
 
       const fulfilled = fulfilledResults.flatMap((entry) => entry.value);
       const failedCount = settled.length - fulfilledResults.length;
@@ -134,10 +133,10 @@ export default function SearchScreen() {
 
   const resultLabel = useMemo(() => {
     if (!debouncedQuery.trim()) {
-      return "Start typing to search across TV, anime, and movies.";
+      return "Start typing a title or keyword.";
     }
     if (isLoading) {
-      return "Searching...";
+      return "Searching the catalog...";
     }
     if (!results.length) {
       return "No results found.";
@@ -149,42 +148,45 @@ export default function SearchScreen() {
     <ScreenWrapper>
       <ScrollView showsVerticalScrollIndicator={false}>
         <View className="pb-10">
-          <View className="mb-6 gap-2">
-            <Text className="text-3xl font-black tracking-tight text-brand-light-text dark:text-brand-text">
-              Search Everything
+          <View className="mb-4 rounded-[28px] border-2 border-brand-surface bg-brand-light-surface px-5 py-5 dark:bg-brand-surface/80">
+            <Text className="text-[11px] font-bold uppercase tracking-[1.8px] text-brand-primary">
+              Search
             </Text>
-            <Text className="text-sm text-slate-600 dark:text-slate-400">
-              Find titles instantly with a blended TMDB + AniList index.
+            <Text className="mt-1 font-serif text-3xl font-bold leading-9 text-brand-light-text dark:text-brand-text">
+              Catalog Desk
+            </Text>
+            <Text className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">
+              Pull titles from TV, anime, and movies in one place.
             </Text>
           </View>
 
-          <View className="mb-4 gap-3 rounded-3xl border border-brand-surface/50 bg-brand-light-surface p-4 dark:bg-brand-surface/75">
+          <View className="mb-4 rounded-2xl border-2 border-brand-surface/70 bg-brand-light-surface p-4 dark:bg-brand-surface/75">
             <TextInput
               value={query}
               onChangeText={setQuery}
               placeholder="Search shows, anime, movies..."
-              placeholderTextColor="#64748b"
+              placeholderTextColor="#857861"
               autoCapitalize="none"
-              className="rounded-2xl border border-brand-surface/60 bg-white px-4 py-3 text-base text-brand-light-text dark:bg-brand-background dark:text-brand-text"
+              className="rounded-xl border-2 border-brand-surface/55 bg-[#fffaf0] px-4 py-3 text-base text-brand-light-text dark:bg-brand-background/70 dark:text-brand-text"
             />
-            <View className="flex-row flex-wrap gap-2">
+            <View className="mt-3 flex-row flex-wrap gap-2">
               {filterOptions.map((option) => {
                 const active = option.key === filter;
                 return (
                   <Pressable
                     key={option.key}
                     onPress={() => setFilter(option.key)}
-                    className={`rounded-full border px-4 py-2 ${
+                    className={`rounded-full border-2 px-4 py-2 ${
                       active
                         ? "border-brand-primary bg-brand-primary"
-                        : "border-brand-surface/60 bg-brand-light-background dark:bg-brand-background"
+                        : "border-brand-surface/55 bg-brand-light-background dark:bg-brand-background/65"
                     }`}
                   >
                     <Text
-                      className={`text-xs font-semibold uppercase tracking-[1px] ${
+                      className={`text-[11px] font-bold uppercase tracking-[1.2px] ${
                         active
                           ? "text-white"
-                          : "text-slate-600 dark:text-slate-300"
+                          : "text-brand-light-text dark:text-brand-text"
                       }`}
                     >
                       {option.label}
@@ -195,17 +197,15 @@ export default function SearchScreen() {
             </View>
           </View>
 
-          <View className="mb-4 flex-row items-center justify-between">
-            <Text className="text-xs uppercase tracking-[1.2px] text-slate-500 dark:text-slate-400">
+          <View className="mb-3 flex-row items-center justify-between">
+            <Text className="text-[11px] font-semibold uppercase tracking-[1.2px] text-slate-500 dark:text-slate-300">
               {resultLabel}
             </Text>
-            {isLoading ? (
-              <ActivityIndicator size="small" color="#64748b" />
-            ) : null}
+            {isLoading ? <ActivityIndicator size="small" color="#cf5d3f" /> : null}
           </View>
 
           {error ? (
-            <View className="mb-4 rounded-2xl border border-amber-400/40 bg-amber-500/10 p-3">
+            <View className="mb-4 rounded-2xl border-2 border-amber-500/40 bg-amber-500/10 p-3">
               <Text className="text-sm text-amber-700 dark:text-amber-300">
                 {error}
               </Text>
@@ -228,16 +228,17 @@ export default function SearchScreen() {
           </View>
 
           {!results.length && !isLoading && debouncedQuery.trim() ? (
-            <View className="mt-6 rounded-2xl border border-brand-surface/50 bg-brand-surface/40 p-4">
-              <Text className="text-sm text-slate-500 dark:text-slate-300">
-                Try a different keyword or switch filters.
+            <View className="mt-6 rounded-2xl border-2 border-brand-surface/60 bg-brand-light-surface px-4 py-5 dark:bg-brand-surface/70">
+              <Text className="text-sm text-slate-600 dark:text-slate-300">
+                Try a broader keyword or switch the filter.
               </Text>
             </View>
           ) : null}
+
           {!debouncedQuery.trim() ? (
-            <View className="mt-8 rounded-2xl border border-brand-surface/50 bg-brand-surface/35 p-4">
-              <Text className="text-sm text-slate-500 dark:text-slate-300">
-                Example searches: "Severance", "One Piece", "Dune"
+            <View className="mt-6 rounded-2xl border-2 border-brand-surface/60 bg-brand-light-surface px-4 py-5 dark:bg-brand-surface/70">
+              <Text className="text-sm text-slate-600 dark:text-slate-300">
+                Suggestions: “The Last of Us”, “Frieren”, “Oppenheimer”
               </Text>
             </View>
           ) : null}

@@ -180,6 +180,96 @@ export const getUserShowTracking = query({
   },
 });
 
+export const getHomeDashboard = query({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await getCurrentUserId(ctx);
+
+    const [userShows, watchedEpisodes] = await Promise.all([
+      ctx.db
+        .query("userShows")
+        .withIndex("by_user", (q) => q.eq("userId", userId))
+        .collect(),
+      ctx.db
+        .query("watchedEpisodes")
+        .withIndex("by_user", (q) => q.eq("userId", userId))
+        .collect(),
+    ]);
+
+    const watchedByShow = new Map<string, number>();
+    for (const entry of watchedEpisodes) {
+      const key = entry.showId as string;
+      watchedByShow.set(key, (watchedByShow.get(key) ?? 0) + 1);
+    }
+
+    const hydrated = await Promise.all(
+      userShows.map(async (userShow) => {
+        const show = await ctx.db.get(userShow.showId);
+        if (!show) {
+          return null;
+        }
+
+        const watchedCount = watchedByShow.get(userShow.showId as string) ?? 0;
+        const totalEpisodes =
+          typeof show.totalEpisodes === "number" ? show.totalEpisodes : null;
+        const remainingEpisodes =
+          totalEpisodes === null ? null : Math.max(totalEpisodes - watchedCount, 0);
+        const progressPercent =
+          totalEpisodes && totalEpisodes > 0
+            ? Math.min(100, Math.round((watchedCount / totalEpisodes) * 100))
+            : null;
+
+        return {
+          id: show._id,
+          title: show.title,
+          mediaType: show.mediaType,
+          status: userShow.status,
+          posterUrl: show.posterUrl ?? null,
+          backdropUrl: show.backdropUrl ?? null,
+          overview: show.overview ?? null,
+          firstAired: show.firstAired ?? null,
+          tmdbId: show.tmdbId ?? null,
+          anilistId: show.anilistId ?? null,
+          tvmazeId: show.tvmazeId ?? null,
+          imdbId: show.imdbId ?? null,
+          watchedEpisodes: watchedCount,
+          totalEpisodes,
+          remainingEpisodes,
+          progressPercent,
+          lastActivityAt: userShow.lastWatchedAt ?? userShow.addedAt,
+        };
+      })
+    );
+
+    const shows = hydrated
+      .filter(
+        (
+          entry
+        ): entry is NonNullable<(typeof hydrated)[number]> =>
+          !!entry &&
+          entry.mediaType !== "movie" &&
+          (entry.status === "watching" ||
+            entry.status === "paused" ||
+            entry.status === "plan_to_watch") &&
+          (entry.remainingEpisodes === null || entry.remainingEpisodes > 0)
+      )
+      .sort((a, b) => b.lastActivityAt - a.lastActivityAt)
+      .slice(0, 40);
+
+    const movies = hydrated
+      .filter(
+        (
+          entry
+        ): entry is NonNullable<(typeof hydrated)[number]> =>
+          !!entry && entry.mediaType === "movie" && entry.status !== "completed"
+      )
+      .sort((a, b) => b.lastActivityAt - a.lastActivityAt)
+      .slice(0, 40);
+
+    return { shows, movies };
+  },
+});
+
 export const addToWatchlist = mutation({
   args: showInput,
   handler: async (ctx, args) => {

@@ -1,215 +1,255 @@
-import { useEffect, useState } from "react";
-import { ScrollView, Text, View } from "react-native";
-import { MediaPosterCard } from "@/components/MediaPosterCard";
+import { useMemo, useState } from "react";
+import { ActivityIndicator, Image, Pressable, ScrollView, Text, View } from "react-native";
+import { Link } from "expo-router";
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
 import { ScreenWrapper } from "@/components/ScreenWrapper";
-import { getTrendingAniList } from "@/lib/api/anilist";
-import { normalizeAniListMedia, normalizeTmdbMedia } from "@/lib/api/normalize";
-import { getTrendingTmdb } from "@/lib/api/tmdb";
-import type { NormalizedShow } from "@/lib/api/types";
-import { createShowRouteId } from "@/lib/show-route";
 
-type SectionState = {
-  isLoading: boolean;
-  error: string | null;
-  items: NormalizedShow[];
+type HomeTab = "shows" | "movies";
+
+type DashboardItem = {
+  id: string;
+  title: string;
+  mediaType: "tv" | "anime" | "movie";
+  status: "watching" | "paused" | "dropped" | "completed" | "plan_to_watch";
+  posterUrl: string | null;
+  backdropUrl: string | null;
+  overview: string | null;
+  firstAired: string | null;
+  tmdbId: number | null;
+  anilistId: number | null;
+  tvmazeId: number | null;
+  imdbId: string | null;
+  watchedEpisodes: number;
+  totalEpisodes: number | null;
+  remainingEpisodes: number | null;
+  progressPercent: number | null;
+  lastActivityAt: number;
 };
 
-const initialSectionState: SectionState = {
-  isLoading: true,
-  error: null,
-  items: [],
-};
-
-function getSectionError(reason: unknown, fallback: string) {
-  if (reason instanceof Error) {
-    return reason.message;
+function getRouteId(item: DashboardItem) {
+  if (typeof item.tmdbId === "number") {
+    if (item.mediaType === "tv" || item.mediaType === "movie") {
+      return `tmdb:${item.mediaType}:${item.tmdbId}`;
+    }
   }
 
-  if (
-    typeof reason === "object" &&
-    reason !== null &&
-    "status" in reason &&
-    typeof (reason as { status?: unknown }).status === "number"
-  ) {
-    return `${fallback} (TMDB ${(reason as { status: number }).status})`;
+  if (typeof item.anilistId === "number" && item.mediaType === "anime") {
+    return `anilist:anime:${item.anilistId}`;
   }
 
-  return fallback;
+  return null;
 }
 
-function DiscoveryRow({
-  title,
-  subtitle,
-  state,
+function formatStatus(status: DashboardItem["status"]) {
+  if (status === "plan_to_watch") {
+    return "Plan to Watch";
+  }
+  return status.slice(0, 1).toUpperCase() + status.slice(1);
+}
+
+function formatActivity(timestamp: number) {
+  try {
+    return new Date(timestamp).toLocaleDateString(undefined, {
+      month: "short",
+      day: "numeric",
+    });
+  } catch {
+    return "recently";
+  }
+}
+
+function SegmentTabs({
+  value,
+  onChange,
 }: {
-  title: string;
-  subtitle: string;
-  state: SectionState;
+  value: HomeTab;
+  onChange: (next: HomeTab) => void;
 }) {
   return (
-    <View className="mb-8 gap-3">
-      <View className="flex-row items-end justify-between">
-        <View className="max-w-[70%] gap-1">
-          <Text className="text-xl font-bold text-brand-light-text dark:text-brand-text">
-            {title}
-          </Text>
-          <Text className="text-xs uppercase tracking-[1.5px] text-slate-500 dark:text-slate-400">
-            {subtitle}
-          </Text>
-        </View>
-      </View>
-
-      {state.error ? (
-        <View className="rounded-2xl border border-red-400/40 bg-red-500/10 p-4">
-          <Text className="text-sm text-red-600 dark:text-red-300">
-            {state.error}
-          </Text>
-        </View>
-      ) : null}
-
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ paddingRight: 8 }}
-      >
-        {state.isLoading
-          ? Array.from({ length: 6 }, (_, index) => (
-              <View key={`loading-${index}`} className="mr-4 w-36">
-                <View className="h-56 animate-pulse rounded-3xl bg-brand-surface/70" />
-                <View className="mt-2 h-3 w-24 rounded bg-brand-surface/70" />
-                <View className="mt-2 h-2 w-12 rounded bg-brand-surface/60" />
-              </View>
-            ))
-          : state.items.map((item, index) => (
-              <MediaPosterCard
-                key={item.id}
-                show={item}
-                href={{
-                  pathname: "/show/[id]",
-                  params: { id: createShowRouteId(item) },
-                }}
-                rank={index + 1}
-                className="mr-4"
-              />
-            ))}
-      </ScrollView>
+    <View className="mb-4 flex-row rounded-2xl border-2 border-brand-surface/70 bg-brand-light-surface p-1 dark:bg-brand-surface/75">
+      {([
+        { key: "shows", label: "Shows" },
+        { key: "movies", label: "Movies" },
+      ] as const).map((tab) => {
+        const active = value === tab.key;
+        return (
+          <Pressable
+            key={tab.key}
+            onPress={() => onChange(tab.key)}
+            className={`flex-1 items-center rounded-xl px-3 py-2 ${
+              active ? "bg-brand-primary" : "bg-transparent"
+            }`}
+          >
+            <Text
+              className={`text-xs font-bold uppercase tracking-[1.3px] ${
+                active
+                  ? "text-white"
+                  : "text-brand-light-text dark:text-brand-text"
+              }`}
+            >
+              {tab.label}
+            </Text>
+          </Pressable>
+        );
+      })}
     </View>
   );
 }
 
-export default function DiscoveryScreen() {
-  const [tvState, setTvState] = useState<SectionState>(initialSectionState);
-  const [animeState, setAnimeState] = useState<SectionState>(initialSectionState);
-  const [movieState, setMovieState] = useState<SectionState>(initialSectionState);
+function DashboardCard({ item }: { item: DashboardItem }) {
+  const routeId = getRouteId(item);
+  const isMovie = item.mediaType === "movie";
 
-  useEffect(() => {
-    let isCancelled = false;
+  const content = (
+    <View className="mb-3 flex-row gap-3 rounded-2xl border-2 border-brand-surface/70 bg-brand-light-surface px-3 py-3 dark:bg-brand-surface/75">
+      <View className="h-24 w-16 overflow-hidden rounded-xl border border-brand-surface/60 bg-brand-surface/20">
+        {item.posterUrl ? (
+          <Image
+            source={{ uri: item.posterUrl }}
+            className="h-full w-full"
+            resizeMode="cover"
+          />
+        ) : (
+          <View className="h-full w-full items-center justify-center px-2">
+            <Text className="text-center text-[11px] font-semibold uppercase tracking-[1px] text-slate-600 dark:text-slate-300">
+              No Art
+            </Text>
+          </View>
+        )}
+      </View>
 
-    const loadDiscovery = async () => {
-      setTvState(initialSectionState);
-      setAnimeState(initialSectionState);
-      setMovieState(initialSectionState);
+      <View className="flex-1 justify-between">
+        <View>
+          <Text
+            className="font-serif text-lg font-semibold leading-5 text-brand-light-text dark:text-brand-text"
+            numberOfLines={2}
+          >
+            {item.title}
+          </Text>
+          <Text className="mt-1 text-[11px] uppercase tracking-[1.2px] text-slate-500 dark:text-slate-300">
+            {item.mediaType === "anime"
+              ? "Anime"
+              : item.mediaType === "tv"
+                ? "TV"
+                : "Movie"}{" "}
+            · {formatStatus(item.status)}
+          </Text>
+        </View>
 
-      const [tvResult, animeResult, movieResult] = await Promise.allSettled([
-        getTrendingTmdb("tv"),
-        getTrendingAniList(1, 20),
-        getTrendingTmdb("movie"),
-      ]);
+        <View className="mt-2 gap-1">
+          {isMovie ? (
+            <Text className="text-xs font-semibold text-brand-light-text dark:text-brand-text">
+              {item.status === "plan_to_watch"
+                ? "Queued for movie night"
+                : "Movie in progress"}
+            </Text>
+          ) : (
+            <>
+              <Text className="text-xs font-semibold text-brand-light-text dark:text-brand-text">
+                {item.remainingEpisodes === null
+                  ? `${item.watchedEpisodes} watched`
+                  : `${item.remainingEpisodes} episodes left`}
+              </Text>
+              {typeof item.progressPercent === "number" ? (
+                <View className="h-1.5 overflow-hidden rounded-full bg-brand-surface/50">
+                  <View
+                    className="h-full rounded-full bg-brand-primary"
+                    style={{ width: `${item.progressPercent}%` }}
+                  />
+                </View>
+              ) : null}
+            </>
+          )}
+          <Text className="text-[11px] uppercase tracking-[1.1px] text-slate-500 dark:text-slate-300">
+            Active {formatActivity(item.lastActivityAt)}
+          </Text>
+        </View>
+      </View>
+    </View>
+  );
 
-      if (isCancelled) {
-        return;
-      }
+  if (!routeId) {
+    return (
+      <View className="opacity-80">
+        {content}
+        <Text className="mb-3 -mt-1 text-[11px] uppercase tracking-[1.2px] text-amber-700 dark:text-amber-300">
+          Detail page unavailable for this source.
+        </Text>
+      </View>
+    );
+  }
 
-      if (tvResult.status === "fulfilled") {
-        setTvState({
-          isLoading: false,
-          error: null,
-          items: tvResult.value.results.slice(0, 20).map(normalizeTmdbMedia),
-        });
-      } else {
-        setTvState({
-          isLoading: false,
-          error: getSectionError(
-            tvResult.reason,
-            "Could not load trending TV right now."
-          ),
-          items: [],
-        });
-      }
+  return (
+    <Link
+      href={{ pathname: "/show/[id]", params: { id: routeId } }}
+      asChild
+    >
+      <Pressable>{content}</Pressable>
+    </Link>
+  );
+}
 
-      if (animeResult.status === "fulfilled") {
-        setAnimeState({
-          isLoading: false,
-          error: null,
-          items: animeResult.value.data.Page.media
-            .slice(0, 20)
-            .map(normalizeAniListMedia),
-        });
-      } else {
-        setAnimeState({
-          isLoading: false,
-          error: "Could not load trending anime right now.",
-          items: [],
-        });
-      }
+export default function HomeScreen() {
+  const [activeTab, setActiveTab] = useState<HomeTab>("shows");
+  const dashboard = useQuery(api.shows.getHomeDashboard, {});
 
-      if (movieResult.status === "fulfilled") {
-        setMovieState({
-          isLoading: false,
-          error: null,
-          items: movieResult.value.results
-            .slice(0, 20)
-            .map(normalizeTmdbMedia),
-        });
-      } else {
-        setMovieState({
-          isLoading: false,
-          error: getSectionError(
-            movieResult.reason,
-            "Could not load popular movies right now."
-          ),
-          items: [],
-        });
-      }
-    };
+  const activeItems = useMemo(() => {
+    if (!dashboard) {
+      return [] as DashboardItem[];
+    }
+    return (activeTab === "shows" ? dashboard.shows : dashboard.movies) as DashboardItem[];
+  }, [activeTab, dashboard]);
 
-    void loadDiscovery();
-
-    return () => {
-      isCancelled = true;
-    };
-  }, []);
-
-  const isLoading =
-    tvState.isLoading || animeState.isLoading || movieState.isLoading;
+  const isLoading = dashboard === undefined;
 
   return (
     <ScreenWrapper>
       <ScrollView showsVerticalScrollIndicator={false}>
         <View className="pb-10">
-          <DiscoveryRow
-            title="Trending TV"
-            subtitle="Freshly buzzing series"
-            state={tvState}
-          />
-          <DiscoveryRow
-            title="Trending Anime"
-            subtitle="Community heat right now"
-            state={animeState}
-          />
-          <DiscoveryRow
-            title="Popular Movies"
-            subtitle="Big screen momentum"
-            state={movieState}
-          />
-          {!tvState.items.length &&
-          !animeState.items.length &&
-          !movieState.items.length &&
-          !isLoading ? (
-            <View className="rounded-2xl border border-brand-surface/50 bg-brand-surface/50 p-4">
-              <Text className="text-sm text-slate-500 dark:text-slate-300">
-                No discovery data available at the moment.
+          <View className="mb-4 rounded-[28px] border-2 border-brand-surface bg-brand-light-surface px-5 py-5 dark:bg-brand-surface/80">
+            <Text className="text-[11px] font-bold uppercase tracking-[1.8px] text-brand-primary">
+              Home
+            </Text>
+            <Text className="mt-1 font-serif text-3xl font-bold leading-9 text-brand-light-text dark:text-brand-text">
+              Tonight&apos;s Queue
+            </Text>
+            <Text className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">
+              A paper-like guide to what is next in your watch stack.
+            </Text>
+          </View>
+
+          <SegmentTabs value={activeTab} onChange={setActiveTab} />
+
+          {isLoading ? (
+            <View className="items-center gap-2 rounded-2xl border-2 border-brand-surface/60 bg-brand-light-surface/80 py-8 dark:bg-brand-surface/70">
+              <ActivityIndicator size="small" color="#cf5d3f" />
+              <Text className="text-xs font-semibold uppercase tracking-[1.2px] text-slate-500 dark:text-slate-300">
+                Loading your dashboard
               </Text>
+            </View>
+          ) : null}
+
+          {!isLoading && !activeItems.length ? (
+            <View className="rounded-2xl border-2 border-brand-surface/60 bg-brand-light-surface px-4 py-5 dark:bg-brand-surface/70">
+              <Text className="font-serif text-lg font-semibold text-brand-light-text dark:text-brand-text">
+                {activeTab === "shows"
+                  ? "No active shows yet"
+                  : "No queued movies yet"}
+              </Text>
+              <Text className="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-300">
+                {activeTab === "shows"
+                  ? "Start tracking episodes from any show detail page and they will appear here."
+                  : "Add movies to your watchlist and they will appear here as your queue."}
+              </Text>
+            </View>
+          ) : null}
+
+          {!isLoading && activeItems.length ? (
+            <View>
+              {activeItems.map((item) => (
+                <DashboardCard key={item.id} item={item} />
+              ))}
             </View>
           ) : null}
         </View>
