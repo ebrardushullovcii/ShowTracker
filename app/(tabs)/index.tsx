@@ -323,6 +323,7 @@ export function HomeScreen() {
     <ScreenWrapper>
       <View className="flex-1" onLayout={onGridLayout}>
         <FlashList
+          key={activeTab}
           data={visibleItems}
           keyExtractor={getItemKey}
           renderItem={renderDashboardItem}
