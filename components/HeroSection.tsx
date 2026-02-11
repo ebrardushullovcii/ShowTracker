@@ -39,41 +39,6 @@ export function HeroSection({
         <View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "#27272a" }} />
       )}
 
-      {/* Gradient overlays - layered for smooth fade */}
-      <View
-        pointerEvents="none"
-        style={{
-          position: "absolute",
-          left: 0,
-          right: 0,
-          bottom: 0,
-          height: "100%",
-          backgroundColor: "rgba(9,9,11,0.3)",
-        }}
-      />
-      <View
-        pointerEvents="none"
-        style={{
-          position: "absolute",
-          left: 0,
-          right: 0,
-          bottom: 0,
-          height: "60%",
-          backgroundColor: "rgba(9,9,11,0.5)",
-        }}
-      />
-      <View
-        pointerEvents="none"
-        style={{
-          position: "absolute",
-          left: 0,
-          right: 0,
-          bottom: 0,
-          height: "35%",
-          backgroundColor: "rgba(9,9,11,0.7)",
-        }}
-      />
-
       {/* Content overlay */}
       <View style={{ position: "absolute", left: 0, right: 0, bottom: 0, padding: 24, justifyContent: "flex-end" }}>
         {title ? (

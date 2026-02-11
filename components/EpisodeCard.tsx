@@ -72,15 +72,6 @@ export function EpisodeCard({
           </View>
         )}
 
-        {/* Gradient Overlay */}
-        <View className="pointer-events-none absolute inset-0">
-          <View className="h-1/2 w-full bg-transparent" />
-          <View
-            className="h-1/2 w-full"
-            style={{ backgroundColor: "rgba(24,24,27,0.9)" }}
-          />
-        </View>
-
         {/* Episode Number Badge */}
         <View className="absolute left-3 top-3 rounded-lg bg-black/60 px-2.5 py-1">
           <Text className="text-xs font-bold text-white">

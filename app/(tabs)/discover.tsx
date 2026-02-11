@@ -142,7 +142,7 @@ export default function DiscoverScreen() {
             imageUrl={heroShow.backdropUrl ?? heroShow.posterUrl}
             title={heroShow.title}
             subtitle={heroShow.overview ?? undefined}
-            mobileHeight={220}
+            mobileHeight={180}
           >
             <Link
               href={{ pathname: "/show/[id]", params: { id: createShowRouteId(heroShow) } }}
