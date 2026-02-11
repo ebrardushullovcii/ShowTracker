@@ -251,6 +251,7 @@ export function HomeScreen() {
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const { width } = useWindowDimensions();
   const isWeb = Platform.OS === "web";
+  const posterHeight = isWeb ? 280 : 240;
   const [gridWidth, setGridWidth] = useState(0);
   const dashboard = useQuery(api.shows.getHomeDashboard, {});
   const loadMoreTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -325,7 +326,7 @@ export function HomeScreen() {
           keyExtractor={getItemKey}
           renderItem={renderDashboardItem}
           numColumns={columns}
-          estimatedItemSize={cardWidth}
+          estimatedItemSize={posterHeight}
           ItemSeparatorComponent={() => <View style={{ height: GRID_GAP }} />}
           onEndReached={loadMoreItems}
           onEndReachedThreshold={0.5}
