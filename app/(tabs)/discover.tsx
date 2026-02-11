@@ -154,10 +154,7 @@ export default function DiscoverScreen() {
         ) : null}
 
         <View className="px-4 pt-4">
-          <Text
-            className="mb-1 text-3xl font-extrabold tracking-tight text-text-primary"
-            style={{ letterSpacing: -0.5 }}
-          >
+          <Text className="mb-1 text-3xl font-extrabold tracking-[-0.5px] text-text-primary">
             Discover
           </Text>
           <Text className="mb-4 text-sm text-text-secondary">
@@ -182,7 +179,7 @@ export default function DiscoverScreen() {
           {!activeState.isLoading && activeState.items.length > 0 ? (
             <>
               <SectionHeader title={`Trending ${activeTab === "anime" ? "Anime" : activeTab === "movie" ? "Movies" : "TV Shows"}`} />
-              <View className="flex-row flex-wrap" style={{ gap: GRID_GAP }} onLayout={onGridLayout}>
+              <View className="flex-row flex-wrap gap-3" onLayout={onGridLayout}>
                 {activeState.items.map((item, index) => (
                   <View key={`${item.id}-${activeTab}-${index}`} style={isWeb ? { width: gridItemWidth } : { width: "48%" }}>
                     <MediaPosterCard

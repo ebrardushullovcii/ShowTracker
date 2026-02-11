@@ -6,10 +6,7 @@ export default function WatchlistScreen() {
   return (
     <ScreenWrapper>
       <View className="pb-4">
-        <Text
-          className="mb-1 text-3xl font-extrabold tracking-tight text-text-primary"
-          style={{ letterSpacing: -0.5 }}
-        >
+        <Text className="mb-1 text-3xl font-extrabold tracking-[-0.5px] text-text-primary">
           Watchlist
         </Text>
         <Text className="mb-6 text-sm text-text-secondary">

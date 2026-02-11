@@ -32,32 +32,26 @@ export function HeroSection({
       {imageUrl ? (
         <Image
           source={{ uri: imageUrl }}
-          style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
+          className="absolute inset-0"
           contentFit="cover"
         />
       ) : (
-        <View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "#27272a" }} />
+        <View className="absolute inset-0 bg-gray-800" />
       )}
 
       {/* Content overlay */}
-      <View style={{ position: "absolute", left: 0, right: 0, bottom: 0, padding: 24, justifyContent: "flex-end" }}>
+      <View className="absolute left-0 right-0 bottom-0 p-6 justify-end">
         {title ? (
-          <Text
-            style={{ color: "#fff", fontSize: 28, fontWeight: "800", letterSpacing: -0.5 }}
-            numberOfLines={2}
-          >
+          <Text className="text-white text-[28px] font-extrabold tracking-[-0.5px]" numberOfLines={2}>
             {title}
           </Text>
         ) : null}
         {subtitle ? (
-          <Text
-            style={{ color: "#d4d4d8", fontSize: 14, marginTop: 6, lineHeight: 20 }}
-            numberOfLines={2}
-          >
+          <Text className="text-gray-300 text-sm mt-1.5 leading-5" numberOfLines={2}>
             {subtitle}
           </Text>
         ) : null}
-        {children ? <View style={{ marginTop: 12 }}>{children}</View> : null}
+        {children ? <View className="mt-3">{children}</View> : null}
       </View>
     </View>
   );

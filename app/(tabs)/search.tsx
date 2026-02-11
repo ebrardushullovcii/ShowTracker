@@ -156,10 +156,7 @@ export function SearchScreen() {
         )}
         ListHeaderComponent={
           <View className="pb-2">
-            <Text
-              className="mb-1 text-3xl font-extrabold tracking-tight text-text-primary"
-              style={{ letterSpacing: -0.5 }}
-            >
+            <Text className="mb-1 text-3xl font-extrabold tracking-[-0.5px] text-text-primary">
               Search
             </Text>
             <Text className="mb-4 text-sm text-text-secondary">

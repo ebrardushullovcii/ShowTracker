@@ -49,11 +49,7 @@ export function EpisodeCard({
     <Pressable
       onPress={onToggle}
       disabled={isUpdating || !canToggle}
-      className="overflow-hidden rounded-2xl border border-border-default bg-bg-surface"
-      style={({ pressed }) => ({
-        backgroundColor: pressed ? "rgba(39,39,42,0.8)" : "rgba(24,24,27,1)",
-        transform: [{ scale: pressed ? 0.98 : 1 }],
-      })}
+      className="overflow-hidden rounded-2xl border border-border-default bg-bg-surface active:bg-bg-elevated/80 active:scale-[0.98] disabled:opacity-40"
     >
       {/* Episode Image */}
       <View className="relative h-32 w-full overflow-hidden">
@@ -105,11 +101,7 @@ export function EpisodeCard({
           <Pressable
             onPress={onToggle}
             disabled={isUpdating || !canToggle}
-            className="relative h-6 w-6 shrink-0 items-center justify-center"
-            style={({ pressed }) => ({
-              opacity: isUpdating || !canToggle ? 0.4 : 1,
-              transform: [{ scale: pressed ? 0.9 : 1 }],
-            })}
+            className="relative h-6 w-6 shrink-0 items-center justify-center active:scale-90 disabled:opacity-40"
           >
             {/* Outer ring */}
             <View

@@ -89,10 +89,7 @@ export function RegisterScreen() {
       <View className={`gap-5 ${isDesktopAuth ? "mx-auto max-w-md pt-12" : "pt-16"}`}>
         <View>
           <Text className="text-sm font-semibold text-primary">ShowTracker</Text>
-          <Text
-            className="mt-2 text-3xl font-extrabold tracking-tight text-text-primary"
-            style={{ letterSpacing: -0.5 }}
-          >
+          <Text className="mt-2 text-3xl font-extrabold tracking-[-0.5px] text-text-primary">
             Register
           </Text>
           <Text className="mt-1 text-sm text-text-secondary">

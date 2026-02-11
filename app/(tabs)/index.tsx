@@ -338,10 +338,7 @@ export function HomeScreen() {
           contentContainerStyle={{ paddingBottom: 16 }}
           ListHeaderComponent={
             <View className="pb-2">
-              <Text
-                className="mb-1 text-3xl font-extrabold tracking-tight text-text-primary"
-                style={{ letterSpacing: -0.5 }}
-              >
+              <Text className="mb-1 text-3xl font-extrabold tracking-[-0.5px] text-text-primary">
                 My Shows
               </Text>
               <Text className="mb-4 text-sm text-text-secondary">
