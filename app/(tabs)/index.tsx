@@ -322,6 +322,7 @@ export function HomeScreen() {
   return (
     <ScreenWrapper>
       <View className="flex-1" onLayout={onGridLayout}>
+        {gridWidth > 0 ? (
         <FlashList
           key={activeTab}
           data={visibleItems}
@@ -388,6 +389,11 @@ export function HomeScreen() {
             ) : null
           }
         />
+        ) : (
+          <View className="flex-1 items-center justify-center">
+            <ActivityIndicator size="small" color="#ef4444" />
+          </View>
+        )}
       </View>
     </ScreenWrapper>
   );
