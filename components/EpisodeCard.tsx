@@ -138,7 +138,9 @@ export function EpisodeCard({
 
             {/* Checkmark */}
             {watched && (
-              <Text className="absolute text-[10px] font-bold text-white">✓</Text>
+              <View className="absolute inset-0 items-center justify-center">
+                <Text className="text-[10px] font-bold text-white">✓</Text>
+              </View>
             )}
 
             {/* Loading indicator */}

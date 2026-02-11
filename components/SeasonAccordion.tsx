@@ -134,7 +134,9 @@ export function SeasonAccordion({
               
               {/* Checkmark */}
               {isFullyWatched && (
-                <Text className="absolute text-xs font-bold text-white">✓</Text>
+                <View className="absolute inset-0 items-center justify-center">
+                  <Text className="text-xs font-bold text-white">✓</Text>
+                </View>
               )}
               
               {/* Loading */}

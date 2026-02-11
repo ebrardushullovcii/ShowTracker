@@ -900,7 +900,9 @@ export function ShowDetailScreen() {
                   {tracking?.inWatchlist && (
                     <>
                       <View className="h-4 w-4 rounded-full bg-success" />
-                      <Text className="absolute text-xs font-bold text-white">✓</Text>
+                      <View className="absolute inset-0 items-center justify-center">
+                        <Text className="text-xs font-bold text-white">✓</Text>
+                      </View>
                     </>
                   )}
                 </Pressable>
