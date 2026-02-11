@@ -174,7 +174,8 @@ function DashboardCard({
 }) {
   const routeId = getRouteId(item);
   const isMovie = item.mediaType === "movie";
-  const progress = typeof item.progressPercent === "number" ? item.progressPercent / 100 : 0;
+  const rawPercent = typeof item.progressPercent === "number" ? item.progressPercent : 0;
+  const progress = Math.max(0, Math.min(100, rawPercent)) / 100;
 
   const posterHeight = isWeb ? 280 : 240;
 
