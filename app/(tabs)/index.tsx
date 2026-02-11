@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   Platform,
   Pressable,
-  ScrollView,
   Text,
   View,
   useWindowDimensions,
@@ -17,6 +16,7 @@ import { api } from "@/convex/_generated/api";
 import { ScreenWrapper } from "@/components/ScreenWrapper";
 import { SegmentedControl } from "@/components/SegmentedControl";
 import { Badge } from "@/components/Badge";
+import { FlashList } from "@shopify/flash-list";
 
 type HomeTab = "shows" | "movies";
 
@@ -179,46 +179,47 @@ function DashboardCard({
   const posterHeight = isWeb ? 280 : 240;
 
   const card = (
-    <View style={{ borderRadius: 16, overflow: "hidden", borderWidth: 1, borderColor: "#27272a", backgroundColor: "#18181b" }}>
+    <View className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900">
       {/* Poster image - portrait ratio */}
-      <View style={{ height: posterHeight, position: "relative", overflow: "hidden" }}>
+      <View className="relative overflow-hidden" style={{ height: posterHeight }}>
         {item.posterUrl ? (
           <Image
             source={{ uri: item.posterUrl }}
-            style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
+            className="absolute inset-0"
             contentFit="cover"
           />
         ) : (
-          <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#27272a", paddingHorizontal: 12 }}>
-            <Text style={{ color: "#fafafa", fontSize: 14, fontWeight: "600", textAlign: "center" }}>{item.title}</Text>
+          <View className="flex-1 items-center justify-center bg-zinc-800 px-3">
+            <Text className="text-center text-sm font-semibold text-zinc-400">{item.title}</Text>
           </View>
         )}
         {/* Gradient fade at bottom */}
         <LinearGradient
           pointerEvents="none"
           colors={["transparent", "rgba(0,0,0,0.85)"]}
-          style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 120 }}
+          className="absolute bottom-0 left-0 right-0"
+          style={{ height: 120 }}
         />
         {/* Badges */}
         {item.isDemo ? (
-          <View style={{ position: "absolute", left: 8, top: 8 }}>
+          <View className="absolute left-2 top-2">
             <Badge label="Demo" variant="warning" />
           </View>
         ) : null}
         {typeof item.remainingEpisodes === "number" && item.remainingEpisodes > 0 ? (
-          <View style={{ position: "absolute", right: 8, top: 8, backgroundColor: "rgba(0,0,0,0.6)", borderRadius: 9999, paddingHorizontal: 8, paddingVertical: 4 }}>
-            <Text style={{ color: "#38bdf8", fontSize: 12, fontWeight: "700" }}>{item.remainingEpisodes} left</Text>
+          <View className="absolute right-2 top-2 rounded-full bg-black/60 px-2 py-1">
+            <Text className="text-xs font-bold text-sky-400">{item.remainingEpisodes} left</Text>
           </View>
         ) : null}
         {/* Bottom overlay: title + meta + progress */}
-        <View style={{ position: "absolute", bottom: 0, left: 0, right: 0, paddingHorizontal: 10, paddingBottom: 10 }}>
-          <Text style={{ color: "#fff", fontSize: 14, fontWeight: "700" }} numberOfLines={1}>{item.title}</Text>
-          <Text style={{ color: "#a1a1aa", fontSize: 12, marginTop: 2 }} numberOfLines={1}>
+        <View className="absolute bottom-0 left-0 right-0 px-2.5 pb-2.5">
+          <Text className="mb-0.5 text-sm font-bold text-white" numberOfLines={1}>{item.title}</Text>
+          <Text className="text-xs text-zinc-400" numberOfLines={1}>
             {item.firstAired?.slice(0, 4) ?? "TBA"} · {formatStatus(item.status)}
           </Text>
           {!isMovie && progress > 0 ? (
-            <View style={{ marginTop: 6, height: 3, borderRadius: 2, backgroundColor: "rgba(255,255,255,0.15)", overflow: "hidden" }}>
-              <View style={{ height: "100%", borderRadius: 2, backgroundColor: "#ef4444", width: `${Math.round(progress * 100)}%` }} />
+            <View className="mt-1.5 h-0.5 overflow-hidden rounded-sm bg-white/15">
+              <View className="h-full rounded-sm bg-red-500" style={{ width: `${Math.round(progress * 100)}%` }} />
             </View>
           ) : null}
         </View>
@@ -310,71 +311,81 @@ export function HomeScreen() {
     }, 140);
   };
 
+  const renderDashboardItem = useCallback(({ item }: { item: HomeDashboardItem }) => (
+    <View className="flex-1 px-1.5">
+      <DashboardCard item={item} isWeb={isWeb} />
+    </View>
+  ), [isWeb]);
+
   return (
     <ScreenWrapper>
-      <ScrollView showsVerticalScrollIndicator={false}>
-        <View className="pb-2">
-          <Text
-            className="mb-1 text-3xl font-extrabold tracking-tight text-text-primary"
-            style={{ letterSpacing: -0.5 }}
-          >
-            My Shows
-          </Text>
-          <Text className="mb-4 text-sm text-text-secondary">
-            {activeTab === "shows" ? "TV shows and anime you're tracking" : "Movies in your queue"}
-          </Text>
-
-          <SegmentedControl options={tabOptions} value={activeTab} onValueChange={setActiveTab} className="mb-4" />
-
-          {isLoading ? (
-            <View className="items-center gap-2 rounded-2xl border border-border-default bg-bg-surface py-8">
-              <ActivityIndicator size="small" color="#ef4444" />
-              <Text className="text-sm text-text-secondary">Loading your dashboard</Text>
-            </View>
-          ) : null}
-
-          {!isLoading && usingDemoItems ? (
-            <View className="mb-4 rounded-xl border border-border-default bg-bg-surface px-4 py-3">
-              <Text className="text-sm leading-relaxed text-text-secondary">
-                Showing sample titles to preview layout. Add your real titles from Discover and this list will update.
+      <View className="flex-1" onLayout={onGridLayout}>
+        <FlashList
+          data={visibleItems}
+          keyExtractor={getItemKey}
+          renderItem={renderDashboardItem}
+          numColumns={columns}
+          estimatedItemSize={cardWidth}
+          ItemSeparatorComponent={() => <View style={{ height: GRID_GAP }} />}
+          onEndReached={loadMoreItems}
+          onEndReachedThreshold={0.5}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingBottom: 16 }}
+          ListHeaderComponent={
+            <View className="pb-2">
+              <Text
+                className="mb-1 text-3xl font-extrabold tracking-tight text-text-primary"
+                style={{ letterSpacing: -0.5 }}
+              >
+                My Shows
               </Text>
-            </View>
-          ) : null}
-
-          {!isLoading && !activeItems.length ? (
-            <View className="rounded-2xl border border-border-default bg-bg-surface px-4 py-6">
-              <Text className="text-lg font-bold text-text-primary">
-                {activeTab === "shows" ? "No active shows yet" : "No queued movies yet"}
+              <Text className="mb-4 text-sm text-text-secondary">
+                {activeTab === "shows" ? "TV shows and anime you're tracking" : "Movies in your queue"}
               </Text>
-              <Text className="mt-1 text-sm leading-relaxed text-text-secondary">
-                {activeTab === "shows"
-                  ? "Start tracking episodes from any show detail page and they will appear here."
-                  : "Add movies to your watchlist and they will appear here as your queue."}
-              </Text>
+
+              <SegmentedControl options={tabOptions} value={activeTab} onValueChange={setActiveTab} className="mb-4" />
+
+              {isLoading ? (
+                <View className="items-center gap-2 rounded-2xl border border-border-default bg-bg-surface py-8">
+                  <ActivityIndicator size="small" color="#ef4444" />
+                  <Text className="text-sm text-text-secondary">Loading your dashboard</Text>
+                </View>
+              ) : null}
+
+              {!isLoading && usingDemoItems ? (
+                <View className="mb-4 rounded-xl border border-border-default bg-bg-surface px-4 py-3">
+                  <Text className="text-sm leading-relaxed text-text-secondary">
+                    Showing sample titles to preview layout. Add your real titles from Discover and this list will update.
+                  </Text>
+                </View>
+              ) : null}
+
+              {!isLoading && !activeItems.length ? (
+                <View className="rounded-2xl border border-border-default bg-bg-surface px-4 py-6">
+                  <Text className="text-lg font-bold text-text-primary">
+                    {activeTab === "shows" ? "No active shows yet" : "No queued movies yet"}
+                  </Text>
+                  <Text className="mt-1 text-sm leading-relaxed text-text-secondary">
+                    {activeTab === "shows"
+                      ? "Start tracking episodes from any show detail page and they will appear here."
+                      : "Add movies to your watchlist and they will appear here as your queue."}
+                  </Text>
+                </View>
+              ) : null}
             </View>
-          ) : null}
-        </View>
-
-        {/* Card grid */}
-        <View className="flex-row flex-wrap" style={{ gap: GRID_GAP }} onLayout={onGridLayout}>
-          {visibleItems.map((item) => (
-            <View key={getItemKey(item)} style={{ width: cardWidth }}>
-              <DashboardCard item={item} isWeb={isWeb} />
-            </View>
-          ))}
-        </View>
-
-        {!isLoading && hasMore ? (
-          <Pressable onPress={loadMoreItems} className="items-center py-4">
-            <ActivityIndicator size="small" color={isLoadingMore ? "#ef4444" : "#52525b"} />
-            <Text className="mt-1 text-xs text-text-secondary">
-              {isLoadingMore ? "Loading more..." : "Tap to load more"}
-            </Text>
-          </Pressable>
-        ) : null}
-
-        <View className="h-4" />
-      </ScrollView>
+          }
+          ListFooterComponent={
+            !isLoading && hasMore ? (
+              <Pressable onPress={loadMoreItems} className="items-center py-4">
+                <ActivityIndicator size="small" color={isLoadingMore ? "#ef4444" : "#52525b"} />
+                <Text className="mt-1 text-xs text-text-secondary">
+                  {isLoadingMore ? "Loading more..." : "Tap to load more"}
+                </Text>
+              </Pressable>
+            ) : null
+          }
+        />
+      </View>
     </ScreenWrapper>
   );
 }

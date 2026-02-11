@@ -24,11 +24,11 @@ export const myQueryFunction = query({
       throw new Error("Not authenticated");
     }
 
-    // Read user-scoped data after identity validation.
+    // Read user-scoped data after identity validation using indexed query.
     // See https://docs.convex.dev/database/reading-data.
     const documents = await ctx.db
       .query("tablename")
-      .filter((q) => q.eq(q.field("userId"), identity.subject))
+      .withIndex("userId", (q) => q.eq(q.field("userId"), identity.subject))
       .collect();
 
     // Arguments passed from the client are properties of the args object.

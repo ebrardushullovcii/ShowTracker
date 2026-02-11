@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Platform,
@@ -310,6 +310,50 @@ export function ShowDetailScreen() {
     }
   }, [pendingEpisodeKeys, seasonActionLoading]);
 
+  const resolveSeasonEpisodes = useCallback(async (season: NormalizedSeason) => {
+    if (season.episodes?.length) return season.episodes;
+    if (!parsedId || parsedId.source !== "tmdb" || parsedId.mediaType !== "tv") {
+      return season.episodes ?? [];
+    }
+    if (seasonLoading[season.seasonNumber]) return season.episodes ?? [];
+
+    setSeasonLoading((prev) => ({ ...prev, [season.seasonNumber]: true }));
+    setSeasonErrors((prev) => ({ ...prev, [season.seasonNumber]: null }));
+
+    try {
+      const seasonDetails = await getTmdbSeasonDetails(
+        parsedId.externalId,
+        season.seasonNumber
+      );
+      const normalizedSeason = normalizeTmdbSeason(seasonDetails);
+      const mergedSeason: NormalizedSeason = {
+        ...season,
+        ...normalizedSeason,
+        episodeCount:
+          normalizedSeason.episodeCount ??
+          season.episodeCount ??
+          normalizedSeason.episodes?.length,
+      };
+
+      setSeasons((prev) =>
+        prev.map((entry) =>
+          entry.seasonNumber === season.seasonNumber ? mergedSeason : entry
+        )
+      );
+
+      return mergedSeason.episodes ?? [];
+    } catch (seasonError) {
+      console.error("Failed to load season details", seasonError);
+      setSeasonErrors((prev) => ({
+        ...prev,
+        [season.seasonNumber]: "Could not load episodes for this season.",
+      }));
+      return null;
+    } finally {
+      setSeasonLoading((prev) => ({ ...prev, [season.seasonNumber]: false }));
+    }
+  }, [parsedId, seasonLoading]);
+
   // Auto-expand earliest season with unwatched episodes
   // Wait for tracking data so we know which episodes are watched
   const trackingLoaded = tracking !== undefined || !canTrackShow;
@@ -351,7 +395,7 @@ export function ShowDetailScreen() {
     }
 
     setExpandedSeasonsInitialized(true);
-  }, [seasons, tracking, trackingLoaded]);
+  }, [seasons, tracking, trackingLoaded, seasonLoading, resolveSeasonEpisodes, expandedSeasonsInitialized]);
 
   useEffect(() => {
     if (!parsedId) {
@@ -441,50 +485,6 @@ export function ShowDetailScreen() {
       setTrackingError("Could not add this show to watchlist.");
     } finally {
       setIsAddingToWatchlist(false);
-    }
-  };
-
-  const resolveSeasonEpisodes = async (season: NormalizedSeason) => {
-    if (season.episodes?.length) return season.episodes;
-    if (!parsedId || parsedId.source !== "tmdb" || parsedId.mediaType !== "tv") {
-      return season.episodes ?? [];
-    }
-    if (seasonLoading[season.seasonNumber]) return season.episodes ?? [];
-
-    setSeasonLoading((prev) => ({ ...prev, [season.seasonNumber]: true }));
-    setSeasonErrors((prev) => ({ ...prev, [season.seasonNumber]: null }));
-
-    try {
-      const seasonDetails = await getTmdbSeasonDetails(
-        parsedId.externalId,
-        season.seasonNumber
-      );
-      const normalizedSeason = normalizeTmdbSeason(seasonDetails);
-      const mergedSeason: NormalizedSeason = {
-        ...season,
-        ...normalizedSeason,
-        episodeCount:
-          normalizedSeason.episodeCount ??
-          season.episodeCount ??
-          normalizedSeason.episodes?.length,
-      };
-
-      setSeasons((prev) =>
-        prev.map((entry) =>
-          entry.seasonNumber === season.seasonNumber ? mergedSeason : entry
-        )
-      );
-
-      return mergedSeason.episodes ?? [];
-    } catch (seasonError) {
-      console.error("Failed to load season details", seasonError);
-      setSeasonErrors((prev) => ({
-        ...prev,
-        [season.seasonNumber]: "Could not load episodes for this season.",
-      }));
-      return null;
-    } finally {
-      setSeasonLoading((prev) => ({ ...prev, [season.seasonNumber]: false }));
     }
   };
 
@@ -633,12 +633,17 @@ export function ShowDetailScreen() {
         return;
       }
 
-      // Check if all episodes are already watched
-      const totalReleasedEpisodes = seasonPayloads.reduce(
-        (sum, payload) => sum + payload.episodes.length,
-        0
-      );
-      const isFullyWatched = watchedEpisodeKeys.size >= totalReleasedEpisodes;
+      // Collect all episode keys for the current season payloads
+      const allEpisodeKeys: string[] = [];
+      for (const payload of seasonPayloads) {
+        for (const episode of payload.episodes) {
+          allEpisodeKeys.push(`${episode.seasonNumber}:${episode.episodeNumber}`);
+        }
+      }
+
+      // Count how many of the collected keys are actually watched
+      const watchedCountInPayloads = allEpisodeKeys.filter(key => watchedEpisodeKeys.has(key)).length;
+      const isFullyWatched = watchedCountInPayloads >= allEpisodeKeys.length;
 
       setSeasonActionLoading((prev) => {
         const next = { ...prev };
@@ -648,15 +653,7 @@ export function ShowDetailScreen() {
         return next;
       });
 
-      // Collect all episode keys for optimistic override
-      const allEpisodeKeys: string[] = [];
-      for (const payload of seasonPayloads) {
-        for (const episode of payload.episodes) {
-          allEpisodeKeys.push(`${episode.seasonNumber}:${episode.episodeNumber}`);
-        }
-      }
-
-      // Apply optimistic override
+      // Apply optimistic override using the previously collected keys
       setPendingOverrides((prev) => {
         const next = { ...prev };
         for (const k of allEpisodeKeys) {
