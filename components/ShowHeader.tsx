@@ -58,12 +58,7 @@ export function ShowHeader({
         </View>
       )}
 
-      {/* Gradient Overlay - Using multiple opacity layers */}
-      <View className="absolute inset-0">
-        <View className="h-[30%] w-full bg-bg-base/10" />
-        <View className="h-[40%] w-full bg-bg-base/50" />
-        <View className="h-[30%] w-full bg-bg-base" />
-      </View>
+
 
       {/* Content */}
       <View
