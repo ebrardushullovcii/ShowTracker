@@ -68,11 +68,11 @@ export function MediaPosterCard({
             </View>
           )}
 
-          {/* Dark gradient overlay at bottom */}
+          {/* Dark gradient overlay at bottom - reduced */}
           <View
             pointerEvents="none"
-            className="absolute inset-x-0 bottom-0 h-20"
-            style={{ backgroundColor: "rgba(0,0,0,0.7)", borderBottomLeftRadius: 16, borderBottomRightRadius: 16 }}
+            className="absolute inset-x-0 bottom-0 h-12"
+            style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
           />
 
           {/* Bottom type + badge */}
@@ -91,8 +91,17 @@ export function MediaPosterCard({
           ) : null}
 
           {typeof rank === "number" ? (
-            <View className="absolute left-2 top-2">
-              <Badge label={`#${rank}`} variant="primary" />
+            <View
+              className="absolute left-2 top-2 rounded-full bg-bg-base/95 px-2 py-1"
+              style={{
+                shadowColor: "#000",
+                shadowOffset: { width: 0, height: 1 },
+                shadowOpacity: 0.3,
+                shadowRadius: 2,
+                elevation: 3,
+              }}
+            >
+              <Text className="text-xs font-bold text-primary">#{rank}</Text>
             </View>
           ) : null}
         </View>
