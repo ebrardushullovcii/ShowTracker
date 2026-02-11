@@ -127,21 +127,23 @@ export function SeasonAccordion({
                 }`}
               />
               
-              {/* Fill circle - shown when fully watched */}
-              {isFullyWatched && (
-                <View className="h-4 w-4 rounded-full bg-success" />
-              )}
-              
-              {/* Checkmark */}
-              {isFullyWatched && (
-                <View className="absolute inset-0 items-center justify-center">
-                  <Text className="text-xs font-bold text-white">✓</Text>
-                </View>
-              )}
-              
-              {/* Loading */}
-              {isMarking && (
+              {/* Loading - shows during update, replaces watched state */}
+              {isMarking ? (
                 <ActivityIndicator size="small" color="#a1a1aa" />
+              ) : (
+                <>
+                  {/* Fill circle - shown when fully watched */}
+                  {isFullyWatched && (
+                    <View className="h-4 w-4 rounded-full bg-success" />
+                  )}
+
+                  {/* Checkmark */}
+                  {isFullyWatched && (
+                    <View className="absolute inset-0 items-center justify-center">
+                      <Text className="text-xs font-bold text-white">✓</Text>
+                    </View>
+                  )}
+                </>
               )}
             </Pressable>
 

@@ -892,17 +892,23 @@ export function ShowDetailScreen() {
                     transform: [{ scale: pressed ? 0.9 : 1 }],
                   })}
                 >
-                  <View 
-                    className={`absolute h-7 w-7 rounded-full border-2 ${
-                      tracking?.inWatchlist ? "border-success" : "border-text-secondary"
-                    }`}
-                  />
-                  {tracking?.inWatchlist && (
+                  {isAddingToWatchlist ? (
+                    <ActivityIndicator size="small" color="#a1a1aa" />
+                  ) : (
                     <>
-                      <View className="h-4 w-4 rounded-full bg-success" />
-                      <View className="absolute inset-0 items-center justify-center">
-                        <Text className="text-xs font-bold text-white">✓</Text>
-                      </View>
+                      <View
+                        className={`absolute h-7 w-7 rounded-full border-2 ${
+                          tracking?.inWatchlist ? "border-success" : "border-text-secondary"
+                        }`}
+                      />
+                      {tracking?.inWatchlist && (
+                        <>
+                          <View className="h-4 w-4 rounded-full bg-success" />
+                          <View className="absolute inset-0 items-center justify-center">
+                            <Text className="text-xs font-bold text-white">✓</Text>
+                          </View>
+                        </>
+                      )}
                     </>
                   )}
                 </Pressable>

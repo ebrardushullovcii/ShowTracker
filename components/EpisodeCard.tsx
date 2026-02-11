@@ -131,21 +131,23 @@ export function EpisodeCard({
               }`}
             />
 
-            {/* Fill circle - shown when watched */}
-            {watched && (
-              <View className="h-3.5 w-3.5 rounded-full bg-success" />
-            )}
-
-            {/* Checkmark */}
-            {watched && (
-              <View className="absolute inset-0 items-center justify-center">
-                <Text className="text-[10px] font-bold text-white">✓</Text>
-              </View>
-            )}
-
-            {/* Loading indicator */}
-            {isUpdating && (
+            {/* Loading indicator - shows during update, replaces watched state */}
+            {isUpdating ? (
               <ActivityIndicator size="small" color="#a1a1aa" />
+            ) : (
+              <>
+                {/* Fill circle - shown when watched */}
+                {watched && (
+                  <View className="h-3.5 w-3.5 rounded-full bg-success" />
+                )}
+
+                {/* Checkmark */}
+                {watched && (
+                  <View className="absolute inset-0 items-center justify-center">
+                    <Text className="text-[10px] font-bold text-white">✓</Text>
+                  </View>
+                )}
+              </>
             )}
           </Pressable>
         </View>
