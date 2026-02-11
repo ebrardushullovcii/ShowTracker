@@ -662,42 +662,53 @@ export function ShowDetailScreen() {
         return next;
       });
 
-      if (isFullyWatched) {
-        for (const payload of seasonPayloads) {
-          await unmarkSeasonWatched({
-            show: buildShowPayload(show),
-            season: payload.seasonNumber,
-          });
+      // Run mutations in parallel with allSettled to track individual success/failure
+      const promises = isFullyWatched
+        ? seasonPayloads.map((payload) =>
+            unmarkSeasonWatched({
+              show: buildShowPayload(show),
+              season: payload.seasonNumber,
+            })
+          )
+        : seasonPayloads.map((payload) =>
+            markSeasonWatched({
+              show: buildShowPayload(show),
+              season: payload.seasonNumber,
+              episodes: payload.episodes.map((episode) => ({
+                episode: episode.episodeNumber,
+                runtime: episode.runtime,
+              })),
+            })
+          );
+
+      const results = await Promise.allSettled(promises);
+
+      // Identify failed seasons
+      const failedIndices = results
+        .map((result, index) => (result.status === "rejected" ? index : -1))
+        .filter((index) => index !== -1);
+
+      if (failedIndices.length > 0) {
+        console.error("Some seasons failed to update:", failedIndices);
+        // Only revert optimistic overrides for failed seasons
+        const failedKeys: string[] = [];
+        for (const index of failedIndices) {
+          const payload = seasonPayloads[index];
+          for (const ep of payload.episodes) {
+            failedKeys.push(`${ep.seasonNumber}:${ep.episodeNumber}`);
+          }
         }
-      } else {
-        for (const payload of seasonPayloads) {
-          await markSeasonWatched({
-            show: buildShowPayload(show),
-            season: payload.seasonNumber,
-            episodes: payload.episodes.map((episode) => ({
-              episode: episode.episodeNumber,
-              runtime: episode.runtime,
-            })),
-          });
-        }
+        setPendingOverrides((prev) => {
+          const next = { ...prev };
+          for (const k of failedKeys) {
+            delete next[k];
+          }
+          return next;
+        });
+        setTrackingError(
+          `Could not update ${failedIndices.length} season${failedIndices.length > 1 ? "s" : ""}. Please try again.`
+        );
       }
-    } catch (mutationError) {
-      console.error("Failed to toggle show watched", mutationError);
-      // Clear overrides to revert to tracking state
-      const allKeys: string[] = [];
-      for (const payload of seasonPayloads) {
-        for (const ep of payload.episodes) {
-          allKeys.push(`${ep.seasonNumber}:${ep.episodeNumber}`);
-        }
-      }
-      setPendingOverrides((prev) => {
-        const next = { ...prev };
-        for (const k of allKeys) {
-          delete next[k];
-        }
-        return next;
-      });
-      setTrackingError("Could not update show status.");
     } finally {
       setSeasonActionLoading((prev) => {
         const next = { ...prev };
