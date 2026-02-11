@@ -6,15 +6,19 @@ interface ProgressBarProps {
   className?: string;
   /** Height of the bar in pixels */
   height?: number;
+  animated?: boolean;
 }
 
 export function ProgressBar({
   progress,
   className,
   height = 4,
+  animated = false,
 }: ProgressBarProps) {
-  const clampedProgress = Math.max(0, Math.min(1, progress));
-  const widthPercent = `${Math.round(clampedProgress * 100)}%`;
+  const clampedProgress = Number.isFinite(progress)
+    ? Math.max(0, Math.min(1, progress))
+    : 0;
+  const widthPercent = `${Math.round(clampedProgress * 100)}%` as `${number}%`;
 
   return (
     <View
@@ -25,7 +29,7 @@ export function ProgressBar({
         className="h-full rounded-full bg-primary"
         style={{
           width: widthPercent,
-          ...(Platform.OS === "web"
+          ...(animated && Platform.OS === "web"
             ? { transition: "width 0.4s ease-out" as string }
             : {}),
         }}

@@ -1,7 +1,7 @@
 import { Text, View } from "react-native";
 import { ScreenWrapper } from "@/components/ScreenWrapper";
 
-export default function ExtraScreen() {
+export function ExtraScreen() {
   return (
     <ScreenWrapper>
       <View className="items-center py-10">

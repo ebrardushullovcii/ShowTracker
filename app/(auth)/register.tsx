@@ -1,5 +1,5 @@
 import { Link, useRouter } from "expo-router";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Platform, Text, TextInput, View, useWindowDimensions } from "react-native";
 import { useAuthActions } from "@convex-dev/auth/react";
 import { Button } from "@/components/Button";
@@ -22,6 +22,16 @@ export function RegisterScreen() {
   const [isPending, setIsPending] = useState(false);
   const isDesktopAuth =
     Platform.OS === "web" && width >= DESKTOP_SIDEBAR_BREAKPOINT;
+  const redirectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (redirectTimerRef.current) {
+        clearTimeout(redirectTimerRef.current);
+        redirectTimerRef.current = null;
+      }
+    };
+  }, []);
 
   const handleRegister = async () => {
     if (!email.trim()) { setError("Please enter your email address."); return; }
@@ -34,20 +44,24 @@ export function RegisterScreen() {
     setError(null);
     setSuccess(null);
     try {
-      const result = await signIn("password", { flow: "signUp", email: email.trim().toLowerCase(), password });
-      if (result.signingIn) { 
+      const didSignIn = await signIn("password", {
+        flow: "signUp",
+        email: email.trim().toLowerCase(),
+        password,
+      });
+
+      if (didSignIn) {
         setSuccess("Account created successfully! Redirecting...");
-        setTimeout(() => router.replace("/"), 1000);
-        return; 
-      }
-      
-      // Check if verification is needed
-      const authResult = result as Record<string, unknown>;
-      if (authResult.started === true || authResult.verificationRequired === true) {
-        setSuccess("Account created! Please check your email to verify your account before signing in.");
+        if (redirectTimerRef.current) {
+          clearTimeout(redirectTimerRef.current);
+        }
+        redirectTimerRef.current = setTimeout(() => {
+          redirectTimerRef.current = null;
+          router.replace("/");
+        }, 1000);
         return;
       }
-      
+
       setError("Unable to create account. Please try again.");
     } catch (authError) {
       console.error("Register failed", authError);

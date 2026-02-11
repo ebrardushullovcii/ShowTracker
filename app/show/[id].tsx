@@ -735,8 +735,8 @@ export function ShowDetailScreen() {
     return inferred > 0 ? inferred : null;
   }, [seasons, show?.totalEpisodes]);
 
-  const watchProgressPercent = totalEpisodesCount
-    ? Math.min(100, (watchedEpisodesCount / totalEpisodesCount))
+  const watchProgressRatio = totalEpisodesCount
+    ? Math.min(1, watchedEpisodesCount / totalEpisodesCount)
     : 0;
 
   const isShowFullyWatched =
@@ -867,7 +867,7 @@ export function ShowDetailScreen() {
                   episodes
                 </Text>
               </View>
-              <ProgressBar progress={watchProgressPercent} height={8} animated />
+              <ProgressBar progress={watchProgressRatio} height={8} animated />
               <View className="mt-3 flex-row items-center justify-between">
                 <Text className="text-xs text-text-muted">
                   {tracking?.inWatchlist
@@ -875,7 +875,7 @@ export function ShowDetailScreen() {
                     : "Add to watchlist to track your progress"}
                 </Text>
                 <Text className="text-xs font-semibold text-text-secondary">
-                  {Math.round(watchProgressPercent * 100)}%
+                  {Math.round(watchProgressRatio * 100)}%
                 </Text>
               </View>
             </View>

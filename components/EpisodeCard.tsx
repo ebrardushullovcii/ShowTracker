@@ -24,7 +24,6 @@ interface EpisodeCardProps {
 }
 
 export function EpisodeCard({
-  id,
   episodeNumber,
   seasonNumber,
   name,

@@ -10,6 +10,7 @@ import {
   type LayoutChangeEvent,
 } from "react-native";
 import { Image } from "expo-image";
+import { LinearGradient } from "expo-linear-gradient";
 import { Link } from "expo-router";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -193,7 +194,11 @@ function DashboardCard({
           </View>
         )}
         {/* Gradient fade at bottom */}
-        <View pointerEvents="none" style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 120, background: "linear-gradient(transparent, rgba(0,0,0,0.85))" as string, backgroundColor: "rgba(0,0,0,0.6)" }} />
+        <LinearGradient
+          pointerEvents="none"
+          colors={["transparent", "rgba(0,0,0,0.85)"]}
+          style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 120 }}
+        />
         {/* Badges */}
         {item.isDemo ? (
           <View style={{ position: "absolute", left: 8, top: 8 }}>
