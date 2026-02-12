@@ -1,5 +1,6 @@
 import { Feather, Ionicons } from "@expo/vector-icons";
 import { Tabs } from "expo-router";
+import { useState } from "react";
 import { Platform, View, useWindowDimensions } from "react-native";
 import { DESKTOP_SIDEBAR_BREAKPOINT } from "@/constants/navigation";
 import { Sidebar } from "@/components/Sidebar";

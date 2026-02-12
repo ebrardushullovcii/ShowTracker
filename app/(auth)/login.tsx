@@ -54,11 +54,7 @@ export function LoginScreen() {
 
   const handleAuthResult = (
     result: Awaited<ReturnType<typeof signIn>>,
-    messages: {
-      verificationRequired: string;
-      authenticationFailed: string;
-      fallback: string;
-    }
+    messages: { verificationRequired: string; authenticationFailed: string; fallback: string }
   ) => {
     const authResult = result as Record<string, unknown>;
     const redirectValue = authResult.redirect;
