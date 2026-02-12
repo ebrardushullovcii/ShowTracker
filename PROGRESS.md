@@ -119,3 +119,15 @@ Phase 4: Tracking Features (in progress)
 - Notifications for new episodes (push notifications)
 - Import from TVTime/Trakt
 - Recommendations based on watch history
+
+## Planned Later (Requested)
+- [ ] Upgrade project from Expo SDK 54 to SDK 55
+  - [x] Confirm version availability (as of 2026-02-12 only `55.0.0-preview.x` exists on npm; no stable `55.x`)
+  - [x] Keep project on latest stable SDK 54 (`expo@54.0.33`) and run alignment/doctor checks
+  - [ ] Upgrade to SDK 55 once stable is published
+  - [ ] Resolve SDK 55 breaking changes (if any) and re-run lint/typecheck
+  - [ ] Validate iOS, Android, and web smoke flows after upgrade
+- [ ] Keep desktop sidebar persistent across authenticated app routes
+  - [ ] Move sidebar shell to a shared authenticated desktop layout (not tabs-only)
+  - [ ] Ensure detail routes (show/list/create) render inside same desktop shell
+  - [ ] Preserve current mobile tab navigation behavior

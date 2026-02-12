@@ -1,6 +1,6 @@
-import { Image } from "expo-image";
-import { Platform, Text, View, useWindowDimensions } from "react-native";
+import { Image, Platform, Text, View, useWindowDimensions } from "react-native";
 import type { ReactNode } from "react";
+import { toHttpsImageUrl } from "@/lib/image-url";
 
 interface HeroSectionProps {
   imageUrl?: string | null;
@@ -31,9 +31,9 @@ export function HeroSection({
       {/* Backdrop image */}
       {imageUrl ? (
         <Image
-          source={{ uri: imageUrl }}
+          source={{ uri: toHttpsImageUrl(imageUrl) }}
           className="absolute inset-0"
-          contentFit="cover"
+          resizeMode="cover"
         />
       ) : (
         <View className="absolute inset-0 bg-gray-800" />

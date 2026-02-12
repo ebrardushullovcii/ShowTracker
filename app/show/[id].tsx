@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Image,
   Platform,
   Pressable,
   ScrollView,
@@ -8,7 +9,6 @@ import {
   View,
   useWindowDimensions,
 } from "react-native";
-import { Image } from "expo-image";
 import { useLocalSearchParams } from "expo-router";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -31,6 +31,7 @@ import type {
   NormalizedShow,
 } from "@/lib/api/types";
 import { parseShowRouteId } from "@/lib/show-route";
+import { toHttpsImageUrl } from "@/lib/image-url";
 
 type SeasonLoadState = Record<number, boolean>;
 type SeasonErrorState = Record<number, string | null>;
@@ -168,7 +169,7 @@ function getEpisodeAvailabilityLabel(airDate?: string | null, now = new Date()) 
       isReleased: true,
       dateLabel: "Air date TBA",
       stateLabel: "Release unknown",
-      stateClassName: "text-text-muted",
+      stateClassName: "text-text-secondary",
     };
   }
 
@@ -204,6 +205,10 @@ function getEpisodeAvailabilityLabel(airDate?: string | null, now = new Date()) 
 
 function formatTrackingStatus(status?: string | null) {
   if (!status) return null;
+  const normalized = status.trim().toLowerCase();
+
+  if (normalized === "watchig") return "Watching";
+
   return status
     .replaceAll("_", " ")
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
@@ -509,6 +514,7 @@ export function ShowDetailScreen() {
         season: episode.seasonNumber,
         episode: episode.episodeNumber,
         runtime: episode.runtime,
+        action: "toggle",
       });
     } catch (mutationError) {
       console.error("Failed to toggle episode", mutationError);
@@ -756,8 +762,8 @@ export function ShowDetailScreen() {
 
   if (isLoading) {
     return (
-      <ScreenWrapper contentClassName="px-0 py-0">
-        <PageBackButton fallbackHref="/" />
+      <ScreenWrapper>
+        <PageBackButton fallbackHref="/home" />
         <View className="flex-1 items-center justify-center">
           <ActivityIndicator size="large" color="#ef4444" />
           <Text className="mt-4 text-sm text-text-secondary">Loading show details...</Text>
@@ -768,8 +774,8 @@ export function ShowDetailScreen() {
 
   if (error) {
     return (
-      <ScreenWrapper contentClassName="px-4 py-6">
-        <PageBackButton fallbackHref="/" />
+      <ScreenWrapper>
+        <PageBackButton fallbackHref="/home" />
         <View className="rounded-2xl border border-primary/30 bg-primary/10 p-6">
           <Text className="text-lg font-semibold text-primary">Error</Text>
           <Text className="mt-2 text-sm text-text-secondary">{error}</Text>
@@ -780,8 +786,8 @@ export function ShowDetailScreen() {
 
   if (!show) {
     return (
-      <ScreenWrapper contentClassName="px-4 py-6">
-        <PageBackButton fallbackHref="/" />
+      <ScreenWrapper>
+        <PageBackButton fallbackHref="/home" />
         <View className="items-center py-12">
           <Text className="text-text-secondary">Show not found.</Text>
         </View>
@@ -790,27 +796,28 @@ export function ShowDetailScreen() {
   }
 
   return (
-    <ScreenWrapper contentClassName="px-0 py-0">
-      <PageBackButton fallbackHref="/" />
-
+    <ScreenWrapper>
       <ScrollView
         className="flex-1"
         showsVerticalScrollIndicator={false}
         bounces={false}
       >
         {/* Hero Section */}
-        <ShowHeader
-          backdropUrl={show.backdropUrl}
-          posterUrl={show.posterUrl}
-          title={cleanedShowTitle}
-          mediaType={show.mediaType}
-          firstAired={show.firstAired}
-          rating={show.rating}
-          isDesktop={isDesktop}
-        />
+        <View className="relative">
+          <ShowHeader
+            backdropUrl={show.backdropUrl}
+            posterUrl={show.posterUrl}
+            title={cleanedShowTitle}
+            mediaType={show.mediaType}
+            firstAired={show.firstAired}
+            rating={show.rating}
+            isDesktop={isDesktop}
+          />
+          <PageBackButton fallbackHref="/home" />
+        </View>
 
         {/* Main Content */}
-        <View className={`${isDesktop ? "px-8" : "px-5"} pt-6 pb-8`}>
+        <View className="pt-6 pb-8">
           <View className={`mx-auto w-full ${isDesktop ? "max-w-4xl" : ""}`}>
           {/* Overview & Poster Row (Mobile Only) */}
           {!isDesktop && (
@@ -821,10 +828,9 @@ export function ShowDetailScreen() {
                   style={{ width: 100, height: 150 }}
                 >
                   <Image
-                    source={{ uri: show.posterUrl }}
+                    source={{ uri: toHttpsImageUrl(show.posterUrl) }}
                     className="h-full w-full"
-                    contentFit="cover"
-                    transition={300}
+                    resizeMode="cover"
                   />
                 </View>
               )}
@@ -877,7 +883,7 @@ export function ShowDetailScreen() {
               </View>
               <ProgressBar progress={watchProgressRatio} height={8} animated />
               <View className="mt-3 flex-row items-center justify-between">
-                <Text className="text-xs text-text-muted">
+                <Text className="text-xs text-text-secondary">
                   {tracking?.inWatchlist
                     ? `Saved${tracking?.status ? ` · ${formatTrackingStatus(tracking.status)}` : ""}`
                     : "Add to watchlist to track your progress"}
@@ -909,7 +915,7 @@ export function ShowDetailScreen() {
                     <>
                       <View
                         className={`absolute h-7 w-7 rounded-full border-2 ${
-                          tracking?.inWatchlist ? "border-success" : "border-text-secondary"
+                          tracking?.inWatchlist ? "border-success" : "border-border-bright"
                         }`}
                       />
                       {tracking?.inWatchlist && (
@@ -953,7 +959,7 @@ export function ShowDetailScreen() {
                     })}
                   >
                     <View 
-                      className="absolute h-7 w-7 rounded-full border-2 border-text-secondary"
+                      className="absolute h-7 w-7 rounded-full border-2 border-border-bright"
                     />
                   </Pressable>
                   <Pressable

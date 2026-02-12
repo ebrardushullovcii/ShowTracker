@@ -10,3 +10,5 @@ export function ExtraScreen() {
     </ScreenWrapper>
   );
 }
+
+export default ExtraScreen;
