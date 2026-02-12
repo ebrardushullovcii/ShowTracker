@@ -22,7 +22,8 @@ export default defineSchema({
     addedAt: v.number(),
   })
     .index("by_user", ["userId"])
-    .index("by_user_show", ["userId", "showId"]),
+    .index("by_user_show", ["userId", "showId"])
+    .index("by_user_mediaType", ["userId", "mediaType"]),
   userSocial: defineTable({
     userId: v.id("users"),
     followingCount: v.optional(v.number()),
@@ -80,7 +81,8 @@ export default defineSchema({
   })
     .index("by_user_show", ["userId", "showId"])
     .index("by_user", ["userId"])
-    .index("by_watchedAt", ["userId", "watchedAt"]),
+    .index("by_watchedAt", ["userId", "watchedAt"])
+    .index("by_user_show_season_episode", ["userId", "showId", "season", "episode"]),
   customLists: defineTable({
     userId: v.id("users"),
     name: v.string(),

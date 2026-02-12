@@ -205,8 +205,8 @@ function getEpisodeAvailabilityLabel(airDate?: string | null, now = new Date()) 
 function formatTrackingStatus(status?: string | null) {
   if (!status) return null;
   return status
-    .replaceAll("_", " ")
-    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (letter: string) => letter.toUpperCase());
 }
 
 const NAMED_HTML_ENTITIES: Record<string, string> = {
@@ -509,6 +509,7 @@ export function ShowDetailScreen() {
         season: episode.seasonNumber,
         episode: episode.episodeNumber,
         runtime: episode.runtime,
+        action: "toggle",
       });
     } catch (mutationError) {
       console.error("Failed to toggle episode", mutationError);

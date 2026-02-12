@@ -1,4 +1,5 @@
-import { Image, Platform, Text, View, useWindowDimensions } from "react-native";
+import { Image } from "expo-image";
+import { Platform, Text, View, useWindowDimensions } from "react-native";
 import type { ReactNode } from "react";
 import { toHttpsImageUrl } from "@/lib/image-url";
 
@@ -33,7 +34,7 @@ export function HeroSection({
         <Image
           source={{ uri: toHttpsImageUrl(imageUrl) }}
           className="absolute inset-0"
-          resizeMode="cover"
+          contentFit="cover"
         />
       ) : (
         <View className="absolute inset-0 bg-gray-800" />

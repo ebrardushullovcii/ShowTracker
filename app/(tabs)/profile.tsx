@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Image,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
   KeyboardAvoidingView,
@@ -14,6 +13,7 @@ import {
   View,
   useWindowDimensions,
 } from "react-native";
+import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { Link } from "expo-router";
@@ -46,7 +46,7 @@ function formatStatus(status: string) {
   const normalized = status.trim().toLowerCase();
   if (normalized === "watchig") return "Watching";
   if (normalized === "plan_to_watch") return "Plan to Watch";
-  const spaced = normalized.replaceAll("_", " ");
+  const spaced = normalized.replace(/_/g, " ");
   return spaced.slice(0, 1).toUpperCase() + spaced.slice(1);
 }
 
@@ -203,7 +203,7 @@ function PosterRail({
           >
             <View style={{ width: posterWidth, height: posterHeight }}>
               {item.posterUrl ? (
-                <Image source={{ uri: toHttpsImageUrl(item.posterUrl) }} style={{ width: posterWidth, height: posterHeight }} resizeMode="cover" />
+                <Image source={{ uri: toHttpsImageUrl(item.posterUrl) }} style={{ width: posterWidth, height: posterHeight }} contentFit="cover" />
               ) : (
                 <View className="h-full w-full items-center justify-center bg-bg-elevated">
                   <Ionicons name="image-outline" size={20} color="#71717a" />
@@ -506,7 +506,7 @@ export default function ProfileScreen() {
         <View className="overflow-hidden rounded-3xl border border-border-default bg-bg-surface">
           <View className="relative" style={{ height: isDesktop ? 250 : 220 }}>
             {heroBackdrop ? (
-              <Image source={{ uri: toHttpsImageUrl(heroBackdrop) }} className="h-full w-full" resizeMode="cover" />
+              <Image source={{ uri: toHttpsImageUrl(heroBackdrop) }} className="h-full w-full" contentFit="cover" />
             ) : (
               <LinearGradient
                 colors={["#27272a", "#18181b", "#09090b"]}
@@ -544,7 +544,7 @@ export default function ProfileScreen() {
               <View className="flex-row items-end gap-3">
                 <View className="h-20 w-20 overflow-hidden rounded-full border-4 border-bg-base bg-bg-elevated">
                   {stats?.avatarUrl ? (
-                    <Image source={{ uri: toHttpsImageUrl(stats.avatarUrl) }} className="h-full w-full" resizeMode="cover" />
+                    <Image source={{ uri: toHttpsImageUrl(stats.avatarUrl) }} className="h-full w-full" contentFit="cover" />
                   ) : (
                     <View className="h-full w-full items-center justify-center">
                       <Ionicons name="person" size={34} color="#a1a1aa" />

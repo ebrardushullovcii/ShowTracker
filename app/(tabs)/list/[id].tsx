@@ -2,14 +2,13 @@ import { useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  Image,
   Pressable,
-  ScrollView,
   Text,
   TextInput,
   View,
   useWindowDimensions,
 } from "react-native";
+import { Image } from "expo-image";
 import { FlashList } from "@shopify/flash-list";
 import { useLocalSearchParams, router } from "expo-router";
 import { useMutation, useQuery } from "convex/react";
@@ -68,7 +67,7 @@ function ListShowCard({
             <Image
               source={{ uri: toHttpsImageUrl(show.posterUrl) }}
               style={{ width: posterWidth * 0.3, height: posterHeight * 0.3 }}
-              resizeMode="cover"
+              contentFit="cover"
             />
           ) : (
             <View className="h-full w-full items-center justify-center bg-bg-elevated">
@@ -128,7 +127,7 @@ function ListShowCard({
             <Image
               source={{ uri: toHttpsImageUrl(show.posterUrl) }}
               style={{ width: posterWidth, height: posterHeight }}
-              resizeMode="cover"
+              contentFit="cover"
             />
           ) : (
             <View className="h-full w-full items-center justify-center bg-bg-elevated">
@@ -304,6 +303,106 @@ export default function ListDetailScreen() {
     );
   };
 
+  const shows = list && list.shows ? (isEditing ? localShows : (list.shows.filter(Boolean) as ShowItem[])) : [];
+
+  const renderHeader = () => {
+    if (!list) return null;
+    return (
+      <View className="gap-3 pt-10">
+        <PageBackButton fallbackHref="/home" />
+
+        {isEditing ? (
+          // Edit Mode Header
+          <>
+            <TextInput
+              value={editedName}
+              onChangeText={setEditedName}
+              className="text-2xl font-bold text-text-primary"
+              placeholder="List name"
+              placeholderTextColor="#71717a"
+            />
+            <TextInput
+              value={editedDescription}
+              onChangeText={setEditedDescription}
+              className="text-sm text-text-secondary"
+              placeholder="Add a description..."
+              placeholderTextColor="#71717a"
+              multiline
+            />
+            <View className="mt-4 flex-row gap-2">
+              <Pressable
+                onPress={saveChanges}
+                disabled={isSaving}
+                className="flex-1 items-center justify-center rounded-xl bg-primary py-3"
+              >
+                {isSaving ? (
+                  <ActivityIndicator size="small" color="#ffffff" />
+                ) : (
+                  <Text className="font-semibold text-white">Save</Text>
+                )}
+              </Pressable>
+              <Pressable
+                onPress={cancelEditing}
+                disabled={isSaving}
+                className="flex-1 items-center justify-center rounded-xl border border-border-default bg-bg-surface py-3"
+              >
+                <Text className="font-semibold text-text-primary">Cancel</Text>
+              </Pressable>
+            </View>
+          </>
+        ) : (
+          // View Mode Header
+          <>
+            <PageIntro
+              title={list.name}
+              subtitle={list.description || "Custom list for your tracked titles"}
+              eyebrow="Custom list"
+              icon="bookmark-outline"
+              rightLabel={`${list.shows.length} ${list.shows.length === 1 ? "show" : "shows"}`}
+            />
+            <View className="-mt-1 mb-1 flex-row justify-end gap-2">
+              <Pressable
+                onPress={startEditing}
+                className="rounded-xl border border-border-default bg-bg-surface p-3"
+              >
+                <Ionicons name="create-outline" size={20} color="#a1a1aa" />
+              </Pressable>
+              <Pressable
+                onPress={handleDeleteList}
+                className="rounded-xl border border-border-default bg-bg-surface p-3"
+              >
+                <Ionicons name="trash-outline" size={20} color="#ef4444" />
+              </Pressable>
+            </View>
+            <Text className="text-sm text-text-secondary">
+              Reorder from edit mode to curate this list.
+            </Text>
+          </>
+        )}
+
+        {/* Grid width measurement wrapper */}
+        <View
+          className="mt-6"
+          onLayout={(e) => setGridWidth(e.nativeEvent.layout.width)}
+        />
+      </View>
+    );
+  };
+
+  const renderEmptyList = () => {
+    return (
+      <View className="items-center rounded-2xl border border-border-default bg-bg-surface px-6 py-12">
+        <Text className="mb-2 text-4xl">📝</Text>
+        <Text className="text-lg font-semibold text-text-primary">
+          Empty list
+        </Text>
+        <Text className="mt-1 max-w-xs text-center text-sm text-text-secondary">
+          This list is empty. Add shows from their detail pages.
+        </Text>
+      </View>
+    );
+  };
+
   if (list === undefined) {
     return (
       <ScreenWrapper>
@@ -324,153 +423,71 @@ export default function ListDetailScreen() {
     );
   }
 
-  const shows = isEditing ? localShows : (list.shows.filter(Boolean) as ShowItem[]);
-
   return (
     <ScreenWrapper>
-      <ScrollView className="flex-1">
-        <View className="gap-3 pt-10">
-          <PageBackButton fallbackHref="/home" />
-
-          {isEditing ? (
-            // Edit Mode Header
-            <>
-              <TextInput
-                value={editedName}
-                onChangeText={setEditedName}
-                className="text-2xl font-bold text-text-primary"
-                placeholder="List name"
-                placeholderTextColor="#71717a"
-              />
-              <TextInput
-                value={editedDescription}
-                onChangeText={setEditedDescription}
-                className="text-sm text-text-secondary"
-                placeholder="Add a description..."
-                placeholderTextColor="#71717a"
-                multiline
-              />
-              <View className="mt-4 flex-row gap-2">
-                <Pressable
-                  onPress={saveChanges}
-                  disabled={isSaving}
-                  className="flex-1 items-center justify-center rounded-xl bg-primary py-3"
-                >
-                  {isSaving ? (
-                    <ActivityIndicator size="small" color="#ffffff" />
-                  ) : (
-                    <Text className="font-semibold text-white">Save</Text>
-                  )}
-                </Pressable>
-                <Pressable
-                  onPress={cancelEditing}
-                  disabled={isSaving}
-                  className="flex-1 items-center justify-center rounded-xl border border-border-default bg-bg-surface py-3"
-                >
-                  <Text className="font-semibold text-text-primary">Cancel</Text>
-                </Pressable>
-              </View>
-            </>
-          ) : (
-            // View Mode Header
-            <>
-              <PageIntro
-                title={list.name}
-                subtitle={list.description || "Custom list for your tracked titles"}
-                eyebrow="Custom list"
-                icon="bookmark-outline"
-                rightLabel={`${list.shows.length} ${list.shows.length === 1 ? "show" : "shows"}`}
-              />
-              <View className="-mt-1 mb-1 flex-row justify-end gap-2">
-                <Pressable
-                  onPress={startEditing}
-                  className="rounded-xl border border-border-default bg-bg-surface p-3"
-                >
-                  <Ionicons name="create-outline" size={20} color="#a1a1aa" />
-                </Pressable>
-                <Pressable
-                  onPress={handleDeleteList}
-                  className="rounded-xl border border-border-default bg-bg-surface p-3"
-                >
-                  <Ionicons name="trash-outline" size={20} color="#ef4444" />
-                </Pressable>
-              </View>
-              <Text className="text-sm text-text-secondary">
-                Reorder from edit mode to curate this list.
-              </Text>
-            </>
+      {isEditing ? (
+        // Edit Mode - List view with reorder controls (uses FlashList for consistency)
+        <FlashList
+          data={shows}
+          keyExtractor={(item) => item.id}
+          ItemSeparatorComponent={() => <View style={{ height: GRID_GAP }} />}
+          ListHeaderComponent={renderHeader}
+          ListEmptyComponent={renderEmptyList}
+          renderItem={({ item, index }) => (
+            <ListShowCard
+              show={item as ShowItem}
+              isEditing={true}
+              onMoveUp={() => handleMoveUp(index)}
+              onMoveDown={() => handleMoveDown(index)}
+              onRemove={() => handleRemove(item.id)}
+              index={index}
+              totalCount={shows.length}
+              posterWidth={posterWidth}
+              posterHeight={posterHeight}
+            />
           )}
-
-          {/* Shows Grid/List */}
-          <View
-            className="mt-6"
-            onLayout={(e) => setGridWidth(e.nativeEvent.layout.width)}
-          >
-            {shows.length === 0 ? (
-              <View className="items-center rounded-2xl border border-border-default bg-bg-surface px-6 py-12">
-                <Text className="mb-2 text-4xl">📝</Text>
-                <Text className="text-lg font-semibold text-text-primary">
-                  Empty list
-                </Text>
-                <Text className="mt-1 max-w-xs text-center text-sm text-text-secondary">
-                  This list is empty. Add shows from their detail pages.
-                </Text>
-              </View>
-            ) : isEditing ? (
-              // Edit Mode - List view with reorder controls
-              <View className="gap-3">
-                {shows.map((show, index) => (
-                  <ListShowCard
-                    key={show.id}
-                    show={show}
-                    isEditing={true}
-                    onMoveUp={() => handleMoveUp(index)}
-                    onMoveDown={() => handleMoveDown(index)}
-                    onRemove={() => handleRemove(show.id)}
-                    index={index}
-                    totalCount={shows.length}
-                    posterWidth={posterWidth}
-                    posterHeight={posterHeight}
-                  />
-                ))}
-              </View>
-            ) : (
-              // View Mode - Grid
-              <FlashList
-                data={shows}
-                key={columns}
-                numColumns={columns}
-                keyExtractor={(item) => item.id}
-                ItemSeparatorComponent={() => <View style={{ height: GRID_GAP }} />}
-                renderItem={({ item, index }) => (
-                  <View
-                    style={{
-                      width: posterWidth,
-                      marginRight: GRID_GAP,
-                      marginBottom: GRID_GAP,
-                    }}
-                  >
-                    <ListShowCard
-                      show={item as ShowItem}
-                      isEditing={false}
-                      onMoveUp={() => {}}
-                      onMoveDown={() => {}}
-                      onRemove={() => {}}
-                      index={index}
-                      totalCount={shows.length}
-                      posterWidth={posterWidth}
-                      posterHeight={posterHeight}
-                    />
-                  </View>
-                )}
-                contentContainerStyle={{
-                  paddingBottom: containerPadding,
-                }}
+          contentContainerStyle={{
+            paddingHorizontal: containerPadding,
+            paddingBottom: containerPadding,
+          }}
+        />
+      ) : (
+        // View Mode - Grid
+        <FlashList
+          data={shows}
+          key={columns}
+          numColumns={columns}
+          keyExtractor={(item) => item.id}
+          ItemSeparatorComponent={() => <View style={{ height: GRID_GAP }} />}
+          ListHeaderComponent={renderHeader}
+          ListEmptyComponent={renderEmptyList}
+          renderItem={({ item, index }) => (
+            <View
+              style={{
+                width: posterWidth,
+                marginRight: GRID_GAP,
+                marginBottom: GRID_GAP,
+              }}
+            >
+              <ListShowCard
+                show={item as ShowItem}
+                isEditing={false}
+                onMoveUp={() => {}}
+                onMoveDown={() => {}}
+                onRemove={() => {}}
+                index={index}
+                totalCount={shows.length}
+                posterWidth={posterWidth}
+                posterHeight={posterHeight}
               />
-            )}
-          </View>
-        </View>
-      </ScrollView>
+            </View>
+          )}
+          contentContainerStyle={{
+            paddingHorizontal: containerPadding,
+            paddingBottom: containerPadding,
+          }}
+        />
+      )}
     </ScreenWrapper>
   );
 }

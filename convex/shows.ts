@@ -649,7 +649,6 @@ export const getWatchlist = query({
 
         return {
           id: getExternalShowId(show),
-          showId: userShow.showId,
           title: show.title,
           mediaType: show.mediaType,
           posterUrl: show.posterUrl ?? null,
@@ -712,12 +711,19 @@ export const batchMarkWatched = mutation({
 
     const now = Date.now();
     let addedCount = 0;
+    const totalEpisodes = args.show.totalEpisodes;
+    let episodesInserted = 0;
 
     for (let season = 1; season <= args.upToSeason; season++) {
       const isLastSeason = season === args.upToSeason;
       const maxEpisode = isLastSeason ? args.upToEpisode : 99;
 
       for (let episode = 1; episode <= maxEpisode; episode++) {
+        // Stop if we've reached the show's total episode count
+        if (typeof totalEpisodes === "number" && episodesInserted >= totalEpisodes) {
+          break;
+        }
+
         const key = `${season}:${episode}`;
         if (existingKeys.has(key)) {
           continue;
@@ -734,6 +740,12 @@ export const batchMarkWatched = mutation({
           watchHistory: [now],
         });
         addedCount++;
+        episodesInserted++;
+      }
+
+      // Break outer loop if we've reached total episodes
+      if (typeof totalEpisodes === "number" && episodesInserted >= totalEpisodes) {
+        break;
       }
     }
 
@@ -774,8 +786,12 @@ export const getEpisodeWatchHistory = query({
 
     const watchedEntry = await ctx.db
       .query("watchedEpisodes")
-      .withIndex("by_user_show", (q) => q.eq("userId", userId).eq("showId", show._id))
-      .filter((q) => q.and(q.eq(q.field("season"), args.season), q.eq(q.field("episode"), args.episode)))
+      .withIndex("by_user_show_season_episode", (q) =>
+        q.eq("userId", userId)
+          .eq("showId", show._id)
+          .eq("season", args.season)
+          .eq("episode", args.episode)
+      )
       .unique();
 
     if (!watchedEntry) {

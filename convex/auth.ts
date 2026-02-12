@@ -15,24 +15,22 @@ export const checkPasswordAccount = mutation({
   handler: async (ctx, args) => {
     const raw = args.email.trim();
     if (!raw) {
-      return { exists: false, matchedEmail: "" } as const;
+      return { ok: true } as const;
     }
 
+    // Perform lookup for internal tracking/logging but don't leak result
     const candidates = raw.toLowerCase() === raw ? [raw] : [raw, raw.toLowerCase()];
 
     for (const candidate of candidates) {
-      const account = await ctx.db
+      await ctx.db
         .query("authAccounts")
         .withIndex("providerAndAccountId", (q) =>
           q.eq("provider", "password").eq("providerAccountId", candidate)
         )
         .unique();
-
-      if (account) {
-        return { exists: true, matchedEmail: candidate } as const;
-      }
     }
 
-    return { exists: false, matchedEmail: raw.toLowerCase() } as const;
+    // Always return generic response to prevent account enumeration
+    return { ok: true } as const;
   },
 });

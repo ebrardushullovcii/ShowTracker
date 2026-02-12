@@ -61,18 +61,6 @@ export function RegisterScreen() {
     };
   }, []);
 
-  const isDesktopAuth = Platform.OS === "web" && width >= DESKTOP_SIDEBAR_BREAKPOINT;
-  const redirectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    return () => {
-      if (redirectTimerRef.current) {
-        clearTimeout(redirectTimerRef.current);
-        redirectTimerRef.current = null;
-      }
-    };
-  }, []);
-
   const handleRegister = async () => {
     if (!email.trim()) {
       setError("Please enter your email address.");

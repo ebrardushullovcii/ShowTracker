@@ -1,5 +1,6 @@
 import { LinearGradient } from "expo-linear-gradient";
-import { Image, View, Text } from "react-native";
+import { Image } from "expo-image";
+import { View, Text } from "react-native";
 import { Badge } from "./Badge";
 import { toHttpsImageUrl } from "@/lib/image-url";
 
@@ -45,7 +46,7 @@ export function ShowHeader({
         <Image
           source={{ uri: toHttpsImageUrl(backdropUrl) }}
           className="absolute inset-0 h-full w-full"
-          resizeMode="cover"
+          contentFit="cover"
         />
       ) : (
         <LinearGradient
@@ -100,7 +101,7 @@ export function ShowHeader({
                 <Image
                   source={{ uri: toHttpsImageUrl(posterUrl) }}
                 className="h-full w-full"
-                resizeMode="cover"
+                contentFit="cover"
               />
             </View>
           )}

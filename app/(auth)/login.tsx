@@ -129,15 +129,13 @@ export function LoginScreen() {
     setSuccess(null);
 
     try {
-      const accountCheck = await checkPasswordAccount({ email });
-      if (!accountCheck.exists) {
-        setError("No account found for this email. Create one first.");
-        return;
-      }
+      // Account check now returns generic response to prevent enumeration
+      // Proceed with sign-in attempt directly
+      await checkPasswordAccount({ email });
 
       const result = await signIn("password", {
         flow: "signIn",
-        email: accountCheck.matchedEmail,
+        email: email.trim().toLowerCase(),
         password,
       });
 
@@ -169,14 +167,11 @@ export function LoginScreen() {
 
     try {
       const result = await signIn("anonymous");
-      const authResult = result as Record<string, unknown>;
-
-      if (authResult.signingIn === true) {
-        setSuccess("Entering guest mode...");
-        return;
-      }
-
-      setError("Failed to continue as guest.");
+      handleAuthResult(result, {
+        verificationRequired: "Verification required for guest access.",
+        authenticationFailed: "Failed to continue as guest.",
+        fallback: "Failed to continue as guest.",
+      });
     } catch {
       setError("Failed to continue as guest.");
     } finally {

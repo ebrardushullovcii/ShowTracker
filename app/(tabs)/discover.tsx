@@ -115,10 +115,6 @@ export default function DiscoverScreen() {
     setGridWidth(e.nativeEvent.layout.width);
   }, []);
 
-  const onGridLayout = useCallback((e: LayoutChangeEvent) => {
-    setGridWidth(e.nativeEvent.layout.width);
-  }, []);
-
   useEffect(() => {
     let isCancelled = false;
 

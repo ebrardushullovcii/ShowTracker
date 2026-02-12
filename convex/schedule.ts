@@ -188,6 +188,11 @@ export const upsertScheduleBucket = mutation({
     lastUpdated: v.number(),
   },
   handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Unauthorized: unauthenticated access to schedule cache");
+    }
+
     const existing = await ctx.db
       .query("scheduleCache")
       .withIndex("by_date_type", (q) =>
@@ -231,6 +236,11 @@ export const getScheduleCacheStatusForDate = query({
     date: v.string(),
   },
   handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Unauthorized: unauthenticated access to schedule cache");
+    }
+
     const now = Date.now();
     const todayKey = formatDate(new Date());
     const rows = await ctx.db

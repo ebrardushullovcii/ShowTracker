@@ -1,14 +1,15 @@
 import { mutation, query } from "./_generated/server";
 import type { MutationCtx, QueryCtx } from "./_generated/server.js";
+import type { Id } from "./_generated/dataModel";
 import { v } from "convex/values";
 import { auth } from "./auth";
 
 async function getCurrentUserId(ctx: QueryCtx | MutationCtx) {
-  const userId = await auth.getUserId(ctx);
-  if (!userId) {
+  const identity = await ctx.auth.getUserIdentity();
+  if (!identity?.subject) {
     throw new Error("Unauthorized");
   }
-  return userId;
+  return identity.subject as Id<"users">;
 }
 
 function formatDuration(minutes: number): string {
@@ -410,15 +411,21 @@ export const getUserFavorites = query({
     const userId = await getCurrentUserId(ctx);
     const limit = args.limit ?? 20;
 
-    let query = ctx.db
-      .query("userFavorites")
-      .withIndex("by_user", (q) => q.eq("userId", userId));
-
-    if (args.mediaType) {
-      query = query.filter((q) => q.eq(q.field("mediaType"), args.mediaType));
+    let favorites;
+    const mediaTypeFilter = args.mediaType;
+    if (mediaTypeFilter) {
+      favorites = await ctx.db
+        .query("userFavorites")
+        .withIndex("by_user_mediaType", (q) => q.eq("userId", userId).eq("mediaType", mediaTypeFilter))
+        .order("desc")
+        .take(limit);
+    } else {
+      favorites = await ctx.db
+        .query("userFavorites")
+        .withIndex("by_user", (q) => q.eq("userId", userId))
+        .order("desc")
+        .take(limit);
     }
-
-    const favorites = await query.order("desc").take(limit);
 
     const shows = await Promise.all(
       favorites.map(async (fav) => {
@@ -447,7 +454,7 @@ export const getWatchHistory = query({
 
     const watchedEpisodes = await ctx.db
       .query("watchedEpisodes")
-      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .withIndex("by_watchedAt", (q) => q.eq("userId", userId))
       .order("desc")
       .take(limit);
 
