@@ -1,6 +1,10 @@
 import { getCached, setCached } from "@/lib/api/cache";
 import { normalizeTmdbEpisode } from "@/lib/api/normalize";
 import type { NormalizedEpisode } from "@/lib/api/types";
+import {
+  lookupTvMazeShowByImdb,
+  searchTvMazeShows,
+} from "@/lib/api/tvmaze";
 
 function normalizeTmdbBaseUrl(input?: string) {
   const fallback = "https://api.themoviedb.org/3";
@@ -76,6 +80,7 @@ export type TmdbShowDetails = {
   number_of_episodes?: number;
   number_of_seasons?: number;
   episode_run_time?: number[];
+  runtime?: number | null;
   vote_average?: number;
   first_air_date?: string;
   release_date?: string;
@@ -183,6 +188,51 @@ async function request<T>(path: string, params?: Record<string, string | number>
   throw error;
 }
 
+function pickPositiveRuntime(value?: number | null) {
+  return typeof value === "number" && value > 0 ? value : undefined;
+}
+
+async function resolveTmdbTvRuntimeFallback(details: TmdbShowDetails) {
+  const directRuntime =
+    details.episode_run_time?.find((value) => pickPositiveRuntime(value)) ??
+    pickPositiveRuntime(details.runtime);
+  if (typeof directRuntime === "number") {
+    return directRuntime;
+  }
+
+  const imdbId = details.imdb_id?.trim();
+  if (imdbId) {
+    try {
+      const tvMazeShow = await lookupTvMazeShowByImdb(imdbId);
+      const runtime = pickPositiveRuntime(tvMazeShow.runtime);
+      if (typeof runtime === "number") {
+        return runtime;
+      }
+    } catch {
+      // Ignore lookup failures and continue with title-based fallback.
+    }
+  }
+
+  const title = (details.name ?? details.title ?? "").trim();
+  if (!title) {
+    return undefined;
+  }
+
+  try {
+    const results = await searchTvMazeShows(title);
+    for (const result of results) {
+      const runtime = pickPositiveRuntime(result.show.runtime);
+      if (typeof runtime === "number") {
+        return runtime;
+      }
+    }
+  } catch {
+    // Ignore fallback search failures.
+  }
+
+  return undefined;
+}
+
 export async function searchTmdb(
   query: string,
   mediaType: "multi" | "tv" | "movie" = "multi",
@@ -224,7 +274,21 @@ export async function getTmdbShowDetails(
   mediaType: "tv" | "movie",
   id: number
 ) {
-  return request<TmdbShowDetails>(`/${mediaType}/${id}`);
+  const details = await request<TmdbShowDetails>(`/${mediaType}/${id}`);
+
+  if (mediaType === "tv") {
+    const fallbackRuntime = await resolveTmdbTvRuntimeFallback(details);
+    if (typeof fallbackRuntime === "number") {
+      const existingRuntime =
+        details.episode_run_time?.find((value) => pickPositiveRuntime(value)) ??
+        pickPositiveRuntime(details.runtime);
+      if (typeof existingRuntime !== "number") {
+        details.episode_run_time = [fallbackRuntime];
+      }
+    }
+  }
+
+  return details;
 }
 
 export async function getTmdbSeasonDetails(id: number, seasonNumber: number) {
