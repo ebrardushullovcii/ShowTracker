@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Image,
   Modal,
   Platform,
   Pressable,
@@ -9,7 +10,6 @@ import {
   View,
   useWindowDimensions,
 } from "react-native";
-import { Image } from "expo-image";
 import { useLocalSearchParams } from "expo-router";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -345,11 +345,12 @@ export function ShowDetailScreen() {
   // Clear optimistic overrides once all pending operations complete
   useEffect(() => {
     const hasPending = Object.values(pendingEpisodeKeys).some(Boolean) ||
-      Object.values(seasonActionLoading).some(Boolean);
+      Object.values(seasonActionLoading).some(Boolean) ||
+      isWatchActionRunning;
     if (!hasPending) {
       setPendingOverrides({});
     }
-  }, [pendingEpisodeKeys, seasonActionLoading]);
+  }, [pendingEpisodeKeys, seasonActionLoading, isWatchActionRunning]);
 
   // Sync movie watch history
   useEffect(() => {
@@ -1261,7 +1262,7 @@ export function ShowDetailScreen() {
                   <Image
                     source={{ uri: showPosterUrl }}
                     className="h-full w-full"
-                    contentFit="cover"
+                    resizeMode="cover"
                   />
                 </View>
               )}

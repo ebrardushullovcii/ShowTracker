@@ -219,7 +219,7 @@ function EditModeHeader({
   );
 }
 
-export default function ListDetailScreen() {
+export function ListDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const listId = id ? (Array.isArray(id) ? id[0] : id) : undefined;
   const [isEditing, setIsEditing] = useState(false);
@@ -557,3 +557,5 @@ export default function ListDetailScreen() {
     </ScreenWrapper>
   );
 }
+
+export default ListDetailScreen;
