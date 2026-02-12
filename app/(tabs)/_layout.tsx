@@ -89,9 +89,6 @@ export default function TabsLayout() {
               ),
             }}
           />
-          <Tabs.Screen name="Extra" options={{ href: null }} />
-          <Tabs.Screen name="schedule" options={{ href: null }} />
-          <Tabs.Screen name="watchlist" options={{ href: null }} />
         </Tabs>
       </View>
     </View>
