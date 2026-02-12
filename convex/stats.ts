@@ -5,11 +5,11 @@ import { v } from "convex/values";
 import { auth } from "./auth";
 
 async function getCurrentUserId(ctx: QueryCtx | MutationCtx) {
-  const identity = await ctx.auth.getUserIdentity();
-  if (!identity?.subject) {
+  const userId = await auth.getUserId(ctx);
+  if (!userId) {
     throw new Error("Unauthorized");
   }
-  return identity.subject as Id<"users">;
+  return userId;
 }
 
 function formatDuration(minutes: number): string {
