@@ -1,7 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Platform, Pressable, Text, View, useWindowDimensions } from "react-native";
+import {
+  ActivityIndicator,
+  Image,
+  Platform,
+  Pressable,
+  Text,
+  View,
+  useWindowDimensions,
+} from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
-import { Image } from "expo-image";
 import { Link } from "expo-router";
 import { useAction, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -174,7 +181,7 @@ function WatchlistCard({ item, isWeb }: { item: WatchlistItem; isWeb: boolean })
           <Image
             source={{ uri: toHttpsImageUrl(item.posterUrl) }}
             className="absolute inset-0"
-            contentFit="cover"
+            resizeMode="cover"
           />
         ) : (
           <View className="flex-1 items-center justify-center bg-zinc-800 px-3">
@@ -233,7 +240,7 @@ function UpcomingCard({ episode, isWeb }: { episode: UpcomingEpisode; isWeb: boo
           <Image
             source={{ uri: toHttpsImageUrl(episode.posterUrl) }}
             className="absolute inset-0"
-            contentFit="cover"
+            resizeMode="cover"
           />
         ) : (
           <View className="flex-1 items-center justify-center bg-zinc-800 px-3">
