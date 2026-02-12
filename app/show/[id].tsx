@@ -1177,7 +1177,7 @@ export function ShowDetailScreen() {
   if (error) {
     return (
       <ScreenWrapper contentClassName="px-4 py-6">
-        <View className="rounded-2xl border border-primary/30 bg-primary/10 p-6">
+        <View className="rounded-xl border-2 border-primary/30 bg-primary/10 p-6">
           <Text className="text-lg font-semibold text-primary">Error</Text>
           <Text className="mt-2 text-sm text-text-secondary">{error}</Text>
         </View>
@@ -1221,7 +1221,7 @@ export function ShowDetailScreen() {
             <View className="mb-6 flex-row gap-4">
               {showPosterUrl && (
                 <View
-                  className="overflow-hidden rounded-xl border border-border-default shadow-lg"
+                  className="overflow-hidden rounded-lg border-2 border-border-default shadow-lg"
                   style={{ width: 100, height: 150 }}
                 >
                   <Image
@@ -1269,7 +1269,7 @@ export function ShowDetailScreen() {
 
           {/* Progress Section - Hide for movies */}
           {canTrackShow && show.mediaType !== "movie" && (
-            <View className="mb-6 rounded-2xl border border-border-default bg-bg-surface p-5">
+            <View className="mb-6 rounded-xl border-2 border-border-default bg-bg-surface p-5">
               <View className="mb-3 flex-row items-center justify-between">
                 <Text className="text-sm font-semibold text-text-primary">
                   Watch Progress
@@ -1432,7 +1432,10 @@ export function ShowDetailScreen() {
           {/* Seasons Section */}
           {seasons.length > 0 && (
             <View>
-              <Text className="mb-4 text-xl font-bold text-text-primary">
+              <Text
+                className="mb-4 text-xl text-text-primary"
+                style={{ fontFamily: "Courier New", fontWeight: "900" }}
+              >
                 Seasons & Episodes
               </Text>
               <View className="gap-3">
@@ -1476,7 +1479,7 @@ export function ShowDetailScreen() {
 
           {/* Movie Watch Section */}
           {show.mediaType === "movie" && (
-            <View className="rounded-2xl border border-border-default bg-bg-surface p-5">
+            <View className="rounded-xl border-2 border-border-default bg-bg-surface p-5">
               <Text className="mb-4 text-lg font-bold text-text-primary">
                 Watch Status
               </Text>
@@ -1559,7 +1562,7 @@ export function ShowDetailScreen() {
             onPress={() => !isWatchActionRunning && setWatchActionTarget(null)}
           />
 
-          <View className="w-full max-w-sm overflow-hidden rounded-3xl border border-border-bright bg-bg-surface">
+          <View className="w-full max-w-sm overflow-hidden rounded-xl border-2 border-border-bright bg-bg-surface">
             <View className="border-b border-border-default px-4 pb-3 pt-4">
               <Text className="text-xs font-semibold uppercase tracking-wide text-text-secondary">
                 Watch Options

@@ -53,7 +53,7 @@ export function EpisodeCard({
     <Pressable
       onPress={onToggle}
       disabled={isUpdating || !canToggle}
-      className="overflow-hidden rounded-2xl border border-border-default bg-bg-surface active:bg-bg-elevated/80 active:scale-[0.98] disabled:opacity-40"
+      className="overflow-hidden rounded-xl border-2 border-border-default bg-bg-surface active:bg-bg-elevated/80 active:scale-[0.98] disabled:opacity-40"
     >
       {/* Episode Image */}
       <View className="relative h-32 w-full overflow-hidden">
@@ -72,8 +72,8 @@ export function EpisodeCard({
         )}
 
         {/* Episode Number Badge */}
-        <View className="absolute left-3 top-3 rounded-lg bg-black/60 px-2.5 py-1">
-          <Text className="text-xs font-bold text-white">
+        <View className="absolute left-3 top-3 rounded-md border border-white/20 bg-black/60 px-2.5 py-1">
+          <Text className="text-[11px] font-black uppercase tracking-wide text-white">
             S{String(seasonNumber).padStart(2, "0")}E
             {String(episodeNumber).padStart(2, "0")}
           </Text>
@@ -81,8 +81,8 @@ export function EpisodeCard({
 
         {/* Runtime Badge */}
         {runtime && runtime > 0 && (
-          <View className="absolute right-3 top-3 rounded-lg bg-black/60 px-2 py-1">
-            <Text className="text-xs font-medium text-text-secondary">
+          <View className="absolute right-3 top-3 rounded-md border border-white/20 bg-black/60 px-2 py-1">
+            <Text className="text-[11px] font-bold text-text-secondary">
               {runtime}m
             </Text>
           </View>

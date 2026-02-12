@@ -77,7 +77,7 @@ export function SeasonAccordion({
   });
 
   return (
-    <View className="overflow-hidden rounded-2xl border border-border-default bg-bg-surface">
+    <View className="overflow-hidden rounded-xl border-2 border-border-default bg-bg-surface">
       {/* Header */}
       <Pressable
         onPress={onToggle}
@@ -88,7 +88,7 @@ export function SeasonAccordion({
       >
         <View className="flex-row items-center gap-4">
           {/* Season Number Circle */}
-          <View className="h-12 w-12 items-center justify-center rounded-full bg-bg-elevated">
+          <View className="h-12 w-12 items-center justify-center rounded-md border-2 border-primary/40 bg-primary/15">
             <Text className="text-lg font-black text-primary">
               {seasonNumber}
             </Text>

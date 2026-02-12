@@ -64,9 +64,14 @@ function getSectionError(reason: unknown, fallback: string) {
 function SectionHeader({ title, count }: { title: string; count: number }) {
   return (
     <View className="mb-3 flex-row items-center justify-between">
-      <Text className="text-lg font-bold text-text-primary">{title}</Text>
-      <View className="rounded-full border border-border-default bg-bg-surface px-3 py-1">
-        <Text className="text-xs font-semibold text-text-secondary">{count} titles</Text>
+      <Text
+        className="text-lg text-text-primary"
+        style={{ fontFamily: "Courier New", fontWeight: "900" }}
+      >
+        {title}
+      </Text>
+      <View className="rounded-md border-2 border-border-bright bg-bg-surface px-3 py-1">
+        <Text className="text-[11px] font-black uppercase tracking-wide text-text-secondary">{count} titles</Text>
       </View>
     </View>
   );
@@ -313,7 +318,7 @@ export default function DiscoverScreen() {
   const renderEmpty = useCallback(() => {
     if (activeState.isLoading) {
       return (
-        <View className="items-center gap-2 rounded-2xl border border-border-default bg-bg-surface py-8">
+        <View className="items-center gap-2 rounded-xl border-2 border-border-default bg-bg-surface py-8">
           <ActivityIndicator size="small" color="#ef4444" />
           <Text className="text-sm text-text-secondary">Loading trending titles</Text>
         </View>
@@ -322,14 +327,14 @@ export default function DiscoverScreen() {
 
     if (activeState.error) {
       return (
-        <View className="mb-4 rounded-2xl border border-primary/30 bg-primary/10 p-4">
+        <View className="mb-4 rounded-xl border-2 border-primary/30 bg-primary/10 p-4">
           <Text className="text-sm text-primary">{activeState.error}</Text>
         </View>
       );
     }
 
     return (
-      <View className="mt-5 rounded-2xl border border-border-default bg-bg-surface px-4 py-5">
+      <View className="mt-5 rounded-xl border-2 border-border-default bg-bg-surface px-4 py-5">
         <Text className="text-sm text-text-secondary">No discovery data available right now.</Text>
       </View>
     );
@@ -350,7 +355,7 @@ export default function DiscoverScreen() {
 
         {/* Hero banner */}
         {heroShow ? (
-          <View className="mb-5 overflow-hidden rounded-2xl border border-border-default">
+          <View className="mb-5 overflow-hidden rounded-xl border-2 border-border-default">
             <HeroSection
               imageUrl={heroShow.backdropUrl ?? heroShow.posterUrl}
               title={heroShow.title}

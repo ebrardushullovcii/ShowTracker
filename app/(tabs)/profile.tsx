@@ -90,7 +90,7 @@ function StatCard({
 
   return (
     <View
-      className="overflow-hidden rounded-2xl border border-border-default bg-bg-surface"
+      className="overflow-hidden rounded-xl border-2 border-border-default bg-bg-surface"
       style={{ flexBasis: isDesktop ? "23.5%" : "48%", flexGrow: 1, minWidth: 160 }}
     >
       <View style={{ height: 3, backgroundColor: accent }} />
@@ -137,7 +137,7 @@ function QuickMetric({
   accent: string;
 }) {
   return (
-    <View className="flex-1 rounded-xl border border-border-default bg-bg-surface px-3 py-3">
+    <View className="flex-1 rounded-xl border-2 border-border-default bg-bg-surface px-3 py-3">
       <View className="flex-row items-center gap-2">
         <Ionicons name={icon} size={14} color={accent} />
         <Text className="text-[11px] text-text-secondary">{label}</Text>
@@ -160,9 +160,18 @@ function SectionHeader({
     <View className="mb-3 flex-row items-center justify-between">
       <View className="flex-row items-center gap-2">
         <Ionicons name={icon} size={18} color="#ef4444" />
-        <Text className="text-xl font-extrabold text-text-primary">{title}</Text>
+        <Text
+          className="text-xl text-text-primary"
+          style={{ fontFamily: "Courier New", fontWeight: "900" }}
+        >
+          {title}
+        </Text>
       </View>
-      {rightLabel ? <Text className="text-xs text-text-secondary">{rightLabel}</Text> : null}
+      {rightLabel ? (
+        <Text className="text-[11px] font-black uppercase tracking-wide text-text-secondary">
+          {rightLabel}
+        </Text>
+      ) : null}
     </View>
   );
 }
@@ -178,7 +187,7 @@ function PosterRail({
 }) {
   if (items.length === 0) {
     return (
-      <View className="items-center justify-center rounded-2xl border border-border-default bg-bg-surface py-8">
+      <View className="items-center justify-center rounded-xl border-2 border-border-default bg-bg-surface py-8">
         <Text className="text-sm text-text-secondary">{emptyMessage}</Text>
       </View>
     );
@@ -197,7 +206,7 @@ function PosterRail({
       {items.map((item) => {
         const card = (
           <Pressable
-            className="overflow-hidden rounded-xl border border-border-default bg-bg-surface"
+            className="overflow-hidden rounded-xl border-2 border-border-default bg-bg-surface"
             style={({ pressed }) => (pressed && item.routeId ? { opacity: 0.92 } : undefined)}
             disabled={!item.routeId}
           >
@@ -229,8 +238,8 @@ function PosterRail({
               </View>
 
               {item.badge ? (
-                <View className="absolute left-2 top-2 rounded-full bg-black/70 px-2 py-1">
-                  <Text className="text-[10px] font-semibold text-white">{item.badge}</Text>
+                <View className="absolute left-2 top-2 rounded-md border border-white/20 bg-black/70 px-2 py-1">
+                  <Text className="text-[10px] font-black uppercase tracking-wide text-white">{item.badge}</Text>
                 </View>
               ) : null}
             </View>
@@ -510,7 +519,7 @@ export default function ProfileScreen() {
         onScroll={onProfileScroll}
         scrollEventThrottle={16}
       >
-        <View className="overflow-hidden rounded-3xl border border-border-default bg-bg-surface">
+        <View className="overflow-hidden rounded-xl border-2 border-border-default bg-bg-surface">
           <View className="relative" style={{ height: isDesktop ? 250 : 220 }}>
             {heroBackdropUrl ? (
               <Image source={{ uri: heroBackdropUrl }} className="h-full w-full" resizeMode="cover" />
@@ -661,7 +670,7 @@ export default function ProfileScreen() {
           <SectionHeader title="Lists" icon="list-outline" rightLabel={`${lists?.length ?? 0} TOTAL`} />
 
           <Link href="/list/create" asChild>
-            <Pressable className="overflow-hidden rounded-2xl border border-border-default bg-bg-surface">
+            <Pressable className="overflow-hidden rounded-xl border-2 border-border-default bg-bg-surface">
               <LinearGradient
                 colors={["rgba(239,68,68,0.18)", "rgba(239,68,68,0.02)"]}
                 start={{ x: 0, y: 0 }}
@@ -685,7 +694,7 @@ export default function ProfileScreen() {
             >
               {visibleLists.map((list) => (
                 <Link key={String(list.id)} href={`/list/${list.id}`} asChild>
-                  <Pressable className="w-44 overflow-hidden rounded-xl border border-border-default bg-bg-surface">
+                  <Pressable className="w-44 overflow-hidden rounded-xl border-2 border-border-default bg-bg-surface">
                     <View className="h-1 w-full bg-primary" />
                     <View className="p-3">
                       <Text className="text-sm font-bold text-text-primary" numberOfLines={1}>
@@ -800,7 +809,7 @@ export default function ProfileScreen() {
             behavior={Platform.OS === "ios" ? "padding" : undefined}
             className={`w-full ${isDesktop ? "max-w-xl" : ""}`}
           >
-            <View className="overflow-hidden rounded-3xl border border-border-bright bg-bg-surface">
+            <View className="overflow-hidden rounded-xl border-2 border-border-bright bg-bg-surface">
               <LinearGradient
                 colors={["rgba(239,68,68,0.2)", "rgba(56,189,248,0.06)", "transparent"]}
                 start={{ x: 0, y: 0 }}
@@ -841,7 +850,7 @@ export default function ProfileScreen() {
                       maxLength={32}
                       placeholder="Your username"
                       placeholderTextColor="#52525b"
-                      className="rounded-xl border border-border-default bg-bg-base px-3 py-2.5 text-text-primary"
+                      className="rounded-lg border-2 border-border-default bg-bg-base px-3 py-2.5 text-text-primary"
                     />
                   </View>
 
@@ -863,7 +872,7 @@ export default function ProfileScreen() {
                       placeholderTextColor="#52525b"
                       multiline
                       textAlignVertical="top"
-                      className="min-h-[90px] rounded-xl border border-border-default bg-bg-base px-3 py-2.5 text-text-primary"
+                      className="min-h-[90px] rounded-lg border-2 border-border-default bg-bg-base px-3 py-2.5 text-text-primary"
                     />
                   </View>
 
@@ -878,7 +887,7 @@ export default function ProfileScreen() {
                       placeholder="https://..."
                       placeholderTextColor="#52525b"
                       autoCapitalize="none"
-                      className="rounded-xl border border-border-default bg-bg-base px-3 py-2.5 text-text-primary"
+                      className="rounded-lg border-2 border-border-default bg-bg-base px-3 py-2.5 text-text-primary"
                     />
                   </View>
 
@@ -893,7 +902,7 @@ export default function ProfileScreen() {
                       placeholder="https://..."
                       placeholderTextColor="#52525b"
                       autoCapitalize="none"
-                      className="rounded-xl border border-border-default bg-bg-base px-3 py-2.5 text-text-primary"
+                      className="rounded-lg border-2 border-border-default bg-bg-base px-3 py-2.5 text-text-primary"
                     />
                   </View>
 
@@ -903,20 +912,20 @@ export default function ProfileScreen() {
                     <Pressable
                       onPress={closeProfileEditor}
                       disabled={isSavingProfile}
-                      className="flex-1 items-center justify-center rounded-xl border border-border-default bg-bg-elevated py-3"
+                      className="flex-1 items-center justify-center rounded-lg border-2 border-border-default bg-bg-elevated py-3"
                     >
-                      <Text className="text-sm font-semibold text-text-primary">Cancel</Text>
+                      <Text className="text-sm font-bold text-text-primary">Cancel</Text>
                     </Pressable>
                     <Pressable
                       onPress={handleSaveProfile}
                       disabled={isSavingProfile}
-                      className="flex-1 items-center justify-center rounded-xl bg-primary py-3"
+                      className="flex-1 items-center justify-center border-2 border-primary bg-primary py-3"
                       style={{ opacity: isSavingProfile ? 0.6 : 1 }}
                     >
                       {isSavingProfile ? (
                         <ActivityIndicator size="small" color="#fff" />
                       ) : (
-                        <Text className="text-sm font-semibold text-white">Save Profile</Text>
+                        <Text className="text-sm font-black uppercase tracking-wide text-white">Save</Text>
                       )}
                     </Pressable>
                   </View>
@@ -940,7 +949,7 @@ export default function ProfileScreen() {
             disabled={isSigningOut}
           />
 
-          <View className={`w-full overflow-hidden rounded-3xl border border-border-bright bg-bg-surface ${isDesktop ? "max-w-md" : ""}`}>
+          <View className={`w-full overflow-hidden rounded-xl border-2 border-border-bright bg-bg-surface ${isDesktop ? "max-w-md" : ""}`}>
             <LinearGradient
               colors={["rgba(239,68,68,0.2)", "transparent"]}
               start={{ x: 0, y: 0 }}
@@ -966,20 +975,20 @@ export default function ProfileScreen() {
                 <Pressable
                   onPress={() => setShowSignOutConfirm(false)}
                   disabled={isSigningOut}
-                  className="flex-1 items-center justify-center rounded-xl border border-border-default bg-bg-elevated py-3.5"
+                  className="flex-1 items-center justify-center rounded-lg border-2 border-border-default bg-bg-elevated py-3.5"
                 >
-                  <Text className="text-sm font-semibold text-text-primary">Cancel</Text>
+                  <Text className="text-sm font-bold text-text-primary">Cancel</Text>
                 </Pressable>
                 <Pressable
                   onPress={handleSignOut}
                   disabled={isSigningOut}
-                  className="flex-1 items-center justify-center rounded-xl bg-primary py-3.5"
+                  className="flex-1 items-center justify-center border-2 border-primary bg-primary py-3.5"
                   style={{ opacity: isSigningOut ? 0.6 : 1 }}
                 >
                   {isSigningOut ? (
                     <ActivityIndicator size="small" color="#fff" />
                   ) : (
-                    <Text className="text-sm font-semibold text-white">Sign Out</Text>
+                    <Text className="text-sm font-black uppercase tracking-wide text-white">Sign Out</Text>
                   )}
                 </Pressable>
               </View>

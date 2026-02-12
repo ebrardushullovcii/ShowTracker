@@ -2,13 +2,13 @@ import { useMemo, useState, useCallback } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Image,
   Pressable,
   Text,
   TextInput,
   View,
   useWindowDimensions,
 } from "react-native";
-import { Image } from "expo-image";
 import { FlashList } from "@shopify/flash-list";
 import { useLocalSearchParams, router } from "expo-router";
 import { useMutation, useQuery } from "convex/react";
@@ -51,14 +51,14 @@ function ListShowCard({
 }) {
   if (isEditing) {
     return (
-      <View className="flex-row items-center gap-3 rounded-xl border border-border-default bg-bg-surface p-3">
+      <View className="flex-row items-center gap-3 rounded-xl border-2 border-border-default bg-bg-surface p-3">
         {/* Poster */}
         <View className="h-20 w-14 overflow-hidden rounded-lg bg-bg-elevated shrink-0">
           {show.posterUrl ? (
             <Image
               source={{ uri: toHttpsImageUrl(show.posterUrl) }}
               className="h-full w-full"
-              contentFit="cover"
+              resizeMode="cover"
             />
           ) : (
             <View className="h-full w-full items-center justify-center bg-bg-elevated">
@@ -118,7 +118,7 @@ function ListShowCard({
             <Image
               source={{ uri: toHttpsImageUrl(show.posterUrl) }}
               style={{ width: 180, height: 270 }}
-              contentFit="cover"
+              resizeMode="cover"
             />
           ) : (
             <View className="h-full w-full items-center justify-center bg-bg-elevated">
