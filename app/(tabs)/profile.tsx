@@ -326,7 +326,7 @@ export default function ProfileScreen() {
         title: entry.title,
         posterUrl: entry.posterUrl,
         meta:
-          typeof entry.remainingEpisodes === "number"
+          typeof entry.remainingEpisodes === "number" && entry.remainingEpisodes > 0
             ? `${entry.remainingEpisodes} left`
             : formatStatus(entry.status),
         badge: entry.mediaType === "anime" ? "Anime" : "TV",
@@ -353,8 +353,8 @@ export default function ProfileScreen() {
     (lists?.length ?? 0) > visibleRailCount ||
     favoriteShowRailItems.length > visibleRailCount ||
     activeShowRailItems.length > visibleRailCount ||
-    (favoriteMovieRailItems.length > 0 ? favoriteMovieRailItems.length : activeMovieRailItems.length) >
-      visibleRailCount;
+    favoriteMovieRailItems.length > visibleRailCount ||
+    activeMovieRailItems.length > visibleRailCount;
 
   const visibleLists = useMemo(
     () => (lists ?? []).slice(0, visibleRailCount),
@@ -368,10 +368,13 @@ export default function ProfileScreen() {
     () => activeShowRailItems.slice(0, visibleRailCount),
     [activeShowRailItems, visibleRailCount]
   );
-  const movieRailItems = favoriteMovieRailItems.length > 0 ? favoriteMovieRailItems : activeMovieRailItems;
+  const visibleFavoriteMovieRailItems = useMemo(
+    () => favoriteMovieRailItems.slice(0, visibleRailCount),
+    [favoriteMovieRailItems, visibleRailCount]
+  );
   const visibleMovieRailItems = useMemo(
-    () => movieRailItems.slice(0, visibleRailCount),
-    [movieRailItems, visibleRailCount]
+    () => activeMovieRailItems.slice(0, visibleRailCount),
+    [activeMovieRailItems, visibleRailCount]
   );
 
   useEffect(() => {
@@ -474,6 +477,8 @@ export default function ProfileScreen() {
     }
   };
 
+  const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
+
   const handleSignOut = async () => {
     setSignOutError(null);
     setIsSigningOut(true);
@@ -534,12 +539,29 @@ export default function ProfileScreen() {
                   {stats?.currentStreak ?? 0} day streak
                 </Text>
               </View>
-              <Pressable
-                onPress={openProfileEditor}
-                className="rounded-full border border-white/20 bg-black/35 px-3 py-1.5"
-              >
-                <Text className="text-[11px] font-semibold text-white">EDIT</Text>
-              </Pressable>
+              <View className="flex-row items-center gap-3">
+                <Pressable
+                  onPress={openProfileEditor}
+                  className="rounded-full border border-white/40 bg-black/70 px-4 py-2 shadow-lg"
+                >
+                  <Text className="text-xs font-bold tracking-wide text-white">EDIT</Text>
+                </Pressable>
+                {isDesktop && (
+                  <Pressable
+                    onPress={() => setShowSignOutConfirm(true)}
+                    disabled={!isAuthenticated || isSigningOut}
+                    className="rounded-full border border-primary/50 bg-black/70 px-4 py-2 shadow-lg"
+                    style={{ opacity: !isAuthenticated || isSigningOut ? 0.5 : 1 }}
+                  >
+                    <View className="flex-row items-center gap-2">
+                      <Ionicons name="log-out-outline" size={14} color="#ef4444" />
+                      <Text className="text-xs font-bold tracking-wide text-primary">
+                        {isSigningOut ? "..." : "LOGOUT"}
+                      </Text>
+                    </View>
+                  </Pressable>
+                )}
+              </View>
             </View>
 
             <View className="absolute bottom-4 left-4 right-4 flex-row items-end justify-between">
@@ -695,6 +717,21 @@ export default function ProfileScreen() {
           </View>
         ) : null}
 
+        {favoriteMovieRailItems.length > 0 ? (
+          <View className="mt-8">
+            <SectionHeader
+              title="Favorite Movies"
+              icon="heart"
+              rightLabel={`${favoriteMovieRailItems.length} FAVORITES`}
+            />
+            <PosterRail
+              items={visibleFavoriteMovieRailItems}
+              emptyMessage="No favorite movies yet"
+              isDesktop={isDesktop}
+            />
+          </View>
+        ) : null}
+
         <View className="mt-8">
           <SectionHeader
             title="Shows"
@@ -727,21 +764,23 @@ export default function ProfileScreen() {
           </View>
         ) : null}
 
-        <View className="mt-8 pb-8">
-          <SectionHeader title="Account" icon="person-outline" />
-          <Pressable
-            onPress={handleSignOut}
-            disabled={!isAuthenticated || isSigningOut}
-            className="flex-row items-center justify-center gap-2 rounded-xl border border-primary/40 bg-primary/10 py-3.5"
-            style={{ opacity: !isAuthenticated || isSigningOut ? 0.5 : 1 }}
-          >
-            <Ionicons name="log-out-outline" size={18} color="#ef4444" />
-            <Text className="font-semibold text-primary">
-              {isSigningOut ? "Signing out..." : "Sign out"}
-            </Text>
-          </Pressable>
-          {signOutError ? <Text className="mt-2 text-sm text-primary">{signOutError}</Text> : null}
-        </View>
+        {!isDesktop && (
+          <View className="mt-8 pb-8">
+            <SectionHeader title="Account" icon="person-outline" />
+            <Pressable
+              onPress={() => setShowSignOutConfirm(true)}
+              disabled={!isAuthenticated || isSigningOut}
+              className="flex-row items-center justify-center gap-2 rounded-xl border border-primary/40 bg-primary/10 py-3.5"
+              style={{ opacity: !isAuthenticated || isSigningOut ? 0.5 : 1 }}
+            >
+              <Ionicons name="log-out-outline" size={18} color="#ef4444" />
+              <Text className="font-semibold text-primary">
+                {isSigningOut ? "Signing out..." : "Sign out"}
+              </Text>
+            </Pressable>
+            {signOutError ? <Text className="mt-2 text-sm text-primary">{signOutError}</Text> : null}
+          </View>
+        )}
       </ScrollView>
 
       <Modal
@@ -885,6 +924,67 @@ export default function ProfileScreen() {
               </ScrollView>
             </View>
           </KeyboardAvoidingView>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={showSignOutConfirm}
+        transparent
+        animationType="fade"
+        onRequestClose={() => !isSigningOut && setShowSignOutConfirm(false)}
+      >
+        <View className="flex-1 items-center justify-center bg-black/70 px-5">
+          <Pressable
+            className="absolute inset-0"
+            onPress={() => !isSigningOut && setShowSignOutConfirm(false)}
+            disabled={isSigningOut}
+          />
+
+          <View className={`w-full overflow-hidden rounded-3xl border border-border-bright bg-bg-surface ${isDesktop ? "max-w-md" : ""}`}>
+            <LinearGradient
+              colors={["rgba(239,68,68,0.2)", "transparent"]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={{ height: 4, width: "100%" }}
+            />
+
+            <View className="items-center px-6 py-8">
+              <View className="mb-4 h-16 w-16 items-center justify-center rounded-full bg-primary/10">
+                <Ionicons name="log-out-outline" size={32} color="#ef4444" />
+              </View>
+
+              <Text className="text-xl font-black text-text-primary">Sign Out?</Text>
+              <Text className="mt-2 text-center text-sm text-text-secondary">
+                Are you sure you want to sign out of your account?
+              </Text>
+
+              {signOutError ? (
+                <Text className="mt-4 text-center text-sm text-primary">{signOutError}</Text>
+              ) : null}
+
+              <View className="mt-6 w-full flex-row gap-3">
+                <Pressable
+                  onPress={() => setShowSignOutConfirm(false)}
+                  disabled={isSigningOut}
+                  className="flex-1 items-center justify-center rounded-xl border border-border-default bg-bg-elevated py-3.5"
+                >
+                  <Text className="text-sm font-semibold text-text-primary">Cancel</Text>
+                </Pressable>
+                <Pressable
+                  onPress={handleSignOut}
+                  disabled={isSigningOut}
+                  className="flex-1 items-center justify-center rounded-xl bg-primary py-3.5"
+                  style={{ opacity: isSigningOut ? 0.6 : 1 }}
+                >
+                  {isSigningOut ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <Text className="text-sm font-semibold text-white">Sign Out</Text>
+                  )}
+                </Pressable>
+              </View>
+            </View>
+          </View>
         </View>
       </Modal>
     </ScreenWrapper>

@@ -21,6 +21,7 @@ interface EpisodeCardProps {
   isUpdating: boolean;
   availability: EpisodeAvailability;
   onToggle: () => void;
+  watchCount?: number;
 }
 
 export function EpisodeCard({
@@ -34,13 +35,16 @@ export function EpisodeCard({
   isUpdating,
   availability,
   onToggle,
+  watchCount,
 }: EpisodeCardProps) {
   const canToggle = availability.isReleased || watched;
 
   const statusText = isUpdating
     ? "Saving..."
     : watched
-      ? "Watched"
+      ? watchCount && watchCount > 1 
+        ? `Watched (${watchCount}x)`
+        : "Watched"
       : !availability.isReleased
         ? "Upcoming"
         : "Watch";
@@ -98,7 +102,10 @@ export function EpisodeCard({
 
           {/* Watch Radio Button */}
           <Pressable
-            onPress={onToggle}
+            onPress={(event) => {
+              event.stopPropagation();
+              onToggle();
+            }}
             disabled={isUpdating || !canToggle}
             className="relative h-6 w-6 shrink-0 items-center justify-center active:scale-90 disabled:opacity-40"
           >
@@ -152,17 +159,19 @@ export function EpisodeCard({
             {availability.dateLabel}
           </Text>
 
-          <Text
-            className={`text-xs font-medium ${
-              watched
-                ? "text-success"
-                : !availability.isReleased
-                  ? "text-warning"
-                  : "text-text-secondary"
-            }`}
-          >
-            {statusText}
-          </Text>
+          <View className="flex-row items-center gap-2">
+            <Text
+              className={`text-xs font-medium ${
+                watched
+                  ? "text-success"
+                  : !availability.isReleased
+                    ? "text-warning"
+                    : "text-text-secondary"
+              }`}
+            >
+              {statusText}
+            </Text>
+          </View>
         </View>
       </View>
 
