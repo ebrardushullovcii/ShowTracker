@@ -42,6 +42,7 @@ export default function CreateListScreen() {
     } catch (err) {
       console.error("Failed to create list:", err);
       setError("Failed to create list. Please try again.");
+    } finally {
       setIsCreating(false);
     }
   };

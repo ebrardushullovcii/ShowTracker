@@ -160,6 +160,7 @@ function ListShowCard({
 
 export default function ListDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const listId = id ? (Array.isArray(id) ? id[0] : id) : undefined;
   const [isEditing, setIsEditing] = useState(false);
   const [editedName, setEditedName] = useState("");
   const [editedDescription, setEditedDescription] = useState("");
@@ -168,7 +169,7 @@ export default function ListDetailScreen() {
   const [gridWidth, setGridWidth] = useState(0);
   const { width: windowWidth } = useWindowDimensions();
 
-  const list = useQuery(api.lists.getListDetail, { listId: id as any });
+  const list = useQuery(api.lists.getListDetail, listId ? { listId } : "skip");
   const updateList = useMutation(api.lists.updateList);
   const deleteList = useMutation(api.lists.deleteList);
   const reorderItems = useMutation(api.lists.reorderListItems);
@@ -213,10 +214,12 @@ export default function ListDetailScreen() {
     
     setIsSaving(true);
     try {
+      if (!listId) return;
+
       // Update name/description if changed
       if (editedName !== list.name || editedDescription !== (list.description || "")) {
         await updateList({
-          listId: id as any,
+          listId,
           name: editedName,
           description: editedDescription || undefined,
         });
@@ -229,7 +232,7 @@ export default function ListDetailScreen() {
       
       if (orderChanged) {
         await reorderItems({
-          listId: id as any,
+          listId,
           showIds: newOrderIds as any,
         });
       }
@@ -267,8 +270,9 @@ export default function ListDetailScreen() {
           text: "Remove",
           style: "destructive",
           onPress: async () => {
+            if (!listId) return;
             try {
-              await removeShow({ listId: id as any, showId: showId as any });
+              await removeShow({ listId, showId: showId as any });
               setLocalShows((prev) => prev.filter((s) => s.id !== showId));
             } catch (err) {
               console.error("Failed to remove show:", err);
@@ -290,8 +294,9 @@ export default function ListDetailScreen() {
           text: "Delete",
           style: "destructive",
           onPress: async () => {
+            if (!listId) return;
             try {
-              await deleteList({ listId: id as any });
+              await deleteList({ listId });
               router.replace("/home");
             } catch (err) {
               console.error("Failed to delete list:", err);

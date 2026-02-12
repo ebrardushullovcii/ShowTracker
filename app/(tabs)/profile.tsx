@@ -44,7 +44,7 @@ function formatCount(value: number) {
 
 function formatStatus(status: string) {
   const normalized = status.trim().toLowerCase();
-  if (normalized === "watchig") return "Watching";
+  if (normalized === "watching") return "Watching";
   if (normalized === "plan_to_watch") return "Plan to Watch";
   const spaced = normalized.replace(/_/g, " ");
   return spaced.slice(0, 1).toUpperCase() + spaced.slice(1);
