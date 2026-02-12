@@ -10,7 +10,6 @@ import {
 import { router } from "expo-router";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { PageBackButton } from "@/components/PageBackButton";
 import { PageIntro } from "@/components/PageIntro";
 import { ScreenWrapper } from "@/components/ScreenWrapper";
 
@@ -50,8 +49,7 @@ export default function CreateListScreen() {
   return (
     <ScreenWrapper>
       <ScrollView className="flex-1">
-        <View className="gap-3 pt-10">
-          <PageBackButton fallbackHref="/home" />
+        <View className="gap-3">
           <PageIntro
             title="Create List"
             subtitle="Organize your shows into a custom collection"

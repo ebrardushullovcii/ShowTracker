@@ -12,7 +12,6 @@ import {
 import { useLocalSearchParams } from "expo-router";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { PageBackButton } from "@/components/PageBackButton";
 import { ScreenWrapper } from "@/components/ScreenWrapper";
 import { Badge } from "@/components/Badge";
 import { ProgressBar } from "@/components/ProgressBar";
@@ -169,7 +168,7 @@ function getEpisodeAvailabilityLabel(airDate?: string | null, now = new Date()) 
       isReleased: true,
       dateLabel: "Air date TBA",
       stateLabel: "Release unknown",
-      stateClassName: "text-text-secondary",
+      stateClassName: "text-text-muted",
     };
   }
 
@@ -205,13 +204,9 @@ function getEpisodeAvailabilityLabel(airDate?: string | null, now = new Date()) 
 
 function formatTrackingStatus(status?: string | null) {
   if (!status) return null;
-  const normalized = status.trim().toLowerCase();
-
-  if (normalized === "watchig") return "Watching";
-
   return status
-    .replaceAll("_", " ")
-    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (letter: string) => letter.toUpperCase());
 }
 
 const NAMED_HTML_ENTITIES: Record<string, string> = {
@@ -759,11 +754,11 @@ export function ShowDetailScreen() {
   const cleanedShowTitle = cleanRichText(show?.title) || show?.title || "";
   const cleanedShowOverview =
     cleanRichText(show?.overview) || "No overview available yet.";
+  const showPosterUrl = toHttpsImageUrl(show?.posterUrl);
 
   if (isLoading) {
     return (
-      <ScreenWrapper>
-        <PageBackButton fallbackHref="/home" />
+      <ScreenWrapper contentClassName="px-0 py-0">
         <View className="flex-1 items-center justify-center">
           <ActivityIndicator size="large" color="#ef4444" />
           <Text className="mt-4 text-sm text-text-secondary">Loading show details...</Text>
@@ -774,8 +769,7 @@ export function ShowDetailScreen() {
 
   if (error) {
     return (
-      <ScreenWrapper>
-        <PageBackButton fallbackHref="/home" />
+      <ScreenWrapper contentClassName="px-4 py-6">
         <View className="rounded-2xl border border-primary/30 bg-primary/10 p-6">
           <Text className="text-lg font-semibold text-primary">Error</Text>
           <Text className="mt-2 text-sm text-text-secondary">{error}</Text>
@@ -786,8 +780,7 @@ export function ShowDetailScreen() {
 
   if (!show) {
     return (
-      <ScreenWrapper>
-        <PageBackButton fallbackHref="/home" />
+      <ScreenWrapper contentClassName="px-4 py-6">
         <View className="items-center py-12">
           <Text className="text-text-secondary">Show not found.</Text>
         </View>
@@ -796,39 +789,36 @@ export function ShowDetailScreen() {
   }
 
   return (
-    <ScreenWrapper>
+    <ScreenWrapper contentClassName="px-0 py-0">
       <ScrollView
         className="flex-1"
         showsVerticalScrollIndicator={false}
         bounces={false}
       >
         {/* Hero Section */}
-        <View className="relative">
-          <ShowHeader
-            backdropUrl={show.backdropUrl}
-            posterUrl={show.posterUrl}
-            title={cleanedShowTitle}
-            mediaType={show.mediaType}
-            firstAired={show.firstAired}
-            rating={show.rating}
-            isDesktop={isDesktop}
-          />
-          <PageBackButton fallbackHref="/home" />
-        </View>
+        <ShowHeader
+          backdropUrl={show.backdropUrl}
+          posterUrl={show.posterUrl}
+          title={cleanedShowTitle}
+          mediaType={show.mediaType}
+          firstAired={show.firstAired}
+          rating={show.rating}
+          isDesktop={isDesktop}
+        />
 
         {/* Main Content */}
-        <View className="pt-6 pb-8">
+        <View className={`${isDesktop ? "px-8" : "px-5"} pt-6 pb-8`}>
           <View className={`mx-auto w-full ${isDesktop ? "max-w-4xl" : ""}`}>
           {/* Overview & Poster Row (Mobile Only) */}
           {!isDesktop && (
             <View className="mb-6 flex-row gap-4">
-              {show.posterUrl && (
+              {showPosterUrl && (
                 <View
                   className="overflow-hidden rounded-xl border border-border-default shadow-lg"
                   style={{ width: 100, height: 150 }}
                 >
                   <Image
-                    source={{ uri: toHttpsImageUrl(show.posterUrl) }}
+                    source={{ uri: showPosterUrl }}
                     className="h-full w-full"
                     resizeMode="cover"
                   />
@@ -883,7 +873,7 @@ export function ShowDetailScreen() {
               </View>
               <ProgressBar progress={watchProgressRatio} height={8} animated />
               <View className="mt-3 flex-row items-center justify-between">
-                <Text className="text-xs text-text-secondary">
+                <Text className="text-xs text-text-muted">
                   {tracking?.inWatchlist
                     ? `Saved${tracking?.status ? ` · ${formatTrackingStatus(tracking.status)}` : ""}`
                     : "Add to watchlist to track your progress"}
@@ -915,7 +905,7 @@ export function ShowDetailScreen() {
                     <>
                       <View
                         className={`absolute h-7 w-7 rounded-full border-2 ${
-                          tracking?.inWatchlist ? "border-success" : "border-border-bright"
+                          tracking?.inWatchlist ? "border-success" : "border-text-secondary"
                         }`}
                       />
                       {tracking?.inWatchlist && (
@@ -959,7 +949,7 @@ export function ShowDetailScreen() {
                     })}
                   >
                     <View 
-                      className="absolute h-7 w-7 rounded-full border-2 border-border-bright"
+                      className="absolute h-7 w-7 rounded-full border-2 border-text-secondary"
                     />
                   </Pressable>
                   <Pressable

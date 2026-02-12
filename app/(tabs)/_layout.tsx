@@ -2,7 +2,6 @@ import { Feather, Ionicons } from "@expo/vector-icons";
 import { Tabs } from "expo-router";
 import { Platform, View, useWindowDimensions } from "react-native";
 import { DESKTOP_SIDEBAR_BREAKPOINT } from "@/constants/navigation";
-import { Sidebar } from "@/components/Sidebar";
 
 export default function TabsLayout() {
   const { width } = useWindowDimensions();
@@ -12,10 +11,8 @@ export default function TabsLayout() {
   const mobileTabBarPaddingTop = Platform.OS === "ios" ? 4 : 6;
 
   return (
-    <View className="flex-1 flex-row" style={{ backgroundColor: "#09090b" }}>
-      {isDesktop ? <Sidebar /> : null}
-      <View className="flex-1 min-w-0">
-        <Tabs
+    <View className="flex-1" style={{ backgroundColor: "#09090b" }}>
+      <Tabs
           screenOptions={{
             headerShown: false,
             tabBarHideOnKeyboard: true,
@@ -89,12 +86,7 @@ export default function TabsLayout() {
               ),
             }}
           />
-          {/* Hide nested routes from tab bar */}
-          <Tabs.Screen name="list/create" options={{ href: null }} />
-          <Tabs.Screen name="list/[id]" options={{ href: null }} />
-          <Tabs.Screen name="show/[id]" options={{ href: null }} />
         </Tabs>
-      </View>
     </View>
   );
 }

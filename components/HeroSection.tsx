@@ -1,5 +1,4 @@
-import { Image } from "expo-image";
-import { Platform, Text, View, useWindowDimensions } from "react-native";
+import { Image, Platform, Text, View, useWindowDimensions } from "react-native";
 import type { ReactNode } from "react";
 import { toHttpsImageUrl } from "@/lib/image-url";
 
@@ -23,6 +22,7 @@ export function HeroSection({
   const isWeb = Platform.OS === "web";
   const { width } = useWindowDimensions();
   const heroHeight = isWeb ? Math.max(280, Math.round(width * 0.25)) : mobileHeight;
+  const heroImageUrl = toHttpsImageUrl(imageUrl);
 
   return (
     <View
@@ -30,11 +30,11 @@ export function HeroSection({
       style={{ height: heroHeight }}
     >
       {/* Backdrop image */}
-      {imageUrl ? (
+      {heroImageUrl ? (
         <Image
-          source={{ uri: toHttpsImageUrl(imageUrl) }}
+          source={{ uri: heroImageUrl }}
           className="absolute inset-0"
-          contentFit="cover"
+          resizeMode="cover"
         />
       ) : (
         <View className="absolute inset-0 bg-gray-800" />

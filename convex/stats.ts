@@ -78,24 +78,12 @@ function extractCandidateFromTokenIdentifier(tokenIdentifier?: string): string {
 function resolveDisplayName(args: {
   profileUsername?: string;
   profileTokenIdentifier?: string;
-  authName?: string;
-  authEmail?: string;
-  authTokenIdentifier?: string;
 }): string {
   const explicitProfileName = args.profileUsername?.trim() ?? "";
   if (explicitProfileName) return explicitProfileName;
 
-  const explicitAuthName = args.authName?.trim() ?? "";
-  if (explicitAuthName) return explicitAuthName;
-
-  const authEmailHandle = (args.authEmail?.split("@")[0] ?? "").trim();
-  if (authEmailHandle) return prettifyHandle(authEmailHandle);
-
   const tokenCandidate = extractCandidateFromTokenIdentifier(args.profileTokenIdentifier);
   if (tokenCandidate) return prettifyHandle(tokenCandidate);
-
-  const authTokenCandidate = extractCandidateFromTokenIdentifier(args.authTokenIdentifier);
-  if (authTokenCandidate) return prettifyHandle(authTokenCandidate);
 
   return "ShowTracker User";
 }
@@ -288,15 +276,9 @@ export const getUserStats = query({
       .withIndex("by_user", (q) => q.eq("userId", userId))
       .first();
 
-    const authUser = (await ctx.db.get(userId)) as Record<string, unknown> | null;
-
     const displayName = resolveDisplayName({
       profileUsername: userProfile?.username,
       profileTokenIdentifier: userProfile?.tokenIdentifier,
-      authName: typeof authUser?.name === "string" ? authUser.name : undefined,
-      authEmail: typeof authUser?.email === "string" ? authUser.email : undefined,
-      authTokenIdentifier:
-        typeof authUser?.tokenIdentifier === "string" ? authUser.tokenIdentifier : undefined,
     });
 
     // Calculate detailed time breakdowns
@@ -364,15 +346,11 @@ export const upsertUserProfile = mutation({
       .withIndex("by_userId", (q) => q.eq("userId", userId))
       .first();
 
-    const authUser = (await ctx.db.get(userId)) as Record<string, unknown> | null;
-    const authTokenIdentifier =
-      typeof authUser?.tokenIdentifier === "string" ? authUser.tokenIdentifier : undefined;
-
     const username = (args.username ?? "").trim().slice(0, 32);
     const bio = (args.bio ?? "").trim().slice(0, 280);
     const avatarUrl = (args.avatarUrl ?? "").trim().slice(0, 500);
     const bannerUrl = (args.bannerUrl ?? "").trim().slice(0, 500);
-    const tokenIdentifier = existingProfile?.tokenIdentifier ?? authTokenIdentifier;
+    const tokenIdentifier = existingProfile?.tokenIdentifier;
     const createdAt = existingProfile?.createdAt ?? Date.now();
 
     const nextData = {

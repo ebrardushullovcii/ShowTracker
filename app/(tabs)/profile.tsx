@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Image,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
   KeyboardAvoidingView,
@@ -13,7 +14,6 @@ import {
   View,
   useWindowDimensions,
 } from "react-native";
-import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { Link } from "expo-router";
@@ -202,8 +202,8 @@ function PosterRail({
             disabled={!item.routeId}
           >
             <View style={{ width: posterWidth, height: posterHeight }}>
-              {item.posterUrl ? (
-                <Image source={{ uri: toHttpsImageUrl(item.posterUrl) }} style={{ width: posterWidth, height: posterHeight }} contentFit="cover" />
+              {toHttpsImageUrl(item.posterUrl) ? (
+                <Image source={{ uri: toHttpsImageUrl(item.posterUrl) }} style={{ width: posterWidth, height: posterHeight }} resizeMode="cover" />
               ) : (
                 <View className="h-full w-full items-center justify-center bg-bg-elevated">
                   <Ionicons name="image-outline" size={20} color="#71717a" />
@@ -287,6 +287,8 @@ export default function ProfileScreen() {
 
   const heroBackdrop =
     stats?.bannerUrl ?? dashboard?.shows?.[0]?.backdropUrl ?? dashboard?.movies?.[0]?.backdropUrl ?? null;
+  const heroBackdropUrl = toHttpsImageUrl(heroBackdrop);
+  const avatarUrl = toHttpsImageUrl(stats?.avatarUrl);
 
   const favoriteShowRailItems = useMemo<RailItem[]>(
     () =>
@@ -505,8 +507,8 @@ export default function ProfileScreen() {
       >
         <View className="overflow-hidden rounded-3xl border border-border-default bg-bg-surface">
           <View className="relative" style={{ height: isDesktop ? 250 : 220 }}>
-            {heroBackdrop ? (
-              <Image source={{ uri: toHttpsImageUrl(heroBackdrop) }} className="h-full w-full" contentFit="cover" />
+            {heroBackdropUrl ? (
+              <Image source={{ uri: heroBackdropUrl }} className="h-full w-full" resizeMode="cover" />
             ) : (
               <LinearGradient
                 colors={["#27272a", "#18181b", "#09090b"]}
@@ -543,8 +545,8 @@ export default function ProfileScreen() {
             <View className="absolute bottom-4 left-4 right-4 flex-row items-end justify-between">
               <View className="flex-row items-end gap-3">
                 <View className="h-20 w-20 overflow-hidden rounded-full border-4 border-bg-base bg-bg-elevated">
-                  {stats?.avatarUrl ? (
-                    <Image source={{ uri: toHttpsImageUrl(stats.avatarUrl) }} className="h-full w-full" contentFit="cover" />
+                  {avatarUrl ? (
+                    <Image source={{ uri: avatarUrl }} className="h-full w-full" resizeMode="cover" />
                   ) : (
                     <View className="h-full w-full items-center justify-center">
                       <Ionicons name="person" size={34} color="#a1a1aa" />

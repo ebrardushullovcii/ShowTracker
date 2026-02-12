@@ -15,7 +15,6 @@ export function PageIntro({
   title,
   subtitle,
   eyebrow,
-  rightLabel,
   icon,
   className,
 }: PageIntroProps) {
@@ -33,8 +32,8 @@ export function PageIntro({
       <View className="absolute -right-10 -top-8 h-28 w-28 rounded-full bg-primary/15" />
       <View className="absolute -bottom-12 -left-10 h-28 w-28 rounded-full bg-accent/10" />
 
-      <View className="relative flex-row items-start justify-between gap-3 px-4 py-4">
-        <View className="flex-1">
+      <View className="relative px-4 py-4">
+        <View>
           {eyebrow || icon ? (
             <View className="mb-2 flex-row items-center gap-2">
               {icon ? (
@@ -55,12 +54,6 @@ export function PageIntro({
           </Text>
           <Text className="mt-1 text-sm text-text-secondary">{subtitle}</Text>
         </View>
-
-        {rightLabel ? (
-          <View className="rounded-full border border-border-default bg-bg-base/55 px-3 py-1.5">
-            <Text className="text-[11px] font-semibold text-text-secondary">{rightLabel}</Text>
-          </View>
-        ) : null}
       </View>
     </View>
   );

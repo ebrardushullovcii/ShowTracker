@@ -143,8 +143,10 @@ function WatchlistCard({ item, isWeb }: { item: WatchlistItem; isWeb: boolean })
           end={{ x: 0.5, y: 1 }}
           style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 96 }}
         />
-        <View className="absolute right-2 top-2 rounded-full border border-primary/40 bg-primary/15 px-2 py-1">
-          <Text className="text-xs font-bold text-primary">{item.remainingEpisodes} left</Text>
+        <View className="absolute right-2 top-2 rounded-full border border-white/20 bg-black/80 px-2.5 py-1.5">
+          <Text className="text-[11px] font-extrabold tracking-wide text-white">
+            {item.remainingEpisodes} left
+          </Text>
         </View>
         <View className="absolute bottom-0 left-0 right-0 px-2.5 pb-2.5">
           <Text className="mb-0.5 text-sm font-bold text-white" numberOfLines={1}>{item.title}</Text>

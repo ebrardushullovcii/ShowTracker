@@ -14,7 +14,6 @@ import { useLocalSearchParams, router } from "expo-router";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Ionicons } from "@expo/vector-icons";
-import { PageBackButton } from "@/components/PageBackButton";
 import { PageIntro } from "@/components/PageIntro";
 import { ScreenWrapper } from "@/components/ScreenWrapper";
 import { toHttpsImageUrl } from "@/lib/image-url";
@@ -313,9 +312,7 @@ export default function ListDetailScreen() {
   const renderHeader = () => {
     if (!list) return null;
     return (
-      <View className="gap-3 pt-10">
-        <PageBackButton fallbackHref="/home" />
-
+      <View className="gap-3">
         {isEditing ? (
           // Edit Mode Header
           <>

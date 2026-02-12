@@ -30,7 +30,9 @@ Phase 4: Tracking Features (in progress)
 - [x] Navigation + UI shell redesign (TV-inspired)
   - [x] Persistent desktop remote navigation across app screens
   - [x] Mobile bottom navigation preserved for tab screens
-  - [x] Floating back button pattern for non-tab screens
+  - [x] Stack gesture navigation for non-tab screens (edge swipe on iOS + default Android back)
+  - [x] Detail routes (`/show/*`, `/list/*`) run as full-page stack screens on mobile
+  - [x] Desktop sidebar visibility scoped to app-shell routes (hidden on auth/landing)
   - [x] Responsive TV frame layout tuning for desktop and mobile
 - [x] Theme system hardening
   - [x] Simplified to dark-only (Midnight Pulse); removed light mode toggle, localStorage persistence, and all light-* color tokens
@@ -92,16 +94,14 @@ Phase 4: Tracking Features (in progress)
   - [x] Login/Register now provide explicit success states and clearer validation/network/auth failure messaging
   - [x] Guest sign-in flow now reports deterministic success/failure feedback
 - [x] Navigation shell finalization
-  - [x] Desktop uses collapsible sidebar (Home, Discover, Search, Watchlist, Schedule + Profile quick-link)
-  - [x] Mobile bottom bar simplified to five visible tabs (Home, Discover, Search, Watchlist, Profile)
-  - [x] `Extra` and `Schedule` remain routed but hidden from mobile tab bar
+  - [x] Desktop uses collapsible sidebar on app-shell routes (Home, Discover, Search, Library, Profile, Show, List)
+  - [x] Mobile bottom bar uses five visible tabs (Home, Discover, Search, Library, Profile)
+  - [x] List and Show detail routes are hidden from tabs and rendered as stack screens
+  - [x] Removed in-screen back buttons in favor of native gesture/back navigation
 
 ## PR Readiness Snapshot (current branch)
-- [x] `npx expo lint` passes (1 warning only)
-- [ ] `npx tsc --noEmit` currently fails on 3 issues:
-  - [ ] `app/(tabs)/index.tsx` uses unsupported `background` style key on React Native `View`
-  - [ ] `app/show/[id].tsx` passes `animated` prop to `ProgressBar`, but prop is not defined
-  - [ ] `components/ProgressBar.tsx` uses string width typing that does not satisfy `ViewStyle` in strict TS
+- [x] `npx expo lint` passes
+- [x] `npx tsc --noEmit` passes
 
 ## Pending
 - [ ] Phase 4: Tracking Features (Watchlist, Episode marking) - remaining polish and edge cases
@@ -128,6 +128,6 @@ Phase 4: Tracking Features (in progress)
   - [ ] Resolve SDK 55 breaking changes (if any) and re-run lint/typecheck
   - [ ] Validate iOS, Android, and web smoke flows after upgrade
 - [ ] Keep desktop sidebar persistent across authenticated app routes
-  - [ ] Move sidebar shell to a shared authenticated desktop layout (not tabs-only)
-  - [ ] Ensure detail routes (show/list/create) render inside same desktop shell
-  - [ ] Preserve current mobile tab navigation behavior
+  - [x] Move sidebar shell to a shared authenticated desktop layout (not tabs-only)
+  - [x] Ensure detail routes (show/list/create) render inside same desktop shell
+  - [x] Preserve current mobile tab navigation behavior
