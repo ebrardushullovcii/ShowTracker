@@ -89,6 +89,10 @@ export default function TabsLayout() {
               ),
             }}
           />
+          {/* Hide nested routes from tab bar */}
+          <Tabs.Screen name="list/create" options={{ href: null }} />
+          <Tabs.Screen name="list/[id]" options={{ href: null }} />
+          <Tabs.Screen name="show/[id]" options={{ href: null }} />
         </Tabs>
       </View>
     </View>
