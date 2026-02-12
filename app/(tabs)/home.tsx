@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Image, Platform, Pressable, ScrollView, Text, View, useWindowDimensions } from "react-native";
+import { ActivityIndicator, Platform, Pressable, Text, View, useWindowDimensions } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
+import { Image } from "expo-image";
 import { Link } from "expo-router";
 import { useAction, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -44,18 +45,52 @@ type UpcomingGroup = {
   episodes: UpcomingEpisode[];
 };
 
+type UpcomingListItem =
+  | {
+      type: "header";
+      id: string;
+      date: string;
+      isToday: boolean;
+    }
+  | {
+      type: "episode";
+      id: string;
+      date: string;
+      episodes: UpcomingEpisode[];
+    };
+
+const DAY_IN_MS = 1000 * 60 * 60 * 24;
+
+function parseLocalDate(dateString: string) {
+  const match = dateString.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+
+  const parsed = new Date(
+    Number(match[1]),
+    Number(match[2]) - 1,
+    Number(match[3])
+  );
+
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function startOfLocalDay(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
 function formatDateForApi(date: Date): string {
-  return date.toISOString().split("T")[0];
+  const year = date.getFullYear();
+  const month = `${date.getMonth() + 1}`.padStart(2, "0");
+  const day = `${date.getDate()}`.padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function getDayLabel(dateString: string) {
-  const date = new Date(dateString);
-  const today = new Date();
-  const dayDiff = Math.floor(
-    (new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime() -
-      new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime()) /
-      (1000 * 60 * 60 * 24)
-  );
+  const date = parseLocalDate(dateString);
+  if (!date) return "";
+
+  const today = startOfLocalDay(new Date());
+  const dayDiff = Math.floor((startOfLocalDay(date).getTime() - today.getTime()) / DAY_IN_MS);
 
   if (dayDiff === 0) return "TODAY";
   if (dayDiff === 1) return "TOMORROW";
@@ -67,7 +102,9 @@ function getDayLabel(dateString: string) {
 }
 
 function getDateLabel(dateString: string) {
-  const date = new Date(dateString);
+  const date = parseLocalDate(dateString);
+  if (!date) return "";
+
   return date
     .toLocaleDateString("en-US", {
       month: "short",
@@ -94,15 +131,19 @@ const RANGE_EXTENSION_DAYS = 8;
 const SCROLL_EDGE_THRESHOLD = 180;
 
 function addDaysToDateString(dateString: string, days: number): string {
-  const date = new Date(`${dateString}T00:00:00`);
+  const date = parseLocalDate(dateString);
+  if (!date) return dateString;
+
   date.setDate(date.getDate() + days);
   return formatDateForApi(date);
 }
 
 function getInclusiveDayCount(startDate: string, endDate: string): number {
-  const start = new Date(`${startDate}T00:00:00`).getTime();
-  const end = new Date(`${endDate}T00:00:00`).getTime();
-  return Math.max(1, Math.floor((end - start) / (1000 * 60 * 60 * 24)) + 1);
+  const start = parseLocalDate(startDate);
+  const end = parseLocalDate(endDate);
+  if (!start || !end) return 1;
+
+  return Math.max(1, Math.floor((startOfLocalDay(end).getTime() - startOfLocalDay(start).getTime()) / DAY_IN_MS) + 1);
 }
 
 function getWatchlistRouteId(item: WatchlistItem) {
@@ -121,6 +162,10 @@ function getWatchlistRouteId(item: WatchlistItem) {
 function WatchlistCard({ item, isWeb }: { item: WatchlistItem; isWeb: boolean }) {
   const routeId = getWatchlistRouteId(item);
   const posterHeight = isWeb ? 280 : 240;
+  const watchedPercent =
+    item.totalEpisodes > 0
+      ? Math.round((item.watchedEpisodes / item.totalEpisodes) * 100)
+      : 0;
 
   const card = (
     <View className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900">
@@ -129,7 +174,7 @@ function WatchlistCard({ item, isWeb }: { item: WatchlistItem; isWeb: boolean })
           <Image
             source={{ uri: toHttpsImageUrl(item.posterUrl) }}
             className="absolute inset-0"
-            resizeMode="cover"
+            contentFit="cover"
           />
         ) : (
           <View className="flex-1 items-center justify-center bg-zinc-800 px-3">
@@ -156,7 +201,7 @@ function WatchlistCard({ item, isWeb }: { item: WatchlistItem; isWeb: boolean })
           <View className="mt-1.5 h-0.5 overflow-hidden rounded-sm bg-white/15">
             <View 
               className="h-full rounded-sm bg-red-500" 
-              style={{ width: `${Math.round((item.watchedEpisodes / item.totalEpisodes) * 100)}%` }} 
+              style={{ width: `${watchedPercent}%` }} 
             />
           </View>
         </View>
@@ -188,7 +233,7 @@ function UpcomingCard({ episode, isWeb }: { episode: UpcomingEpisode; isWeb: boo
           <Image
             source={{ uri: toHttpsImageUrl(episode.posterUrl) }}
             className="absolute inset-0"
-            resizeMode="cover"
+            contentFit="cover"
           />
         ) : (
           <View className="flex-1 items-center justify-center bg-zinc-800 px-3">
@@ -259,8 +304,7 @@ export default function HomeScreen() {
     addDaysToDateString(todayKey, INITIAL_FUTURE_DAYS)
   );
 
-  const upcomingScrollRef = useRef<ScrollView>(null);
-  const pastSectionHeightRef = useRef(0);
+  const upcomingScrollRef = useRef<any>(null);
   const didHydrateInitialUpcomingRef = useRef(false);
   const hydratedRangesRef = useRef(new Set<string>());
   const shouldAnchorTodayRef = useRef(false);
@@ -375,14 +419,41 @@ export default function HomeScreen() {
     [upcoming, upcomingSnapshot]
   );
 
-  const pastUpcomingGroups = useMemo(
-    () => upcomingGroups.filter((group) => group.date < todayKey),
-    [todayKey, upcomingGroups]
-  );
+  const effectiveWidth = gridWidth || Math.max(width - 40, 0);
+  const columns = getColumnCount(effectiveWidth, isWeb);
+  const cardWidth = (effectiveWidth - (columns - 1) * GRID_GAP) / columns;
+  const watchlistPageSize = Math.max(columns * 3, 6);
 
-  const currentAndFutureUpcomingGroups = useMemo(
-    () => upcomingGroups.filter((group) => group.date >= todayKey),
-    [todayKey, upcomingGroups]
+  const upcomingListItems = useMemo<UpcomingListItem[]>(() => {
+    const items: UpcomingListItem[] = [];
+
+    for (const group of upcomingGroups) {
+      items.push({
+        type: "header",
+        id: `header:${group.date}`,
+        date: group.date,
+        isToday: group.date === todayKey,
+      });
+
+      for (let index = 0; index < group.episodes.length; index += columns) {
+        items.push({
+          type: "episode",
+          id: `row:${group.date}:${index}`,
+          date: group.date,
+          episodes: group.episodes.slice(index, index + columns),
+        });
+      }
+    }
+
+    return items;
+  }, [columns, todayKey, upcomingGroups]);
+
+  const todayAnchorIndex = useMemo(
+    () =>
+      upcomingListItems.findIndex(
+        (item) => item.type === "header" && item.date >= todayKey
+      ),
+    [todayKey, upcomingListItems]
   );
 
   const isWatchlistLoading = watchlist === undefined;
@@ -390,11 +461,6 @@ export default function HomeScreen() {
     activeTab === "upcoming" &&
     upcomingGroups.length === 0 &&
     (upcoming === undefined || isHydratingInitialUpcoming);
-
-  const effectiveWidth = gridWidth || Math.max(width - 40, 0);
-  const columns = getColumnCount(effectiveWidth, isWeb);
-  const cardWidth = (effectiveWidth - (columns - 1) * GRID_GAP) / columns;
-  const watchlistPageSize = Math.max(columns * 3, 6);
 
   const getHeaderText = () => {
     switch (activeTab) {
@@ -444,60 +510,73 @@ export default function HomeScreen() {
     }, 120);
   }, [filteredWatchlist.length, hasMoreWatchlist, isLoadingMoreWatchlist, isWatchlistLoading, watchlistPageSize]);
 
-  const renderUpcomingGroup = useCallback(
-    (group: UpcomingGroup) => {
-      const isToday = group.date === todayKey;
+  const upcomingListData = useMemo(
+    () => (isUpcomingLoading || upcomingGroups.length === 0 ? [] : upcomingListItems),
+    [isUpcomingLoading, upcomingGroups.length, upcomingListItems]
+  );
+
+  const stickyHeaderIndices = useMemo(() => {
+    const headerIndices: number[] = [];
+    for (let index = 0; index < upcomingListData.length; index += 1) {
+      if (upcomingListData[index]?.type === "header") {
+        headerIndices.push(index);
+      }
+    }
+    return headerIndices;
+  }, [upcomingListData]);
+
+  useEffect(() => {
+    if (
+      shouldAnchorTodayRef.current &&
+      activeTab === "upcoming" &&
+      !isUpcomingLoading &&
+      todayAnchorIndex >= 0
+    ) {
+      requestAnimationFrame(() => {
+        upcomingScrollRef.current?.scrollToIndex({
+          index: todayAnchorIndex,
+          animated: false,
+        });
+      });
+      shouldAnchorTodayRef.current = false;
+    }
+  }, [activeTab, isUpcomingLoading, todayAnchorIndex]);
+
+  const renderUpcomingListItem = useCallback(
+    ({ item }: { item: UpcomingListItem }) => {
+      if (item.type === "header") {
+        return (
+          <View className="mb-3">
+            <View
+              className={`self-start rounded-full px-3 py-1 ${
+                item.isToday ? "bg-red-500" : "bg-zinc-700/70"
+              }`}
+            >
+              <Text className="text-xs font-bold text-zinc-100">
+                {getDayLabel(item.date)} · {getDateLabel(item.date)}
+              </Text>
+            </View>
+          </View>
+        );
+      }
 
       return (
-        <View key={group.date} className="mb-6">
-          <View
-            className={`mb-3 self-start rounded-full px-3 py-1 ${
-              isToday ? "bg-red-500" : "bg-zinc-700/70"
-            }`}
-          >
-            <Text className="text-xs font-bold text-zinc-100">
-              {getDayLabel(group.date)} · {getDateLabel(group.date)}
-            </Text>
-          </View>
-
-          <View className="flex-row flex-wrap">
-            {group.episodes.map((episode, index) => {
-              const isLastInRow = index % columns === columns - 1;
-              const isLastItem = index === group.episodes.length - 1;
-
-              return (
-                <View
-                  key={`${group.date}:${episode.routeId ?? episode.showTitle}:${episode.episode.seasonNumber}:${episode.episode.episodeNumber}:${index}`}
-                  style={{
-                    width: cardWidth,
-                    marginRight: isLastInRow || isLastItem ? 0 : GRID_GAP,
-                    marginBottom: GRID_GAP,
-                  }}
-                >
-                  <UpcomingCard episode={episode} isWeb={isWeb} />
-                </View>
-              );
-            })}
-          </View>
+        <View className="mb-3 flex-row">
+          {item.episodes.map((episode, index) => (
+            <View
+              key={`${item.date}:${episode.routeId ?? episode.showTitle}:${episode.episode.seasonNumber}:${episode.episode.episodeNumber}:${index}`}
+              style={{
+                width: cardWidth,
+                marginRight: index === item.episodes.length - 1 ? 0 : GRID_GAP,
+              }}
+            >
+              <UpcomingCard episode={episode} isWeb={isWeb} />
+            </View>
+          ))}
         </View>
       );
     },
-    [cardWidth, columns, isWeb, todayKey]
-  );
-
-  const onPastSectionLayout = useCallback(
-    (event: any) => {
-      const nextHeight = event.nativeEvent.layout.height;
-      pastSectionHeightRef.current = nextHeight;
-
-      if (shouldAnchorTodayRef.current && activeTab === "upcoming" && !isUpcomingLoading) {
-        requestAnimationFrame(() => {
-          upcomingScrollRef.current?.scrollTo({ y: nextHeight, animated: false });
-        });
-        shouldAnchorTodayRef.current = false;
-      }
-    },
-    [activeTab, isUpcomingLoading]
+    [cardWidth, isWeb]
   );
 
   const onUpcomingScroll = useCallback(
@@ -632,83 +711,81 @@ export default function HomeScreen() {
               }
             />
           ) : (
-            <>
-              <View className="pb-4">
-                <PageIntro
-                  title={headerText.title}
-                  subtitle={headerText.subtitle}
-                  eyebrow="Calendar"
-                  icon="calendar-outline"
-                  rightLabel={`${upcomingCount} episodes`}
-                  className="mb-4"
-                />
+            <FlashList
+              ref={upcomingScrollRef}
+              data={upcomingListData}
+              keyExtractor={(item) => item.id}
+              renderItem={renderUpcomingListItem as any}
+              getItemType={(item) => item.type}
+              stickyHeaderIndices={stickyHeaderIndices}
+              onScroll={onUpcomingScroll}
+              scrollEventThrottle={16}
+              showsVerticalScrollIndicator
+              contentContainerStyle={{ paddingBottom: 24 }}
+              ListHeaderComponent={
+                <View className="pb-4">
+                  <PageIntro
+                    title={headerText.title}
+                    subtitle={headerText.subtitle}
+                    eyebrow="Calendar"
+                    icon="calendar-outline"
+                    rightLabel={`${upcomingCount} episodes`}
+                    className="mb-4"
+                  />
 
-                <SegmentedControl
-                  className="mb-3"
-                  options={[
-                    { value: "watchlist", label: "Watchlist" },
-                    { value: "upcoming", label: "Upcoming" },
-                  ]}
-                  value={activeTab}
-                  onValueChange={(value: HomeTab) => setActiveTab(value)}
-                />
+                  <SegmentedControl
+                    className="mb-3"
+                    options={[
+                      { value: "watchlist", label: "Watchlist" },
+                      { value: "upcoming", label: "Upcoming" },
+                    ]}
+                    value={activeTab}
+                    onValueChange={(value: HomeTab) => setActiveTab(value)}
+                  />
 
-                <SegmentedControl
-                  options={[
-                    { value: "all", label: "All" },
-                    { value: "tv", label: "TV" },
-                    { value: "anime", label: "Anime" },
-                  ]}
-                  value={filter}
-                  onValueChange={(value: HomeFilter) => setFilter(value)}
-                />
-              </View>
+                  <SegmentedControl
+                    options={[
+                      { value: "all", label: "All" },
+                      { value: "tv", label: "TV" },
+                      { value: "anime", label: "Anime" },
+                    ]}
+                    value={filter}
+                    onValueChange={(value: HomeFilter) => setFilter(value)}
+                  />
 
-              <ScrollView
-                ref={upcomingScrollRef}
-                showsVerticalScrollIndicator
-                onScroll={onUpcomingScroll}
-                scrollEventThrottle={16}
-                contentContainerStyle={{ paddingBottom: 24 }}
-              >
-                {/* Loading state */}
-                {isUpcomingLoading ? (
-                  <View className="py-10 items-center">
+                  {isUpcomingLoading ? (
+                    <View className="py-10 items-center">
                       <ActivityIndicator size="small" color="#ef4444" />
                       <Text className="mt-2 text-xs text-text-secondary">Loading schedule...</Text>
                     </View>
-                  ) : upcomingGroups.length === 0 ? (
+                  ) : null}
+
+                  {!isUpcomingLoading && upcomingGroups.length === 0 ? (
                     <View className="items-center rounded-2xl border border-border-default bg-bg-surface px-6 py-12">
                       <Text className="text-lg font-semibold text-text-primary">No upcoming episodes</Text>
                       <Text className="mt-1 text-center text-sm text-text-secondary">
                         Shows with future episodes will appear here.
                       </Text>
                     </View>
-                  ) : (
-                    <>
-                      {isLoadingPast ? (
-                        <View className="mb-3 items-center py-2">
-                          <ActivityIndicator size="small" color="#ef4444" />
-                          <Text className="mt-1 text-xs text-text-secondary">Loading earlier days...</Text>
-                        </View>
-                      ) : null}
+                  ) : null}
 
-                      <View onLayout={onPastSectionLayout}>
-                        {pastUpcomingGroups.map(renderUpcomingGroup)}
-                      </View>
-
-                      <View>{currentAndFutureUpcomingGroups.map(renderUpcomingGroup)}</View>
-
-                      {isLoadingFuture ? (
-                        <View className="items-center py-2">
-                          <ActivityIndicator size="small" color="#ef4444" />
-                          <Text className="mt-1 text-xs text-text-secondary">Loading later days...</Text>
-                        </View>
-                      ) : null}
-                    </>
-                  )}
-                </ScrollView>
-            </>
+                  {!isUpcomingLoading && upcomingGroups.length > 0 && isLoadingPast ? (
+                    <View className="mt-3 items-center py-2">
+                      <ActivityIndicator size="small" color="#ef4444" />
+                      <Text className="mt-1 text-xs text-text-secondary">Loading earlier days...</Text>
+                    </View>
+                  ) : null}
+                </View>
+              }
+              ListFooterComponent={
+                !isUpcomingLoading && upcomingGroups.length > 0 && isLoadingFuture ? (
+                  <View className="items-center py-2">
+                    <ActivityIndicator size="small" color="#ef4444" />
+                    <Text className="mt-1 text-xs text-text-secondary">Loading later days...</Text>
+                  </View>
+                ) : null
+              }
+            />
           )
         ) : (
           <View className="flex-1 items-center justify-center">

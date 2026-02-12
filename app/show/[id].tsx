@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Image,
   Platform,
   Pressable,
   ScrollView,
@@ -9,6 +8,7 @@ import {
   View,
   useWindowDimensions,
 } from "react-native";
+import { Image } from "expo-image";
 import { useLocalSearchParams } from "expo-router";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -820,7 +820,7 @@ export function ShowDetailScreen() {
                   <Image
                     source={{ uri: showPosterUrl }}
                     className="h-full w-full"
-                    resizeMode="cover"
+                    contentFit="cover"
                   />
                 </View>
               )}
