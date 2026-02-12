@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  FlatList,
   Platform,
   Text,
   View,
   useWindowDimensions,
   type LayoutChangeEvent,
 } from "react-native";
+import { FlashList } from "@shopify/flash-list";
 import { MediaPosterCard } from "@/components/MediaPosterCard";
 import { ScreenWrapper } from "@/components/ScreenWrapper";
 import { SegmentedControl } from "@/components/SegmentedControl";
@@ -77,7 +77,7 @@ function SectionHeader({ title, count }: { title: string; count: number }) {
   );
 }
 
-export default function DiscoverScreen() {
+export function DiscoverScreen() {
   const [activeTab, setActiveTab] = useState<DiscoverTab>("tv");
   const { width } = useWindowDimensions();
   const isWeb = Platform.OS === "web";
@@ -385,7 +385,7 @@ export default function DiscoverScreen() {
   return (
     <ScreenWrapper>
       <View className="flex-1" onLayout={onGridLayout}>
-        <FlatList
+        <FlashList
           data={activeState.items}
           renderItem={renderItem}
           keyExtractor={(item, index) => `${item.id}-${activeTab}-${index}`}
@@ -398,9 +398,10 @@ export default function DiscoverScreen() {
           ListFooterComponent={renderFooter}
           ListEmptyComponent={renderEmpty}
           contentContainerStyle={{ paddingBottom: 32 }}
-          columnWrapperStyle={columns > 1 ? { justifyContent: "flex-start" } : undefined}
         />
       </View>
     </ScreenWrapper>
   );
 }
+
+export default DiscoverScreen;

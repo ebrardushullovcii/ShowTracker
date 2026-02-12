@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Image,
   Modal,
   Platform,
   Pressable,
@@ -10,6 +9,7 @@ import {
   View,
   useWindowDimensions,
 } from "react-native";
+import { Image } from "expo-image";
 import { useLocalSearchParams } from "expo-router";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -476,7 +476,11 @@ export function ShowDetailScreen() {
       setPendingOverrides({});
       setPendingEpisodeKeys({});
       setSeasonActionLoading({});
+      setEpisodeWatchCounts({});
       setIsMarkingShow(false);
+      setMovieWatchCount(null);
+      setWatchActionTarget(null);
+      setIsWatchActionRunning(false);
 
       try {
         if (parsedId.source === "tmdb") {
@@ -607,6 +611,7 @@ export function ShowDetailScreen() {
         });
       }
       setTrackingError("Could not update episode status.");
+      throw mutationError;
     } finally {
       setPendingEpisodeKeys((prev) => ({ ...prev, [key]: false }));
     }
@@ -626,7 +631,11 @@ export function ShowDetailScreen() {
       return;
     }
 
-    await runEpisodeToggle(episode, "toggle");
+    try {
+      await runEpisodeToggle(episode, "toggle");
+    } catch {
+      // Error already handled in runEpisodeToggle.
+    }
   };
 
   const handleMarkSeasonWatched = async (season: NormalizedSeason) => {
@@ -863,6 +872,7 @@ export function ShowDetailScreen() {
     } catch (mutationError) {
       console.error("Failed to toggle movie watched", mutationError);
       setTrackingError("Could not update movie status.");
+      throw mutationError;
     } finally {
       setIsTogglingMovieWatch(false);
     }
@@ -922,6 +932,7 @@ export function ShowDetailScreen() {
     } catch (mutationError) {
       console.error("Failed to rewatch season", mutationError);
       setTrackingError("Could not update season status.");
+      throw mutationError;
     } finally {
       setSeasonActionLoading((prev) => ({ ...prev, [season.seasonNumber]: false }));
     }
@@ -1006,6 +1017,7 @@ export function ShowDetailScreen() {
     } catch (mutationError) {
       console.error("Failed to rewatch show", mutationError);
       setTrackingError("Could not update show status.");
+      throw mutationError;
     } finally {
       setIsMarkingShow(false);
     }
@@ -1048,6 +1060,7 @@ export function ShowDetailScreen() {
         }
         return next;
       });
+      throw mutationError;
     } finally {
       setSeasonActionLoading((prev) => ({ ...prev, [season.seasonNumber]: false }));
     }
@@ -1084,6 +1097,8 @@ export function ShowDetailScreen() {
     if (!watchActionTarget || isWatchActionRunning) return;
 
     setIsWatchActionRunning(true);
+    let didSucceed = false;
+
     try {
       if (watchActionTarget.kind === "movie") {
         await handleToggleMovieWatched(choice === "rewatch" ? "rewatch" : "toggle");
@@ -1115,10 +1130,13 @@ export function ShowDetailScreen() {
         if (choice === "rewatch") {
           await handleRewatchShow(watchActionTarget.releasedEpisodes);
         } else {
-          if (!show) return;
-          await clearShowWatched({
-            show: buildShowPayload(show),
-          });
+          if (!show) {
+            throw new Error("Show context unavailable");
+          }
+
+          const previousPendingOverrides = { ...pendingOverrides };
+          const previousEpisodeWatchCounts = { ...episodeWatchCounts };
+
           setPendingOverrides((prev) => {
             const next = { ...prev };
             for (const episode of watchActionTarget.releasedEpisodes) {
@@ -1133,11 +1151,27 @@ export function ShowDetailScreen() {
             }
             return next;
           });
+
+          try {
+            await clearShowWatched({
+              show: buildShowPayload(show),
+            });
+          } catch (mutationError) {
+            setPendingOverrides(previousPendingOverrides);
+            setEpisodeWatchCounts(previousEpisodeWatchCounts);
+            throw mutationError;
+          }
         }
       }
+      didSucceed = true;
+    } catch (mutationError) {
+      console.error("Failed to apply watch action", mutationError);
+      setTrackingError("Could not update watch status. Please try again.");
     } finally {
       setIsWatchActionRunning(false);
-      setWatchActionTarget(null);
+      if (didSucceed) {
+        setWatchActionTarget(null);
+      }
     }
   };
 
@@ -1227,7 +1261,7 @@ export function ShowDetailScreen() {
                   <Image
                     source={{ uri: showPosterUrl }}
                     className="h-full w-full"
-                    resizeMode="cover"
+                    contentFit="cover"
                   />
                 </View>
               )}
@@ -1496,7 +1530,7 @@ export function ShowDetailScreen() {
                         if (movieWatchCount && movieWatchCount > 0) {
                           handleOpenMovieActionMenu();
                         } else {
-                          void handleToggleMovieWatched("toggle");
+                          void handleToggleMovieWatched("toggle").catch(() => undefined);
                         }
                       }}
                       className="relative h-8 w-8 items-center justify-center"
@@ -1524,7 +1558,7 @@ export function ShowDetailScreen() {
                         if (movieWatchCount && movieWatchCount > 0) {
                           handleOpenMovieActionMenu();
                         } else {
-                          void handleToggleMovieWatched("toggle");
+                          void handleToggleMovieWatched("toggle").catch(() => undefined);
                         }
                       }}
                       className="active:opacity-70"

@@ -254,8 +254,6 @@ export default function ListDetailScreen() {
     return Math.floor(availableWidth / columns);
   }, [gridWidth, columns, isDesktop]);
 
-  const posterHeight = Math.floor(posterWidth * 1.5);
-
   // Initialize local state when entering edit mode
   const startEditing = () => {
     if (list) {
@@ -376,7 +374,7 @@ export default function ListDetailScreen() {
 
   const shows = list && list.shows ? (isEditing ? localShows : (list.shows.filter(Boolean) as ShowItem[])) : [];
 
-  const renderHeader = useCallback(() => {
+  const renderHeader = () => {
     if (!list) return null;
     return (
       <View className="gap-3">
@@ -435,7 +433,7 @@ export default function ListDetailScreen() {
         />
       </View>
     );
-  }, [list, isEditing, editedName, editedDescription, isSaving]);
+  };
 
   const renderEmptyList = () => {
     return (
