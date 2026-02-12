@@ -58,13 +58,12 @@ export function LoginScreen() {
 
   const handleAuthResult = (
     result: Awaited<ReturnType<typeof signIn>>,
-    messages: { verificationRequired: string; authenticationFailed: string; fallback: string }
+    messages: { fallback: string }
   ) => {
-    const authResult = result as Record<string, unknown>;
-    const redirectValue = authResult.redirect;
+    const { redirect, signingIn } = result;
 
-    if (redirectValue instanceof URL || typeof redirectValue === "string") {
-      const redirectTarget = redirectValue.toString();
+    if (redirect instanceof URL || typeof redirect === "string") {
+      const redirectTarget = redirect.toString();
       if (Platform.OS === "web" && typeof window !== "undefined") {
         window.location.href = redirectTarget;
       } else {
@@ -73,45 +72,8 @@ export function LoginScreen() {
       return;
     }
 
-    if (authResult.signingIn === true) {
+    if (signingIn === true) {
       setSuccess("Signed in. Opening your dashboard...");
-      return;
-    }
-
-    const verificationRequired =
-      authResult.started === true ||
-      authResult.verificationRequired === true ||
-      authResult.requiresVerification === true ||
-      authResult.emailVerificationRequired === true ||
-      authResult.requiresEmailVerification === true ||
-      authResult.confirmationRequired === true ||
-      authResult.requiresConfirmation === true ||
-      authResult.needsConfirmation === true;
-
-    if (verificationRequired) {
-      setError(messages.verificationRequired);
-      return;
-    }
-
-    const rawFailureSignal =
-      (typeof authResult.errorCode === "string" && authResult.errorCode) ||
-      (typeof authResult.reason === "string" && authResult.reason) ||
-      (typeof authResult.error === "string" && authResult.error) ||
-      (typeof authResult.status === "string" && authResult.status) ||
-      "";
-    const failureSignal = rawFailureSignal.toLowerCase();
-    const authFailed =
-      authResult.failed === true ||
-      authResult.success === false ||
-      authResult.authenticationFailed === true ||
-      authResult.invalidCredentials === true ||
-      failureSignal.includes("invalid") ||
-      failureSignal.includes("credential") ||
-      failureSignal.includes("unauthorized") ||
-      failureSignal.includes("auth_failed");
-
-    if (authFailed) {
-      setError(messages.authenticationFailed);
       return;
     }
 
@@ -144,10 +106,7 @@ export function LoginScreen() {
       });
 
       handleAuthResult(result, {
-        verificationRequired:
-          "Please verify your email before signing in.",
-        authenticationFailed: "Invalid email or password.",
-        fallback: "Sign in needs one more verification step. Check your email.",
+        fallback: "Invalid email or password. Please try again.",
       });
     } catch (authError) {
       const errorMessage = authError instanceof Error ? authError.message : "";
@@ -172,9 +131,7 @@ export function LoginScreen() {
     try {
       const result = await signIn("anonymous");
       handleAuthResult(result, {
-        verificationRequired: "Verification required for guest access.",
-        authenticationFailed: "Failed to continue as guest.",
-        fallback: "Failed to continue as guest.",
+        fallback: "Failed to continue as guest. Please try again.",
       });
     } catch {
       setError("Failed to continue as guest.");
