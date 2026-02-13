@@ -646,14 +646,15 @@ export function HomeScreen() {
     [rangeEndDate, rangeStartDate]
   );
 
-  const onUpcomingViewableItemsChanged = useRef(
+  const onUpcomingViewableItemsChanged = useCallback(
     ({ viewableItems }: { viewableItems: { item: UpcomingListItem }[] }) => {
       const hasTodayHeaderVisible = viewableItems.some(
         (entry) => entry.item.type === "header" && entry.item.date === todayKey
       );
       setIsTodayVisible(hasTodayHeaderVisible);
-    }
-  ).current;
+    },
+    [todayKey]
+  );
 
   const jumpToToday = useCallback(() => {
     if (todayAnchorIndex < 0) {
