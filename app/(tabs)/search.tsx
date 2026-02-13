@@ -528,6 +528,7 @@ export function SearchScreen() {
         keyExtractor={(item) => `${item.id}-${item.mediaType}`}
         showsVerticalScrollIndicator={false}
         ItemSeparatorComponent={() => <View style={{ height: GRID_GAP }} />}
+        contentContainerStyle={{ paddingHorizontal: 16 }}
         renderItem={({ item }) => (
           <View style={{ flex: 1, paddingHorizontal: GRID_GAP / 2 }}>
             <MediaPosterCard
