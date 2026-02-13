@@ -214,11 +214,32 @@ function buildShowPayload(show: NormalizedShow) {
 
 function buildTrackingArgs(show: NormalizedShow | null) {
   if (!show) return "skip" as const;
-  if (typeof show.tmdbId === "number") return { tmdbId: show.tmdbId };
-  if (typeof show.anilistId === "number") return { anilistId: show.anilistId };
-  if (typeof show.malId === "number") return { malId: show.malId };
-  if (typeof show.tvmazeId === "number") return { tvmazeId: show.tvmazeId };
-  return "skip" as const;
+
+  const lookupArgs: {
+    tmdbId?: number;
+    anilistId?: number;
+    malId?: number;
+    tvmazeId?: number;
+  } = {};
+
+  if (typeof show.tmdbId === "number") {
+    lookupArgs.tmdbId = show.tmdbId;
+  }
+  if (typeof show.anilistId === "number") {
+    lookupArgs.anilistId = show.anilistId;
+  }
+  if (typeof show.malId === "number") {
+    lookupArgs.malId = show.malId;
+  }
+  if (typeof show.tvmazeId === "number") {
+    lookupArgs.tvmazeId = show.tvmazeId;
+  }
+
+  if (Object.keys(lookupArgs).length === 0) {
+    return "skip" as const;
+  }
+
+  return lookupArgs;
 }
 
 function buildRelatedAnimeKey(entry: {

@@ -1852,11 +1852,6 @@ export const getWatchlist = query({
           return null;
         }
 
-        const includeByStatus =
-          userShow.status === "watching" ||
-          (userShow.status === "plan_to_watch" &&
-            (userShow.isAutoTracked || show.mediaType === "anime"));
-
         const totalEpisodes =
           typeof show.totalEpisodes === "number" ? show.totalEpisodes : null;
 
@@ -1866,16 +1861,6 @@ export const getWatchlist = query({
           totalEpisodes === null
             ? null
             : Math.max(totalEpisodes - watchedCount, 0);
-
-        const isCompleted =
-          userShow.status === "completed" ||
-          (remainingEpisodes !== null && remainingEpisodes <= 0);
-
-        const displayEligible = includeByStatus && !isCompleted;
-
-        if (!displayEligible && show.mediaType !== "anime") {
-          return null;
-        }
 
         const progressPercent =
           totalEpisodes && totalEpisodes > 0
@@ -1916,8 +1901,6 @@ export const getWatchlist = query({
           anilistFormat: show.anilistFormat ?? null,
           animeSeason: show.animeSeason ?? null,
           animeSeasonYear: show.animeSeasonYear ?? null,
-          displayEligible,
-          isCompleted,
           watchedEpisodes: watchedCount,
           totalEpisodes,
           remainingEpisodes,
@@ -1940,9 +1923,7 @@ export const getWatchlist = query({
 
     for (const item of hydrated) {
       if (item.mediaType !== "anime") {
-        if (item.displayEligible) {
-          selectedEntries.push(item);
-        }
+        selectedEntries.push(item);
         continue;
       }
 
@@ -1961,7 +1942,7 @@ export const getWatchlist = query({
     }
 
     for (const entries of groupedAnime.values()) {
-      const displayable = entries.filter((entry) => entry.displayEligible);
+      const displayable = entries;
       if (displayable.length === 0) {
         continue;
       }
@@ -1985,8 +1966,6 @@ export const getWatchlist = query({
           anilistFormat: _anilistFormat,
           animeSeason: _animeSeason,
           animeSeasonYear: _animeSeasonYear,
-          displayEligible: _displayEligible,
-          isCompleted: _isCompleted,
           ...rest
         }) => rest
       );

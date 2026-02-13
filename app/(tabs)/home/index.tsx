@@ -109,8 +109,10 @@ function parseLocalDate(dateString: string) {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
-function startOfLocalDay(date: Date) {
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+function getUtcDayIndex(date: Date) {
+  return (
+    Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / DAY_IN_MS
+  );
 }
 
 function formatDateForApi(date: Date): string {
@@ -124,10 +126,7 @@ function getDayLabel(dateString: string) {
   const date = parseLocalDate(dateString);
   if (!date) return "";
 
-  const today = startOfLocalDay(new Date());
-  const dayDiff = Math.floor(
-    (startOfLocalDay(date).getTime() - today.getTime()) / DAY_IN_MS
-  );
+  const dayDiff = getUtcDayIndex(date) - getUtcDayIndex(new Date());
 
   if (dayDiff === 0) return "TODAY";
   if (dayDiff === 1) return "TOMORROW";
@@ -172,15 +171,8 @@ function getInclusiveDayCount(startDate: string, endDate: string): number {
   const end = parseLocalDate(endDate);
   if (!start || !end) return 1;
 
-  return (
-    Math.max(
-      1,
-      Math.floor(
-        (startOfLocalDay(end).getTime() - startOfLocalDay(start).getTime()) /
-          DAY_IN_MS
-      ) + 1
-    )
-  );
+  const inclusiveDays = getUtcDayIndex(end) - getUtcDayIndex(start) + 1;
+  return Math.max(1, inclusiveDays);
 }
 
 function delay(ms: number) {
@@ -368,7 +360,7 @@ function UpcomingCard({ episode, isWeb }: { episode: UpcomingEpisode; isWeb: boo
   );
 }
 
-export default function HomeScreen() {
+export function HomeScreen() {
   const [activeTab, setActiveTab] = useState<HomeTab>("watchlist");
   const [mediaFilter, setMediaFilter] = useState<HomeMediaFilter>("all");
   const [statusFilter, setStatusFilter] = useState<HomeStatusFilter>("all");
@@ -426,10 +418,15 @@ export default function HomeScreen() {
       }
 
       hydratedRangesRef.current.add(cacheKey);
-      await hydrateScheduleRange({
-        startDate,
-        days: safeDays,
-      });
+      try {
+        await hydrateScheduleRange({
+          startDate,
+          days: safeDays,
+        });
+      } catch (error) {
+        hydratedRangesRef.current.delete(cacheKey);
+        throw error;
+      }
     },
     [hydrateScheduleRange]
   );
@@ -1107,3 +1104,5 @@ export default function HomeScreen() {
     </ScreenWrapper>
   );
 }
+
+export { HomeScreen as default };
