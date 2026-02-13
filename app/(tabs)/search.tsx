@@ -5,6 +5,8 @@ import {
   Text,
   View,
   useWindowDimensions,
+  ScrollView,
+  Pressable,
 } from "react-native";
 import { FlashList } from "@shopify/flash-list";
 import { MediaPosterCard } from "@/components/MediaPosterCard";
@@ -12,22 +14,15 @@ import { ScreenWrapper } from "@/components/ScreenWrapper";
 import { SearchInput } from "@/components/SearchInput";
 import { SegmentedControl } from "@/components/SegmentedControl";
 import { PageIntro } from "@/components/PageIntro";
-import { FilterSheet } from "@/components/FilterSheet";
-import { Button } from "@/components/Button";
 import { getMainContentWidth } from "@/constants/navigation";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
-import { searchAniList } from "@/lib/api/anilist";
+import { searchAniList, type AniListFilterParams } from "@/lib/api/anilist";
 import { searchJikan } from "@/lib/api/jikan";
 import { normalizeAniListMedia, normalizeTmdbMedia } from "@/lib/api/normalize";
-import { searchTmdb, discoverTmdb } from "@/lib/api/tmdb";
+import { searchTmdb, discoverTmdb, type TmdbFilterParams } from "@/lib/api/tmdb";
 import type { NormalizedShow } from "@/lib/api/types";
 import { createShowRouteId } from "@/lib/show-route";
-import {
-  getFiltersForMediaType,
-  hasActiveFilters,
-  getActiveFilterCount,
-  type ActiveFilters,
-} from "@/lib/filters";
+import { getFiltersForMediaType, type ActiveFilters } from "@/lib/filters";
 
 type SearchFilter = "all" | "tv" | "anime" | "movie";
 
@@ -68,30 +63,63 @@ export function SearchScreen() {
   const isWeb = Platform.OS === "web";
   const contentWidth = getMainContentWidth(width, isWeb, false);
   const [filter, setFilter] = useState<SearchFilter>("all");
+
+  // Individual filter states
+  const [selectedGenres, setSelectedGenres] = useState<string[]>([]);
+  const [selectedYear, setSelectedYear] = useState<string>("");
+  const [selectedRating, setSelectedRating] = useState<string>("");
+  const [selectedStatus, setSelectedStatus] = useState<string>("");
+  const [openDropdown, setOpenDropdown] = useState<string | null>(null);
+
   const debouncedQuery = useDebouncedValue(query, 350);
   const [results, setResults] = useState<NormalizedShow[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const requestIdRef = useRef(0);
 
-  // Filter state
-  const [activeFilters, setActiveFilters] = useState<ActiveFilters>({});
-  const [isFilterSheetOpen, setIsFilterSheetOpen] = useState(false);
-
-  // Get available filters for current media type
+  // Get available filters
   const availableFilters = useMemo(
     () => getFiltersForMediaType(filter),
     [filter]
   );
 
-  const filterCount = getActiveFilterCount(activeFilters);
+  const genreOptions = useMemo(
+    () => availableFilters.find((f) => f.id === "genres")?.options || [],
+    [availableFilters]
+  );
+  const yearOptions = useMemo(
+    () => availableFilters.find((f) => f.id === "year")?.options || [],
+    [availableFilters]
+  );
+  const ratingOptions = useMemo(
+    () => availableFilters.find((f) => f.id === "minRating")?.options || [],
+    [availableFilters]
+  );
+  const statusOptions = useMemo(
+    () => availableFilters.find((f) => f.id === "status")?.options || [],
+    [availableFilters]
+  );
+
+  const hasActiveFilters = useMemo(
+    () =>
+      selectedGenres.length > 0 ||
+      selectedYear !== "" ||
+      selectedRating !== "" ||
+      selectedStatus !== "",
+    [selectedGenres, selectedYear, selectedRating, selectedStatus]
+  );
+
+  const clearFilters = () => {
+    setSelectedGenres([]);
+    setSelectedYear("");
+    setSelectedRating("");
+    setSelectedStatus("");
+  };
 
   useEffect(() => {
     const normalizedQuery = debouncedQuery.trim();
-    const hasFilters = hasActiveFilters(activeFilters);
 
-    // If no query and no filters, clear results
-    if (!normalizedQuery && !hasFilters) {
+    if (!normalizedQuery && !hasActiveFilters) {
       setResults([]);
       setError(null);
       setIsLoading(false);
@@ -106,33 +134,28 @@ export function SearchScreen() {
     const runSearch = async () => {
       const requests: Promise<NormalizedShow[]>[] = [];
 
-      // Build filter params for TMDB
-      const tmdbFilters = {
-        with_genres: activeFilters.genres?.join(","),
+      const tmdbFilters: TmdbFilterParams = {
+        with_genres: selectedGenres.join(","),
         first_air_date_year:
-          filter === "tv" ? activeFilters.year : undefined,
+          filter === "tv" && selectedYear ? Number(selectedYear) : undefined,
         primary_release_year:
-          filter === "movie" ? activeFilters.year : undefined,
-        vote_average_gte: activeFilters.minRating,
-        with_status: filter === "tv" ? activeFilters.status : undefined,
+          filter === "movie" && selectedYear ? Number(selectedYear) : undefined,
+        vote_average_gte: selectedRating ? Number(selectedRating) : undefined,
+        with_status: filter === "tv" ? selectedStatus : undefined,
       };
 
-      // Build filter params for AniList
-      const anilistFilters = {
-        genres: activeFilters.genres,
-        seasonYear: activeFilters.year,
-        minScore: activeFilters.minRating
-          ? activeFilters.minRating * 10
-          : undefined,
-        status: activeFilters.status,
+      const anilistFilters: AniListFilterParams = {
+        genres: selectedGenres.length > 0 ? selectedGenres : undefined,
+        seasonYear: selectedYear ? Number(selectedYear) : undefined,
+        minScore: selectedRating ? Number(selectedRating) * 10 : undefined,
+        status: selectedStatus || undefined,
       };
 
       if (filter === "all" || filter === "tv" || filter === "movie") {
         const tmdbType: "multi" | "tv" | "movie" =
           filter === "all" ? "multi" : filter;
 
-        // Use discover endpoint for better filter support when we have filters
-        if (hasActiveFilters(activeFilters) && filter !== "all") {
+        if (hasActiveFilters && filter !== "all") {
           requests.push(
             discoverTmdb(filter, 1, tmdbFilters).then((r) =>
               r.results.map(normalizeTmdbMedia)
@@ -140,11 +163,15 @@ export function SearchScreen() {
           );
         } else {
           requests.push(
-            searchTmdb(normalizedQuery || "a", tmdbType, 1, tmdbFilters).then(
-              (r) =>
-                r.results
-                  .filter((item) => item.media_type !== "person")
-                  .map(normalizeTmdbMedia)
+            searchTmdb(
+              normalizedQuery || "a",
+              tmdbType,
+              1,
+              tmdbFilters
+            ).then((r) =>
+              r.results
+                .filter((item) => item.media_type !== "person")
+                .map(normalizeTmdbMedia)
             )
           );
         }
@@ -153,9 +180,7 @@ export function SearchScreen() {
       if (filter === "all" || filter === "anime") {
         requests.push(
           searchAniList(normalizedQuery || "", 1, 20, anilistFilters)
-            .then((r) =>
-              r.data.Page.media.map(normalizeAniListMedia)
-            )
+            .then((r) => r.data.Page.media.map(normalizeAniListMedia))
             .catch(() => searchJikan(normalizedQuery || "", 1))
         );
       }
@@ -191,23 +216,29 @@ export function SearchScreen() {
       setResults([]);
       setIsLoading(false);
     });
-  }, [debouncedQuery, filter, activeFilters]);
+  }, [
+    debouncedQuery,
+    filter,
+    selectedGenres,
+    selectedYear,
+    selectedRating,
+    selectedStatus,
+    hasActiveFilters,
+  ]);
 
   const resultLabel = useMemo(() => {
-    if (!debouncedQuery.trim() && !hasActiveFilters(activeFilters)) return "";
+    if (!debouncedQuery.trim() && !hasActiveFilters) return "";
     if (isLoading) return "Searching...";
     if (!results.length) return "No results found";
     return `${results.length} result${results.length === 1 ? "" : "s"}`;
-  }, [debouncedQuery, isLoading, results.length, activeFilters]);
+  }, [debouncedQuery, isLoading, results.length, hasActiveFilters]);
 
   const columns = getGridColumnCount(contentWidth, isWeb);
 
-  const handleApplyFilters = (filters: ActiveFilters) => {
-    setActiveFilters(filters);
-  };
-
-  const handleClearFilters = () => {
-    setActiveFilters({});
+  const toggleGenre = (genre: string) => {
+    setSelectedGenres((prev) =>
+      prev.includes(genre) ? prev.filter((g) => g !== genre) : [...prev, genre]
+    );
   };
 
   return (
@@ -236,12 +267,11 @@ export function SearchScreen() {
           <View className="pb-2">
             <PageIntro
               title="Search"
-              subtitle="Find shows, anime, and movies across all sources"
+              subtitle="Find shows, anime, and movies"
               eyebrow="Universal search"
               icon="search-outline"
               rightLabel={
-                (debouncedQuery.trim() || hasActiveFilters(activeFilters)) &&
-                !isLoading
+                (debouncedQuery.trim() || hasActiveFilters) && !isLoading
                   ? `${results.length} found`
                   : undefined
               }
@@ -259,28 +289,383 @@ export function SearchScreen() {
               value={filter}
               onValueChange={(newFilter) => {
                 setFilter(newFilter);
-                // Clear filters when switching media type as filter options differ
-                setActiveFilters({});
+                clearFilters();
               }}
               className="mb-3"
             />
 
-            {/* Filter Button */}
-            <View className="mb-4 flex-row gap-2">
-              <Button
-                label={filterCount > 0 ? `Filters (${filterCount})` : "Filters"}
-                variant={filterCount > 0 ? "primary" : "secondary"}
-                onPress={() => setIsFilterSheetOpen(true)}
-                className="flex-1"
-              />
-              {filterCount > 0 && (
-                <Button
-                  label="Clear"
-                  variant="ghost"
-                  onPress={handleClearFilters}
-                />
+            {/* Horizontal Filter Dropdowns */}
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              className="mb-4"
+              contentContainerStyle={{ gap: 8 }}
+            >
+              {/* Genre Dropdown */}
+              {genreOptions.length > 0 && (
+                <View>
+                  <Pressable
+                    onPress={() =>
+                      setOpenDropdown(
+                        openDropdown === "genres" ? null : "genres"
+                      )
+                    }
+                    className={`flex-row items-center gap-2 rounded-full border px-4 py-2 ${
+                      selectedGenres.length > 0
+                        ? "border-primary bg-primary"
+                        : "border-border-default bg-bg-surface"
+                    }`}
+                  >
+                    <Text
+                      className={`text-sm font-semibold ${
+                        selectedGenres.length > 0
+                          ? "text-white"
+                          : "text-text-secondary"
+                      }`}
+                    >
+                      {selectedGenres.length > 0
+                        ? `${selectedGenres.length} Genre${
+                            selectedGenres.length > 1 ? "s" : ""
+                          }`
+                        : "Genre"}
+                    </Text>
+                    <Text
+                      className={
+                        selectedGenres.length > 0
+                          ? "text-white"
+                          : "text-text-secondary"
+                      }
+                    >
+                      {openDropdown === "genres" ? "▲" : "▼"}
+                    </Text>
+                  </Pressable>
+
+                  {openDropdown === "genres" && (
+                    <View className="absolute top-full left-0 z-50 mt-2 max-h-64 w-56 rounded-xl border border-border-default bg-bg-primary shadow-xl">
+                      <ScrollView className="p-2">
+                        {genreOptions.map((option) => (
+                          <Pressable
+                            key={option.value}
+                            onPress={() => toggleGenre(option.value)}
+                            className="flex-row items-center justify-between rounded-lg px-3 py-2.5"
+                          >
+                            <Text
+                              className={`text-sm ${
+                                selectedGenres.includes(option.value)
+                                  ? "font-semibold text-primary"
+                                  : "text-text-secondary"
+                              }`}
+                            >
+                              {option.label}
+                            </Text>
+                            {selectedGenres.includes(option.value) && (
+                              <Text className="text-primary">✓</Text>
+                            )}
+                          </Pressable>
+                        ))}
+                      </ScrollView>
+                    </View>
+                  )}
+                </View>
               )}
-            </View>
+
+              {/* Year Dropdown */}
+              {yearOptions.length > 0 && (
+                <View>
+                  <Pressable
+                    onPress={() =>
+                      setOpenDropdown(openDropdown === "year" ? null : "year")
+                    }
+                    className={`flex-row items-center gap-2 rounded-full border px-4 py-2 ${
+                      selectedYear
+                        ? "border-primary bg-primary"
+                        : "border-border-default bg-bg-surface"
+                    }`}
+                  >
+                    <Text
+                      className={`text-sm font-semibold ${
+                        selectedYear ? "text-white" : "text-text-secondary"
+                      }`}
+                    >
+                      {selectedYear || "Year"}
+                    </Text>
+                    <Text
+                      className={
+                        selectedYear ? "text-white" : "text-text-secondary"
+                      }
+                    >
+                      {openDropdown === "year" ? "▲" : "▼"}
+                    </Text>
+                  </Pressable>
+
+                  {openDropdown === "year" && (
+                    <View className="absolute top-full left-0 z-50 mt-2 max-h-64 w-32 rounded-xl border border-border-default bg-bg-primary shadow-xl">
+                      <ScrollView className="p-2">
+                        <Pressable
+                          onPress={() => {
+                            setSelectedYear("");
+                            setOpenDropdown(null);
+                          }}
+                          className="rounded-lg px-3 py-2.5"
+                        >
+                          <Text
+                            className={`text-sm ${
+                              !selectedYear
+                                ? "font-semibold text-primary"
+                                : "text-text-secondary"
+                            }`}
+                          >
+                            Any Year
+                          </Text>
+                        </Pressable>
+                        {yearOptions.slice(0, 20).map((option) => (
+                          <Pressable
+                            key={option.value}
+                            onPress={() => {
+                              setSelectedYear(option.value);
+                              setOpenDropdown(null);
+                            }}
+                            className="rounded-lg px-3 py-2.5"
+                          >
+                            <Text
+                              className={`text-sm ${
+                                selectedYear === option.value
+                                  ? "font-semibold text-primary"
+                                  : "text-text-secondary"
+                              }`}
+                            >
+                              {option.label}
+                            </Text>
+                          </Pressable>
+                        ))}
+                      </ScrollView>
+                    </View>
+                  )}
+                </View>
+              )}
+
+              {/* Rating Dropdown */}
+              {ratingOptions.length > 0 && (
+                <View>
+                  <Pressable
+                    onPress={() =>
+                      setOpenDropdown(
+                        openDropdown === "rating" ? null : "rating"
+                      )
+                    }
+                    className={`flex-row items-center gap-2 rounded-full border px-4 py-2 ${
+                      selectedRating
+                        ? "border-primary bg-primary"
+                        : "border-border-default bg-bg-surface"
+                    }`}
+                  >
+                    <Text
+                      className={`text-sm font-semibold ${
+                        selectedRating ? "text-white" : "text-text-secondary"
+                      }`}
+                    >
+                      {selectedRating ? `${selectedRating}+ ⭐` : "Rating"}
+                    </Text>
+                    <Text
+                      className={
+                        selectedRating ? "text-white" : "text-text-secondary"
+                      }
+                    >
+                      {openDropdown === "rating" ? "▲" : "▼"}
+                    </Text>
+                  </Pressable>
+
+                  {openDropdown === "rating" && (
+                    <View className="absolute top-full left-0 z-50 mt-2 w-32 rounded-xl border border-border-default bg-bg-primary shadow-xl">
+                      <ScrollView className="p-2">
+                        <Pressable
+                          onPress={() => {
+                            setSelectedRating("");
+                            setOpenDropdown(null);
+                          }}
+                          className="rounded-lg px-3 py-2.5"
+                        >
+                          <Text
+                            className={`text-sm ${
+                              !selectedRating
+                                ? "font-semibold text-primary"
+                                : "text-text-secondary"
+                            }`}
+                          >
+                            Any Rating
+                          </Text>
+                        </Pressable>
+                        {ratingOptions.map((option) => (
+                          <Pressable
+                            key={option.value}
+                            onPress={() => {
+                              setSelectedRating(option.value);
+                              setOpenDropdown(null);
+                            }}
+                            className="rounded-lg px-3 py-2.5"
+                          >
+                            <Text
+                              className={`text-sm ${
+                                selectedRating === option.value
+                                  ? "font-semibold text-primary"
+                                  : "text-text-secondary"
+                              }`}
+                            >
+                              {option.label}
+                            </Text>
+                          </Pressable>
+                        ))}
+                      </ScrollView>
+                    </View>
+                  )}
+                </View>
+              )}
+
+              {/* Status Dropdown */}
+              {statusOptions.length > 0 && (
+                <View>
+                  <Pressable
+                    onPress={() =>
+                      setOpenDropdown(
+                        openDropdown === "status" ? null : "status"
+                      )
+                    }
+                    className={`flex-row items-center gap-2 rounded-full border px-4 py-2 ${
+                      selectedStatus
+                        ? "border-primary bg-primary"
+                        : "border-border-default bg-bg-surface"
+                    }`}
+                  >
+                    <Text
+                      className={`text-sm font-semibold ${
+                        selectedStatus ? "text-white" : "text-text-secondary"
+                      }`}
+                    >
+                      {selectedStatus
+                        ? statusOptions.find((o) => o.value === selectedStatus)
+                            ?.label || "Status"
+                        : "Status"}
+                    </Text>
+                    <Text
+                      className={
+                        selectedStatus ? "text-white" : "text-text-secondary"
+                      }
+                    >
+                      {openDropdown === "status" ? "▲" : "▼"}
+                    </Text>
+                  </Pressable>
+
+                  {openDropdown === "status" && (
+                    <View className="absolute top-full left-0 z-50 mt-2 w-40 rounded-xl border border-border-default bg-bg-primary shadow-xl">
+                      <ScrollView className="p-2">
+                        <Pressable
+                          onPress={() => {
+                            setSelectedStatus("");
+                            setOpenDropdown(null);
+                          }}
+                          className="rounded-lg px-3 py-2.5"
+                        >
+                          <Text
+                            className={`text-sm ${
+                              !selectedStatus
+                                ? "font-semibold text-primary"
+                                : "text-text-secondary"
+                            }`}
+                          >
+                            Any Status
+                          </Text>
+                        </Pressable>
+                        {statusOptions.map((option) => (
+                          <Pressable
+                            key={option.value}
+                            onPress={() => {
+                              setSelectedStatus(option.value);
+                              setOpenDropdown(null);
+                            }}
+                            className="rounded-lg px-3 py-2.5"
+                          >
+                            <Text
+                              className={`text-sm ${
+                                selectedStatus === option.value
+                                  ? "font-semibold text-primary"
+                                  : "text-text-secondary"
+                              }`}
+                            >
+                              {option.label}
+                            </Text>
+                          </Pressable>
+                        ))}
+                      </ScrollView>
+                    </View>
+                  )}
+                </View>
+              )}
+
+              {/* Clear Button */}
+              {hasActiveFilters && (
+                <Pressable
+                  onPress={clearFilters}
+                  className="rounded-full border border-border-default bg-bg-surface px-4 py-2"
+                >
+                  <Text className="text-sm font-semibold text-text-secondary">
+                    Clear
+                  </Text>
+                </Pressable>
+              )}
+            </ScrollView>
+
+            {/* Active Filter Tags */}
+            {hasActiveFilters && (
+              <View className="mb-3 flex-row flex-wrap gap-2">
+                {selectedGenres.map((genre) => (
+                  <Pressable
+                    key={genre}
+                    onPress={() => toggleGenre(genre)}
+                    className="flex-row items-center gap-1 rounded-full bg-primary px-3 py-1"
+                  >
+                    <Text className="text-xs font-medium text-white">
+                      {genreOptions.find((g) => g.value === genre)?.label ||
+                        genre}
+                    </Text>
+                    <Text className="text-xs text-white">×</Text>
+                  </Pressable>
+                ))}
+                {selectedYear && (
+                  <Pressable
+                    onPress={() => setSelectedYear("")}
+                    className="flex-row items-center gap-1 rounded-full bg-primary px-3 py-1"
+                  >
+                    <Text className="text-xs font-medium text-white">
+                      {selectedYear}
+                    </Text>
+                    <Text className="text-xs text-white">×</Text>
+                  </Pressable>
+                )}
+                {selectedRating && (
+                  <Pressable
+                    onPress={() => setSelectedRating("")}
+                    className="flex-row items-center gap-1 rounded-full bg-primary px-3 py-1"
+                  >
+                    <Text className="text-xs font-medium text-white">
+                      {selectedRating}+ ⭐
+                    </Text>
+                    <Text className="text-xs text-white">×</Text>
+                  </Pressable>
+                )}
+                {selectedStatus && (
+                  <Pressable
+                    onPress={() => setSelectedStatus("")}
+                    className="flex-row items-center gap-1 rounded-full bg-primary px-3 py-1"
+                  >
+                    <Text className="text-xs font-medium text-white">
+                      {statusOptions.find((s) => s.value === selectedStatus)
+                        ?.label}
+                    </Text>
+                    <Text className="text-xs text-white">×</Text>
+                  </Pressable>
+                )}
+              </View>
+            )}
 
             {resultLabel ? (
               <View className="mb-3 flex-row items-center justify-between">
@@ -302,8 +687,7 @@ export function SearchScreen() {
         }
         ListEmptyComponent={
           !isLoading ? (
-            !debouncedQuery.trim() &&
-            !hasActiveFilters(activeFilters) ? (
+            !debouncedQuery.trim() && !hasActiveFilters ? (
               <View className="mt-2 items-center rounded-xl border-2 border-border-default bg-bg-surface px-4 py-8">
                 <Text className="text-base font-semibold text-text-primary">
                   Search for anything
@@ -325,16 +709,6 @@ export function SearchScreen() {
           ) : null
         }
         ListFooterComponent={<View className="h-4" />}
-      />
-
-      {/* Filter Sheet */}
-      <FilterSheet
-        isVisible={isFilterSheetOpen}
-        onClose={() => setIsFilterSheetOpen(false)}
-        filters={availableFilters}
-        activeFilters={activeFilters}
-        onApplyFilters={handleApplyFilters}
-        onClearFilters={handleClearFilters}
       />
     </ScreenWrapper>
   );
