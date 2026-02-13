@@ -228,9 +228,9 @@ export async function getJikanAnimeEpisodes(
 
 export async function getJikanAnimeRelations(
   malId: number
-): Promise<JikanAnimeRelation[]> {
+): Promise<NormalizedShow[]> {
   const cacheKey = `jikan-anime-relations:${malId}`;
-  const cached = getCached<JikanAnimeRelation[]>(cacheKey);
+  const cached = getCached<NormalizedShow[]>(cacheKey);
   if (cached) {
     return cached;
   }
@@ -239,6 +239,16 @@ export async function getJikanAnimeRelations(
     `/anime/${malId}/relations`
   );
 
-  setCached(cacheKey, response.data, cacheTtlMs);
-  return response.data;
+  // Map raw Jikan relation entries to NormalizedShow stubs
+  const normalized: NormalizedShow[] = response.data.flatMap((relation) =>
+    relation.entry.map((entry) => ({
+      id: String(entry.mal_id),
+      title: entry.name,
+      malId: entry.mal_id,
+      mediaType: "anime" as const,
+    }))
+  );
+
+  setCached(cacheKey, normalized, cacheTtlMs);
+  return normalized;
 }

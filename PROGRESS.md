@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-Phase 8: Polish and validation (in progress)
+Phase 8b: Polish and validation - remaining items (in progress)
 
 ## Next Up
 
@@ -125,7 +125,7 @@ Phase 9: UI Polish - filters, stats redesign, watchlist removal, scroll fixes
   - [x] Discover infinite scroll for TV/anime/movies
   - [x] Browser swipe-back restoration on web (`overscroll-behavior-y` fix)
   - [x] List-page card consistency and add-show watchlist picker
-- [x] Phase 8: Data quality + anime franchise continuity
+- [x] Phase 8a: Data quality + anime franchise continuity (completed)
   - [x] API/normalization hardening across TMDB/AniList/Jikan/TVMaze
     - [x] TMDB runtime normalization fixes (movies + TV fallback via TVMaze lookup/search)
     - [x] AniList metadata expansion (`idMal`, format/season/year, relation graph access)
@@ -156,7 +156,7 @@ Phase 9: UI Polish - filters, stats redesign, watchlist removal, scroll fixes
 
 ## Pending
 
-- [ ] Phase 8: Polish and validation
+- [ ] Phase 8b: Polish and validation (remaining items)
   - [ ] API normalization parity check: ensure TV/anime/movie adapters return equivalent required fields where possible
   - [ ] Cross-source deduplication pass: resolve duplicates where TMDB TV/discovery already includes anime that also appears from AniList/Jikan
   - [ ] Anime season canonicalization: normalize franchises so season-based entries are grouped correctly (avoid split rows like "Title Season 1" + "Title Season 2" unless intended)

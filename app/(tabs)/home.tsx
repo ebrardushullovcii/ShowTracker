@@ -418,6 +418,8 @@ export default function HomeScreen() {
     relationSyncTriggeredRef.current = true;
     void syncTrackedAnimeRelations({ force: false }).catch((error) => {
       console.warn("Background anime relation sync failed", error);
+      // Reset the trigger so subsequent attempts can retry
+      relationSyncTriggeredRef.current = false;
     });
   }, [syncTrackedAnimeRelations]);
 

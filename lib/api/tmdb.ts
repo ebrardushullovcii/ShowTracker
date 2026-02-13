@@ -218,13 +218,43 @@ async function resolveTmdbTvRuntimeFallback(details: TmdbShowDetails) {
     return undefined;
   }
 
+  // Extract expected premiere year from TMDB data for validation
+  const firstAirDate = details.first_air_date;
+  const expectedYear = firstAirDate ? Number(firstAirDate.split("-")[0]) : undefined;
+
   try {
     const results = await searchTvMazeShows(title);
     for (const result of results) {
       const runtime = pickPositiveRuntime(result.show.runtime);
-      if (typeof runtime === "number") {
+      if (typeof runtime !== "number") {
+        continue;
+      }
+
+      // Validate match by premiere year when available
+      const tvMazePremiered = result.show.premiered;
+      const tvMazeYear = tvMazePremiered ? Number(tvMazePremiered.split("-")[0]) : undefined;
+
+      if (expectedYear && tvMazeYear && expectedYear === tvMazeYear) {
+        // Validated match by year
         return runtime;
       }
+
+      // If no year match but runtime is valid, check if we have externals for additional validation
+      const hasImdbMatch = result.show.externals?.imdb && imdbId && result.show.externals.imdb === imdbId;
+      if (hasImdbMatch) {
+        return runtime;
+      }
+
+      // If we have expected year but no match, continue to next candidate
+      if (expectedYear && tvMazeYear && expectedYear !== tvMazeYear) {
+        continue;
+      }
+
+      // Title-only fallback without verification - log warning for observability
+      console.warn(
+        `TVMaze runtime fallback: using unverified title-only match for "${title}" (expected year: ${expectedYear ?? "unknown"}, matched show premiered: ${tvMazePremiered ?? "unknown"})`
+      );
+      return runtime;
     }
   } catch {
     // Ignore fallback search failures.

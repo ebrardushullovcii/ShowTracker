@@ -664,13 +664,25 @@ export const addAnimeToWatchlistWithRelations = action({
       };
     }
 
-    const syncResult = await syncAnimeRelationRoot(ctx, userId, rootAnilistId);
-
-    return {
-      ...addResult,
-      ...syncResult,
-      rootAnilistId,
-    };
+    // Best-effort relation sync: don't abort watchlist add on sync failure
+    try {
+      const syncResult = await syncAnimeRelationRoot(ctx, userId, rootAnilistId);
+      return {
+        ...addResult,
+        ...syncResult,
+        rootAnilistId,
+      };
+    } catch {
+      // Sync failed but watchlist add succeeded; return partial success state
+      return {
+        ...addResult,
+        synced: false,
+        rootAnilistId,
+        discoveredShows: 0,
+        insertedUserShows: 0,
+        autoTrackedInserted: 0,
+      };
+    }
   },
 });
 

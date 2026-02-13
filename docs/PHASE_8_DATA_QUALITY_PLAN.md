@@ -226,6 +226,6 @@ Store artifacts under `artifacts/`.
 
 ## Non-Negotiable Product Guarantees
 
-1. One anime add should effectively follow its franchise timeline.
+1. Adding one anime should effectively follow its franchise timeline.
 2. New related seasons discovered later must auto-surface.
 3. Watchlist and Upcoming must reflect that automatically.
