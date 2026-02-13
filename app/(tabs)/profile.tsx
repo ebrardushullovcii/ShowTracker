@@ -303,12 +303,26 @@ export default function ProfileScreen() {
   const heroBackdropUrl = toHttpsImageUrl(heroBackdrop);
   const avatarUrl = toHttpsImageUrl(stats?.avatarUrl);
 
-  const favoriteShowRailItems = useMemo<RailItem[]>(
+  const favoriteTvRailItems = useMemo<RailItem[]>(
     () =>
       (favorites ?? [])
-        .filter((entry) => entry.mediaType !== "movie")
+        .filter((entry) => entry.mediaType === "tv")
         .map((entry) => ({
-          key: `fav-show-${String(entry.id)}`,
+          key: `fav-tv-${String(entry.id)}`,
+          routeId: null,
+          title: entry.title,
+          posterUrl: entry.posterUrl,
+          badge: "Favorite",
+        })),
+    [favorites]
+  );
+
+  const favoriteAnimeRailItems = useMemo<RailItem[]>(
+    () =>
+      (favorites ?? [])
+        .filter((entry) => entry.mediaType === "anime")
+        .map((entry) => ({
+          key: `fav-anime-${String(entry.id)}`,
           routeId: null,
           title: entry.title,
           posterUrl: entry.posterUrl,
@@ -331,24 +345,51 @@ export default function ProfileScreen() {
     [favorites]
   );
 
-  const activeShowRailItems = useMemo<RailItem[]>(
+  const activeTvRailItems = useMemo<RailItem[]>(
     () =>
-      (dashboard?.shows ?? []).map((entry) => ({
-        key: `active-show-${entry.id ?? entry.title}`,
-        routeId: getRouteId({
-          mediaType: entry.mediaType,
-          tmdbId: entry.tmdbId,
-          anilistId: entry.anilistId,
-          malId: entry.malId,
-        }),
-        title: entry.title,
-        posterUrl: entry.posterUrl,
-        meta:
-          typeof entry.remainingEpisodes === "number" && entry.remainingEpisodes > 0
-            ? `${entry.remainingEpisodes} left`
-            : formatStatus(entry.status),
-        badge: entry.mediaType === "anime" ? "Anime" : "TV",
-      })),
+      (dashboard?.shows ?? [])
+        .filter((entry) => entry.mediaType === "tv")
+        .map((entry) => ({
+          key: `active-tv-${entry.id ?? entry.title}`,
+          routeId: getRouteId({
+            mediaType: entry.mediaType,
+            tmdbId: entry.tmdbId,
+            anilistId: entry.anilistId,
+            malId: entry.malId,
+          }),
+          title: entry.title,
+          posterUrl: entry.posterUrl,
+          meta:
+            typeof entry.remainingEpisodes === "number" &&
+            entry.remainingEpisodes > 0
+              ? `${entry.remainingEpisodes} left`
+              : formatStatus(entry.status),
+          badge: "TV",
+        })),
+    [dashboard]
+  );
+
+  const activeAnimeRailItems = useMemo<RailItem[]>(
+    () =>
+      (dashboard?.shows ?? [])
+        .filter((entry) => entry.mediaType === "anime")
+        .map((entry) => ({
+          key: `active-anime-${entry.id ?? entry.title}`,
+          routeId: getRouteId({
+            mediaType: entry.mediaType,
+            tmdbId: entry.tmdbId,
+            anilistId: entry.anilistId,
+            malId: entry.malId,
+          }),
+          title: entry.title,
+          posterUrl: entry.posterUrl,
+          meta:
+            typeof entry.remainingEpisodes === "number" &&
+            entry.remainingEpisodes > 0
+              ? `${entry.remainingEpisodes} left`
+              : formatStatus(entry.status),
+          badge: "Anime",
+        })),
     [dashboard]
   );
 
@@ -374,8 +415,10 @@ export default function ProfileScreen() {
 
   const hasMoreRails =
     (lists?.length ?? 0) > visibleRailCount ||
-    favoriteShowRailItems.length > visibleRailCount ||
-    activeShowRailItems.length > visibleRailCount ||
+    favoriteTvRailItems.length > visibleRailCount ||
+    favoriteAnimeRailItems.length > visibleRailCount ||
+    activeTvRailItems.length > visibleRailCount ||
+    activeAnimeRailItems.length > visibleRailCount ||
     favoriteMovieRailItems.length > visibleRailCount ||
     activeMovieRailItems.length > visibleRailCount;
 
@@ -383,13 +426,21 @@ export default function ProfileScreen() {
     () => (lists ?? []).slice(0, visibleRailCount),
     [lists, visibleRailCount]
   );
-  const visibleFavoriteShowRailItems = useMemo(
-    () => favoriteShowRailItems.slice(0, visibleRailCount),
-    [favoriteShowRailItems, visibleRailCount]
+  const visibleFavoriteTvRailItems = useMemo(
+    () => favoriteTvRailItems.slice(0, visibleRailCount),
+    [favoriteTvRailItems, visibleRailCount]
   );
-  const visibleActiveShowRailItems = useMemo(
-    () => activeShowRailItems.slice(0, visibleRailCount),
-    [activeShowRailItems, visibleRailCount]
+  const visibleFavoriteAnimeRailItems = useMemo(
+    () => favoriteAnimeRailItems.slice(0, visibleRailCount),
+    [favoriteAnimeRailItems, visibleRailCount]
+  );
+  const visibleActiveTvRailItems = useMemo(
+    () => activeTvRailItems.slice(0, visibleRailCount),
+    [activeTvRailItems, visibleRailCount]
+  );
+  const visibleActiveAnimeRailItems = useMemo(
+    () => activeAnimeRailItems.slice(0, visibleRailCount),
+    [activeAnimeRailItems, visibleRailCount]
   );
   const visibleFavoriteMovieRailItems = useMemo(
     () => favoriteMovieRailItems.slice(0, visibleRailCount),
@@ -725,16 +776,31 @@ export default function ProfileScreen() {
           ) : null}
         </View>
 
-        {favoriteShowRailItems.length > 0 ? (
+        {favoriteTvRailItems.length > 0 ? (
           <View className="mt-8">
             <SectionHeader
-              title="Favorite Shows"
+              title="Favorite TV"
               icon="heart"
-              rightLabel={`${favoriteShowRailItems.length} FAVORITES`}
+              rightLabel={`${favoriteTvRailItems.length} FAVORITES`}
             />
             <PosterRail
-              items={visibleFavoriteShowRailItems}
-              emptyMessage="No favorite shows yet"
+              items={visibleFavoriteTvRailItems}
+              emptyMessage="No favorite TV yet"
+              isDesktop={isDesktop}
+            />
+          </View>
+        ) : null}
+
+        {favoriteAnimeRailItems.length > 0 ? (
+          <View className="mt-8">
+            <SectionHeader
+              title="Favorite Anime"
+              icon="heart"
+              rightLabel={`${favoriteAnimeRailItems.length} FAVORITES`}
+            />
+            <PosterRail
+              items={visibleFavoriteAnimeRailItems}
+              emptyMessage="No favorite anime yet"
               isDesktop={isDesktop}
             />
           </View>
@@ -757,13 +823,26 @@ export default function ProfileScreen() {
 
         <View className="mt-8">
           <SectionHeader
-            title="Shows"
+            title="TV Shows"
             icon="tv-outline"
-            rightLabel={`${dashboard?.shows?.length ?? 0} TRACKED`}
+            rightLabel={`${activeTvRailItems.length} TRACKED`}
           />
           <PosterRail
-            items={visibleActiveShowRailItems}
-            emptyMessage="Track a show to see it here"
+            items={visibleActiveTvRailItems}
+            emptyMessage="Track a TV show to see it here"
+            isDesktop={isDesktop}
+          />
+        </View>
+
+        <View className="mt-8">
+          <SectionHeader
+            title="Anime"
+            icon="planet-outline"
+            rightLabel={`${activeAnimeRailItems.length} TRACKED`}
+          />
+          <PosterRail
+            items={visibleActiveAnimeRailItems}
+            emptyMessage="Track an anime to see it here"
             isDesktop={isDesktop}
           />
         </View>

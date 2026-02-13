@@ -57,6 +57,21 @@ const showLookupInput = {
   tvmazeId: v.optional(v.number()),
 };
 
+const userShowStatusValidator = v.union(
+  v.literal("watching"),
+  v.literal("paused"),
+  v.literal("dropped"),
+  v.literal("completed"),
+  v.literal("plan_to_watch")
+);
+
+type UserShowStatus =
+  | "watching"
+  | "paused"
+  | "dropped"
+  | "completed"
+  | "plan_to_watch";
+
 function hasLookupArgs(args: {
   tmdbId?: number;
   anilistId?: number;
@@ -1185,6 +1200,125 @@ export const addToWatchlist = mutation({
     });
 
     return { status: "plan_to_watch" as const };
+  },
+});
+
+export const removeFromWatchlist = mutation({
+  args: {
+    show: v.object(showInput),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getCurrentUserId(ctx);
+    const show = await findShowByLookup(ctx, args.show);
+
+    if (!show) {
+      return {
+        removed: false,
+        watchedEpisodesRemoved: 0,
+      };
+    }
+
+    const userShow = await ctx.db
+      .query("userShows")
+      .withIndex("by_user_show", (q) => q.eq("userId", userId).eq("showId", show._id))
+      .unique();
+
+    if (!userShow) {
+      return {
+        removed: false,
+        watchedEpisodesRemoved: 0,
+      };
+    }
+
+    const watchedEpisodes = await ctx.db
+      .query("watchedEpisodes")
+      .withIndex("by_user_show", (q) => q.eq("userId", userId).eq("showId", show._id))
+      .collect();
+
+    for (const entry of watchedEpisodes) {
+      await ctx.db.delete(entry._id);
+    }
+
+    await ctx.db.delete(userShow._id);
+
+    return {
+      removed: true,
+      watchedEpisodesRemoved: watchedEpisodes.length,
+    };
+  },
+});
+
+export const setWatchlistStatus = mutation({
+  args: {
+    show: v.object(showInput),
+    status: userShowStatusValidator,
+  },
+  handler: async (ctx, args) => {
+    const userId = await getCurrentUserId(ctx);
+    const showId = await ensureShowRecordId(ctx, args.show);
+    const now = Date.now();
+
+    const relationRootAnilistId =
+      args.show.mediaType === "anime"
+        ? args.show.rootAnilistId ?? args.show.anilistId
+        : undefined;
+
+    const existing = await ctx.db
+      .query("userShows")
+      .withIndex("by_user_show", (q) => q.eq("userId", userId).eq("showId", showId))
+      .unique();
+
+    if (!existing) {
+      await ctx.db.insert("userShows", {
+        userId,
+        showId,
+        status: args.status,
+        ...(typeof relationRootAnilistId === "number"
+          ? {
+              relationRootAnilistId,
+              isAutoTracked: false,
+            }
+          : {}),
+        ...(args.status === "completed" ? { lastWatchedAt: now } : {}),
+        addedAt: now,
+      });
+
+      return {
+        inWatchlist: true,
+        status: args.status as UserShowStatus,
+      };
+    }
+
+    const patch: {
+      status: UserShowStatus;
+      relationRootAnilistId?: number;
+      isAutoTracked?: boolean;
+      lastWatchedAt?: number;
+    } = {
+      status: args.status as UserShowStatus,
+    };
+
+    if (typeof relationRootAnilistId === "number") {
+      patch.relationRootAnilistId = relationRootAnilistId;
+      if (
+        args.show.mediaType === "anime" &&
+        typeof args.show.anilistId === "number" &&
+        relationRootAnilistId === args.show.anilistId
+      ) {
+        patch.isAutoTracked = false;
+      }
+    }
+
+    if (args.status === "completed" && typeof existing.lastWatchedAt !== "number") {
+      patch.lastWatchedAt = now;
+    }
+
+    await ctx.db.patch(existing._id, patch);
+
+    return {
+      inWatchlist: true,
+      status: args.status as UserShowStatus,
+    };
   },
 });
 
