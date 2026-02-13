@@ -47,6 +47,7 @@ type LibraryItem = {
   remainingEpisodes: number | null;
   progressPercent: number | null;
   lastActivityAt: number;
+  genres: string[];
 };
 
 type LibraryDashboardItem = LibraryItem;
@@ -192,6 +193,8 @@ function LibraryCard({ item, isWeb }: { item: LibraryDashboardItem; isWeb: boole
 export default function LibraryScreen() {
   const [activeTab, setActiveTab] = useState<LibraryMediaTab>("tv");
   const [statusFilter, setStatusFilter] = useState<LibraryStatusFilter>("all");
+  const [selectedGenres, setSelectedGenres] = useState<string[]>([]);
+  const [genreDropdownOpen, setGenreDropdownOpen] = useState(false);
   const [visibleCount, setVisibleCount] = useState(8);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const { width } = useWindowDimensions();
@@ -214,14 +217,44 @@ export default function LibraryScreen() {
     [activeTab, sourceItems]
   );
 
-  const activeItems = useMemo(
-    () =>
-      applyTrackingFilters(mediaItems, {
-        media: "all",
-        status: statusFilter,
-      }),
-    [mediaItems, statusFilter]
-  );
+  // Extract unique genres from library items for current tab
+  const availableGenres = useMemo(() => {
+    const genres = new Set<string>();
+    mediaItems.forEach((item) => {
+      item.genres?.forEach((g) => genres.add(g));
+    });
+    return Array.from(genres).sort();
+  }, [mediaItems]);
+
+  // Filter by status and genres
+  const activeItems = useMemo(() => {
+    let items = applyTrackingFilters(mediaItems, {
+      media: "all",
+      status: statusFilter,
+    });
+    
+    // Apply genre filter
+    if (selectedGenres.length > 0) {
+      items = items.filter((item) =>
+        selectedGenres.some((g) => item.genres?.includes(g))
+      );
+    }
+    
+    return items;
+  }, [mediaItems, statusFilter, selectedGenres]);
+
+  const hasActiveFilters = selectedGenres.length > 0;
+
+  const toggleGenre = (genre: string) => {
+    setSelectedGenres((prev) =>
+      prev.includes(genre) ? prev.filter((g) => g !== genre) : [...prev, genre]
+    );
+  };
+
+  const clearFilters = () => {
+    setSelectedGenres([]);
+    setGenreDropdownOpen(false);
+  };
 
   const statusOptionsWithCounts = useMemo(
     () =>
@@ -242,7 +275,7 @@ export default function LibraryScreen() {
   useEffect(() => {
     setVisibleCount(Math.min(pageSize, activeItems.length));
     setIsLoadingMore(false);
-  }, [activeItems.length, activeTab, pageSize, statusFilter]);
+  }, [activeItems.length, activeTab, pageSize, statusFilter, selectedGenres]);
 
   useEffect(() => {
     return () => {
@@ -296,7 +329,7 @@ export default function LibraryScreen() {
       <View className="flex-1" onLayout={onGridLayout}>
         {gridWidth > 0 ? (
           <FlashList
-            key={`${activeTab}-${statusFilter}`}
+            key={`${activeTab}-${statusFilter}-${selectedGenres.join(",")}`}
             data={visibleItems}
             keyExtractor={getItemKey}
             renderItem={renderLibraryItem}
@@ -331,11 +364,76 @@ export default function LibraryScreen() {
                 />
 
                 <FilterChipGroup
-                  className="mb-4"
+                  className="mb-3"
                   options={statusOptionsWithCounts}
                   value={statusFilter}
                   onValueChange={(value) => setStatusFilter(value)}
                 />
+
+                {/* Genre Filter */}
+                {availableGenres.length > 0 && (
+                  <View className="mb-3">
+                    <Pressable
+                      onPress={() => setGenreDropdownOpen(!genreDropdownOpen)}
+                      className={`flex-row items-center gap-2 self-start rounded-full border px-4 py-2 ${
+                        selectedGenres.length > 0
+                          ? "border-primary bg-primary"
+                          : "border-border-default bg-bg-surface"
+                      }`}
+                    >
+                      <Text className={`text-sm font-semibold ${selectedGenres.length > 0 ? "text-white" : "text-text-secondary"}`}>
+                        {selectedGenres.length > 0 ? `${selectedGenres.length} Genre${selectedGenres.length > 1 ? "s" : ""}` : "Filter by Genre"}
+                      </Text>
+                      <Text className={selectedGenres.length > 0 ? "text-white" : "text-text-secondary"}>
+                        {genreDropdownOpen ? "▲" : "▼"}
+                      </Text>
+                    </Pressable>
+
+                    {genreDropdownOpen && (
+                      <View className="mt-2 rounded-xl border border-border-default bg-bg-surface p-3">
+                        <View className="flex-row flex-wrap gap-2">
+                          {availableGenres.map((genre) => (
+                            <Pressable
+                              key={genre}
+                              onPress={() => toggleGenre(genre)}
+                              className={`rounded-full border px-3 py-1.5 ${
+                                selectedGenres.includes(genre)
+                                  ? "border-primary bg-primary"
+                                  : "border-border-default bg-bg-primary"
+                              }`}
+                            >
+                              <Text className={`text-xs ${selectedGenres.includes(genre) ? "text-white" : "text-text-secondary"}`}>
+                                {genre}
+                              </Text>
+                            </Pressable>
+                          ))}
+                        </View>
+                      </View>
+                    )}
+
+                    {/* Selected Genre Tags */}
+                    {selectedGenres.length > 0 && (
+                      <View className="mt-2 flex-row flex-wrap gap-2">
+                        {selectedGenres.map((genre) => (
+                          <Pressable
+                            key={genre}
+                            onPress={() => toggleGenre(genre)}
+                            className="flex-row items-center gap-1 rounded-full bg-primary px-3 py-1"
+                          >
+                            <Text className="text-xs font-medium text-white">{genre}</Text>
+                            <Text className="text-xs text-white">×</Text>
+                          </Pressable>
+                        ))}
+                        <Pressable
+                          onPress={clearFilters}
+                          className="rounded-full border border-border-default bg-bg-surface px-3 py-1"
+                        >
+                          <Text className="text-xs font-semibold text-text-secondary">Clear</Text>
+                        </Pressable>
+                      </View>
+                    )}
+                  </View>
+                )}
 
                 {isLoading ? (
                   <View className="items-center gap-2 rounded-xl border-2 border-border-default bg-bg-surface py-8">
@@ -352,7 +450,7 @@ export default function LibraryScreen() {
                       No titles for these filters
                     </Text>
                     <Text className="mt-1 text-sm leading-relaxed text-text-secondary">
-                      Try another media tab or status filter.
+                      Try adjusting your status or genre filters.
                     </Text>
                   </View>
                 ) : null}

@@ -962,6 +962,7 @@ export const getHomeDashboard = query({
           remainingEpisodes,
           progressPercent,
           lastActivityAt: userShow.lastWatchedAt ?? userShow.addedAt,
+          genres: show.genres ?? [],
         };
       })
     );
