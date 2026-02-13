@@ -539,11 +539,15 @@ export function HomeScreen() {
     }
 
     canLoadPastFromEdgeRef.current = false;
-    void loadPastWeek().finally(() => {
-      setTimeout(() => {
-        canLoadPastFromEdgeRef.current = true;
-      }, EDGE_LOAD_COOLDOWN_MS);
-    });
+    void loadPastWeek()
+      .catch((error) => {
+        console.warn("Failed to load earlier upcoming range", error);
+      })
+      .finally(() => {
+        setTimeout(() => {
+          canLoadPastFromEdgeRef.current = true;
+        }, EDGE_LOAD_COOLDOWN_MS);
+      });
   }, [isLoadingPast, loadPastWeek]);
 
   const triggerLoadFuture = useCallback(() => {
@@ -555,11 +559,15 @@ export function HomeScreen() {
     }
 
     canLoadFutureFromEdgeRef.current = false;
-    void loadFutureWeek().finally(() => {
-      setTimeout(() => {
-        canLoadFutureFromEdgeRef.current = true;
-      }, EDGE_LOAD_COOLDOWN_MS);
-    });
+    void loadFutureWeek()
+      .catch((error) => {
+        console.warn("Failed to load later upcoming range", error);
+      })
+      .finally(() => {
+        setTimeout(() => {
+          canLoadFutureFromEdgeRef.current = true;
+        }, EDGE_LOAD_COOLDOWN_MS);
+      });
   }, [isLoadingFuture, loadFutureWeek]);
 
   useEffect(() => {

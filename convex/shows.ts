@@ -1408,7 +1408,7 @@ export const toggleEpisodeWatched = mutation({
       season: args.season,
       episode: args.episode,
       watchedAt: now,
-      runtime: args.runtime,
+      runtime: args.runtime ?? args.show.episodeRuntime,
       watchCount: 1,
       watchHistory: [now],
     });
@@ -1505,7 +1505,7 @@ export const batchRewatchEpisodes = mutation({
           season: entry.season,
           episode: entry.episode,
           watchedAt: now,
-          runtime: entry.runtime,
+          runtime: entry.runtime ?? args.show.episodeRuntime,
           watchCount: 1,
           watchHistory: [now],
         });
@@ -1594,7 +1594,7 @@ export const markSeasonWatched = mutation({
         season: args.season,
         episode: entry.episode,
         watchedAt: now,
-        runtime: entry.runtime,
+        runtime: entry.runtime ?? args.show.episodeRuntime,
         watchCount: 1,
         watchHistory: [now],
       });

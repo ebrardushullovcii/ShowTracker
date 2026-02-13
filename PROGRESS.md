@@ -179,19 +179,17 @@ Phase 8b: Finish remaining data-quality validation tasks
   - [ ] End-to-end QA on mobile image rendering, watch actions, and list edit flows
   - [ ] Final UX sweep for loading/error states and microcopy consistency
 
-- [ ] Phase 9: UI Polish
-  - [ ] Profile page stats redesign - improve visual layout and design of stats section
-  - [ ] Discover page advanced filters beyond media tabs (genre/status/sort refinements)
-  - [ ] Additional schedule polish for rare short-viewport and long-session edge cases
-  - [ ] Cross-platform UX QA pass for tracking status modal interactions (web/iOS/Android)
-
-## Known Issues
-
-- React Native Web emits `props.pointerEvents is deprecated. Use style.pointerEvents` warning from upstream internals.
-- Some API records still arrive without complete metadata (air dates, runtimes, or totals), requiring additional fallback validation.
-- Duplicate anime entries can appear when TMDB show feeds overlap with AniList/Jikan results.
-- Anime source mismatch: TMDB can return anime without season structure while AniList can expose seasonized entries as separate shows, causing split titles.
-- Continue UX QA pass for non-tab/detail screens on very small mobile heights.
+- [x] Phase 9b: Profile page redesign
+  - [x] Cinematic hero section (3-stop gradient, side vignette, taller hero, bigger avatar with primary ring, streak badge inline)
+  - [x] Stats section redesign with two toggleable versions (unified panel + polished cards)
+  - [x] Separated TV / Anime / Movie watch time and episode counts in stats
+  - [x] Smart multi-unit time formatting (`2d 5h`, `1mo 2w`, `1y 3mo`, etc.)
+  - [x] Section headers with icon pills, NativeWind-only typography
+  - [x] Lists section: left accent bars, softer borders, left-aligned create button
+  - [x] PosterRail: softer borders, improved empty states, refined badges
+  - [x] Tighter section spacing (`mt-6` cadence)
+  - [x] Fixed anime watch time not counting (fallback to show-level `episodeRuntime`)
+  - [x] Fixed all watched-episode mutations to persist runtime for anime via show-level fallback
 
 ## Future Phases (Post-Polish)
 
@@ -215,3 +213,11 @@ Phase 8b: Finish remaining data-quality validation tasks
 - [ ] Notifications for new episodes (push notifications)
 - [ ] Import from TVTime/Trakt
 - [ ] Recommendations based on watch history
+
+## Known Issues
+
+- React Native Web emits `props.pointerEvents is deprecated. Use style.pointerEvents` warning from upstream internals.
+- Some API records still arrive without complete metadata (air dates, runtimes, or totals), requiring additional fallback validation.
+- Duplicate anime entries can appear when TMDB show feeds overlap with AniList/Jikan results.
+- Anime source mismatch: TMDB can return anime without season structure while AniList can expose seasonized entries as separate shows, causing split titles.
+- Continue UX QA pass for non-tab/detail screens on very small mobile heights.
