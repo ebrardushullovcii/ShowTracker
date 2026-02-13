@@ -1,5 +1,5 @@
 import { useState, useCallback } from "react";
-import { Modal, Pressable, Text, View, ScrollView, Animated } from "react-native";
+import { Modal, Pressable, Text, View, ScrollView } from "react-native";
 import { Button } from "./Button";
 import type { ActiveFilters, FilterConfig } from "@/lib/filters";
 
@@ -12,51 +12,71 @@ interface FilterSheetProps {
   onClearFilters: () => void;
 }
 
-// Collapsible Section Component
-function FilterSection({
+// Section Header with expand/collapse
+function SectionHeader({
   title,
-  children,
   isExpanded,
   onToggle,
-  badgeCount = 0,
+  badgeCount,
 }: {
   title: string;
-  children: React.ReactNode;
   isExpanded: boolean;
   onToggle: () => void;
-  badgeCount?: number;
+  badgeCount: number;
 }) {
   return (
-    <View className="border-b border-border-default">
-      <Pressable
-        onPress={onToggle}
-        className="flex-row items-center justify-between px-5 py-4"
-      >
-        <View className="flex-row items-center gap-2">
-          <Text className="text-base font-bold text-text-primary">
-            {title}
-          </Text>
-          {badgeCount > 0 && (
-            <View className="rounded-full bg-primary px-2 py-0.5">
-              <Text className="text-xs font-bold text-white">{badgeCount}</Text>
-            </View>
-          )}
-        </View>
-        <Text className="text-xl text-text-secondary">
-          {isExpanded ? "−" : "+"}
+    <Pressable
+      onPress={onToggle}
+      className="flex-row items-center justify-between py-4"
+    >
+      <View className="flex-row items-center gap-2">
+        <Text className="text-sm font-bold uppercase tracking-wider text-text-primary">
+          {title}
         </Text>
-      </Pressable>
-      
-      {isExpanded && (
-        <View className="px-5 pb-5">
-          {children}
-        </View>
-      )}
-    </View>
+        {badgeCount > 0 && (
+          <View className="h-5 min-w-[20px] items-center justify-center rounded-full bg-primary px-1.5">
+            <Text className="text-xs font-bold text-white">{badgeCount}</Text>
+          </View>
+        )}
+      </View>
+      <Text className="text-lg text-text-secondary">
+        {isExpanded ? "−" : "+"}
+      </Text>
+    </Pressable>
   );
 }
 
-// Compact Chip Grid for Genres
+// Compact Chip for options
+function FilterChip({
+  label,
+  isSelected,
+  onPress,
+}: {
+  label: string;
+  isSelected: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      className={`rounded-lg border px-3 py-2 ${
+        isSelected
+          ? "border-primary bg-primary"
+          : "border-border-default bg-bg-surface"
+      }`}
+    >
+      <Text
+        className={`text-xs font-medium ${
+          isSelected ? "text-white" : "text-text-secondary"
+        }`}
+      >
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
+// Genre Grid with Show More
 function GenreGrid({
   options,
   selectedValues,
@@ -66,6 +86,9 @@ function GenreGrid({
   selectedValues: string[];
   onChange: (values: string[]) => void;
 }) {
+  const [showAll, setShowAll] = useState(false);
+  const displayOptions = showAll ? options : options.slice(0, 6);
+
   const toggleGenre = (value: string) => {
     if (selectedValues.includes(value)) {
       onChange(selectedValues.filter((v) => v !== value));
@@ -74,44 +97,23 @@ function GenreGrid({
     }
   };
 
-  // Show only first 8 genres, rest in "more"
-  const [showAll, setShowAll] = useState(false);
-  const displayOptions = showAll ? options : options.slice(0, 8);
-
   return (
     <View>
       <View className="flex-row flex-wrap gap-2">
-        {displayOptions.map((option) => {
-          const isSelected = selectedValues.includes(option.value);
-          return (
-            <Pressable
-              key={option.value}
-              onPress={() => toggleGenre(option.value)}
-              className={`rounded-lg border px-3 py-2 ${
-                isSelected
-                  ? "border-primary bg-primary"
-                  : "border-border-default bg-bg-surface"
-              }`}
-            >
-              <Text
-                className={`text-xs font-medium ${
-                  isSelected ? "text-white" : "text-text-secondary"
-                }`}
-              >
-                {option.label}
-              </Text>
-            </Pressable>
-          );
-        })}
+        {displayOptions.map((option) => (
+          <FilterChip
+            key={option.value}
+            label={option.label}
+            isSelected={selectedValues.includes(option.value)}
+            onPress={() => toggleGenre(option.value)}
+          />
+        ))}
       </View>
-      
-      {options.length > 8 && (
-        <Pressable
-          onPress={() => setShowAll(!showAll)}
-          className="mt-3 self-start"
-        >
+
+      {options.length > 6 && (
+        <Pressable onPress={() => setShowAll(!showAll)} className="mt-3">
           <Text className="text-sm font-semibold text-primary">
-            {showAll ? "Show Less" : `+${options.length - 8} More Genres`}
+            {showAll ? "Show Less" : `+${options.length - 6} More`}
           </Text>
         </Pressable>
       )}
@@ -119,130 +121,204 @@ function GenreGrid({
   );
 }
 
-// Year Selector with Compact View
+// Year Selector - Decade buttons + All Years scroll
 function YearSelector({
-  options,
   selectedValue,
   onChange,
 }: {
-  options: { value: string; label: string }[];
   selectedValue?: string;
   onChange: (value: string) => void;
 }) {
+  const currentYear = new Date().getFullYear();
+  const [viewMode, setViewMode] = useState<"decades" | "all">("decades");
+
   const decades = [
-    { label: "2020s", start: 2020, end: 2029 },
-    { label: "2010s", start: 2010, end: 2019 },
-    { label: "2000s", start: 2000, end: 2009 },
-    { label: "1990s", start: 1990, end: 1999 },
-    { label: "Older", start: 1950, end: 1989 },
+    { label: "2020s", years: [2024, 2023, 2022, 2021, 2020] },
+    { label: "2010s", years: [2019, 2018, 2017, 2016, 2015, 2014, 2013, 2012, 2011, 2010] },
+    { label: "2000s", years: [2009, 2008, 2007, 2006, 2005, 2004, 2003, 2002, 2001, 2000] },
+    { label: "1990s", years: [1999, 1998, 1997, 1996, 1995, 1994, 1993, 1992, 1991, 1990] },
+    { label: "1980s", years: [1989, 1988, 1987, 1986, 1985, 1984, 1983, 1982, 1981, 1980] },
+    { label: "1970s", years: [1979, 1978, 1977, 1976, 1975, 1974, 1973, 1972, 1971, 1970] },
+    { label: "1960s", years: [1969, 1968, 1967, 1966, 1965, 1964, 1963, 1962, 1961, 1960] },
+    { label: "Older", years: [1959, 1958, 1957, 1956, 1955, 1954, 1953, 1952, 1951, 1950] },
   ];
 
-  const [selectedDecade, setSelectedDecade] = useState<string | null>(null);
+  const [activeDecade, setActiveDecade] = useState<string | null>(null);
 
-  const getYearsInDecade = (decade: typeof decades[0]) => {
-    return options.filter((opt) => {
-      const year = parseInt(opt.value);
-      return year >= decade.start && year <= decade.end;
-    }).slice(0, 10); // Show max 10 years per decade
-  };
+  // Generate all years from current down to 1950
+  const allYears = Array.from({ length: currentYear - 1949 }, (_, i) => currentYear - i);
 
   return (
     <View>
-      {/* Decade selector */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        className="mb-3"
-        contentContainerStyle={{ gap: 8 }}
-      >
+      {/* View toggle */}
+      <View className="mb-3 flex-row gap-2">
         <Pressable
           onPress={() => {
             onChange("");
-            setSelectedDecade(null);
+            setActiveDecade(null);
+            setViewMode("decades");
           }}
           className={`rounded-full border px-4 py-2 ${
-            !selectedValue
+            !selectedValue && viewMode === "decades"
               ? "border-primary bg-primary"
               : "border-border-default bg-bg-surface"
           }`}
         >
           <Text
             className={`text-xs font-semibold ${
-              !selectedValue ? "text-white" : "text-text-secondary"
+              !selectedValue && viewMode === "decades" ? "text-white" : "text-text-secondary"
+            }`}
+          >
+            Any
+          </Text>
+        </Pressable>
+        <Pressable
+          onPress={() => setViewMode("decades")}
+          className={`rounded-full border px-4 py-2 ${
+            viewMode === "decades" && selectedValue
+              ? "border-primary bg-primary"
+              : "border-border-default bg-bg-surface"
+          }`}
+        >
+          <Text
+            className={`text-xs font-semibold ${
+              viewMode === "decades" && selectedValue ? "text-white" : "text-text-secondary"
+            }`}
+          >
+            By Decade
+          </Text>
+        </Pressable>
+        <Pressable
+          onPress={() => setViewMode("all")}
+          className={`rounded-full border px-4 py-2 ${
+            viewMode === "all"
+              ? "border-primary bg-primary"
+              : "border-border-default bg-bg-surface"
+          }`}
+        >
+          <Text
+            className={`text-xs font-semibold ${
+              viewMode === "all" ? "text-white" : "text-text-secondary"
             }`}
           >
             All Years
           </Text>
         </Pressable>
-        
-        {decades.map((decade) => (
-          <Pressable
-            key={decade.label}
-            onPress={() => setSelectedDecade(decade.label)}
-            className={`rounded-full border px-4 py-2 ${
-              selectedDecade === decade.label
-                ? "border-primary bg-primary"
-                : "border-border-default bg-bg-surface"
-            }`}
-          >
-            <Text
-              className={`text-xs font-semibold ${
-                selectedDecade === decade.label
-                  ? "text-white"
-                  : "text-text-secondary"
-              }`}
-            >
-              {decade.label}
-            </Text>
-          </Pressable>
-        ))}
-      </ScrollView>
+      </View>
 
-      {/* Year grid for selected decade */}
-      {selectedDecade && (
-        <View className="rounded-xl bg-bg-surface p-3">
+      {/* Decades view */}
+      {viewMode === "decades" && (
+        <View>
           <View className="flex-row flex-wrap gap-2">
-            {getYearsInDecade(
-              decades.find((d) => d.label === selectedDecade)!
-            ).map((year) => (
+            {decades.map((decade) => (
               <Pressable
-                key={year.value}
-                onPress={() => onChange(year.value)}
-                className={`rounded-lg border px-3 py-2 ${
-                  selectedValue === year.value
+                key={decade.label}
+                onPress={() =>
+                  setActiveDecade(activeDecade === decade.label ? null : decade.label)
+                }
+                className={`rounded-full border px-4 py-2 ${
+                  activeDecade === decade.label
                     ? "border-primary bg-primary"
-                    : "border-border-default bg-bg-primary"
+                    : "border-border-default bg-bg-surface"
                 }`}
               >
                 <Text
-                  className={`text-xs font-medium ${
-                    selectedValue === year.value
-                      ? "text-white"
-                      : "text-text-secondary"
+                  className={`text-xs font-semibold ${
+                    activeDecade === decade.label ? "text-white" : "text-text-secondary"
                   }`}
                 >
-                  {year.label}
+                  {decade.label}
                 </Text>
               </Pressable>
             ))}
           </View>
+
+          {/* Years in selected decade */}
+          {activeDecade && (
+            <View className="mt-3 rounded-xl border border-border-default bg-bg-surface p-3">
+              <Text className="mb-2 text-xs font-semibold uppercase text-text-secondary">
+                Select Year
+              </Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                <View className="flex-row gap-2">
+                  {decades
+                    .find((d) => d.label === activeDecade)
+                    ?.years.filter((y) => y <= currentYear)
+                    .map((year) => (
+                      <Pressable
+                        key={year}
+                        onPress={() => onChange(String(year))}
+                        className={`rounded-lg border px-4 py-2 ${
+                          selectedValue === String(year)
+                            ? "border-primary bg-primary"
+                            : "border-border-default bg-bg-primary"
+                        }`}
+                      >
+                        <Text
+                          className={`text-sm font-medium ${
+                            selectedValue === String(year)
+                              ? "text-white"
+                              : "text-text-secondary"
+                          }`}
+                        >
+                          {year}
+                        </Text>
+                      </Pressable>
+                    ))}
+                </View>
+              </ScrollView>
+            </View>
+          )}
         </View>
       )}
-      
-      {/* Show selected year if not in a decade */}
-      {selectedValue && !selectedDecade && (
-        <View className="rounded-xl bg-bg-surface p-3">
-          <View className="flex-row items-center justify-between">
-            <Text className="text-sm font-semibold text-text-primary">
-              {selectedValue}
-            </Text>
-            <Pressable
-              onPress={() => onChange("")}
-              className="rounded-full bg-border-default px-2 py-1"
-            >
-              <Text className="text-xs">✕</Text>
-            </Pressable>
-          </View>
+
+      {/* All Years view */}
+      {viewMode === "all" && (
+        <View className="rounded-xl border border-border-default bg-bg-surface p-3">
+          <ScrollView 
+            horizontal 
+            showsHorizontalScrollIndicator={true}
+            className="max-h-16"
+          >
+            <View className="flex-row flex-wrap gap-2" style={{ width: 300 }}>
+              {allYears.map((year) => (
+                <Pressable
+                  key={year}
+                  onPress={() => onChange(String(year))}
+                  className={`rounded-lg border px-3 py-2 ${
+                    selectedValue === String(year)
+                      ? "border-primary bg-primary"
+                      : "border-border-default bg-bg-primary"
+                  }`}
+                >
+                  <Text
+                    className={`text-xs font-medium ${
+                      selectedValue === String(year)
+                        ? "text-white"
+                        : "text-text-secondary"
+                    }`}
+                  >
+                    {year}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </ScrollView>
+        </View>
+      )}
+
+      {/* Selected year display */}
+      {selectedValue && (
+        <View className="mt-3 flex-row items-center justify-between rounded-xl border border-border-default bg-bg-surface p-3">
+          <Text className="text-sm font-semibold text-text-primary">
+            Selected: {selectedValue}
+          </Text>
+          <Pressable
+            onPress={() => onChange("")}
+            className="rounded-full bg-border-default px-3 py-1"
+          >
+            <Text className="text-xs font-bold">✕</Text>
+          </Pressable>
         </View>
       )}
     </View>
@@ -251,19 +327,24 @@ function YearSelector({
 
 // Rating Selector
 function RatingSelector({
-  options,
   selectedValue,
   onChange,
 }: {
-  options: { value: string; label: string }[];
   selectedValue?: string;
   onChange: (value: string) => void;
 }) {
+  const ratings = [
+    { value: "8", label: "8+" },
+    { value: "7", label: "7+" },
+    { value: "6", label: "6+" },
+    { value: "5", label: "5+" },
+  ];
+
   return (
     <View className="flex-row gap-2">
       <Pressable
         onPress={() => onChange("")}
-        className={`flex-1 rounded-xl border px-4 py-3 ${
+        className={`flex-1 rounded-xl border py-3 ${
           !selectedValue
             ? "border-primary bg-primary"
             : "border-border-default bg-bg-surface"
@@ -274,28 +355,26 @@ function RatingSelector({
             !selectedValue ? "text-white" : "text-text-secondary"
           }`}
         >
-          Any Rating
+          Any
         </Text>
       </Pressable>
-      
-      {options.map((option) => (
+
+      {ratings.map((rating) => (
         <Pressable
-          key={option.value}
-          onPress={() => onChange(option.value)}
-          className={`flex-1 rounded-xl border px-4 py-3 ${
-            selectedValue === option.value
+          key={rating.value}
+          onPress={() => onChange(rating.value)}
+          className={`flex-1 rounded-xl border py-3 ${
+            selectedValue === rating.value
               ? "border-primary bg-primary"
               : "border-border-default bg-bg-surface"
           }`}
         >
           <Text
             className={`text-center text-sm font-semibold ${
-              selectedValue === option.value
-                ? "text-white"
-                : "text-text-secondary"
+              selectedValue === rating.value ? "text-white" : "text-text-secondary"
             }`}
           >
-            {option.label}
+            {rating.label}
           </Text>
         </Pressable>
       ))}
@@ -317,7 +396,7 @@ function StatusSelector({
     <View className="flex-row flex-wrap gap-2">
       <Pressable
         onPress={() => onChange("")}
-        className={`rounded-lg border px-4 py-2.5 ${
+        className={`rounded-full border px-4 py-2 ${
           !selectedValue
             ? "border-primary bg-primary"
             : "border-border-default bg-bg-surface"
@@ -328,15 +407,15 @@ function StatusSelector({
             !selectedValue ? "text-white" : "text-text-secondary"
           }`}
         >
-          Any Status
+          Any
         </Text>
       </Pressable>
-      
+
       {options.map((option) => (
         <Pressable
           key={option.value}
           onPress={() => onChange(option.value)}
-          className={`rounded-lg border px-4 py-2.5 ${
+          className={`rounded-full border px-4 py-2 ${
             selectedValue === option.value
               ? "border-primary bg-primary"
               : "border-border-default bg-bg-surface"
@@ -344,9 +423,7 @@ function StatusSelector({
         >
           <Text
             className={`text-sm font-medium ${
-              selectedValue === option.value
-                ? "text-white"
-                : "text-text-secondary"
+              selectedValue === option.value ? "text-white" : "text-text-secondary"
             }`}
           >
             {option.label}
@@ -400,67 +477,28 @@ export function FilterSheet({
     });
   };
 
-  const getFilterValue = (filter: FilterConfig): string | string[] | undefined => {
-    const value = localFilters[filter.id as keyof ActiveFilters];
-    if (filter.id === "year" || filter.id === "minRating") {
+  const getFilterValue = (filterId: string): string | string[] | undefined => {
+    const value = localFilters[filterId as keyof ActiveFilters];
+    if (filterId === "year" || filterId === "minRating") {
       return value !== undefined ? String(value) : undefined;
     }
     return value as string | string[] | undefined;
   };
 
-  const getActiveCountForFilter = (filter: FilterConfig): number => {
-    const value = localFilters[filter.id as keyof ActiveFilters];
+  const getActiveCount = (filterId: string): number => {
+    const value = localFilters[filterId as keyof ActiveFilters];
     if (Array.isArray(value)) return value.length;
     return value !== undefined ? 1 : 0;
   };
 
-  const hasChanges = JSON.stringify(localFilters) !== JSON.stringify(activeFilters);
-
-  const totalActiveFilters = Object.values(localFilters).reduce<number>((count, value) => {
+  const totalActive = Object.values(localFilters).reduce<number>((count, value) => {
     if (Array.isArray(value)) return count + value.length;
     return value !== undefined ? count + 1 : count;
   }, 0);
 
-  const renderFilterContent = (filter: FilterConfig) => {
-    const value = getFilterValue(filter);
-    
-    switch (filter.id) {
-      case "genres":
-        return (
-          <GenreGrid
-            options={filter.options || []}
-            selectedValues={(value as string[]) || []}
-            onChange={(values) => updateFilter(filter.id, values)}
-          />
-        );
-      case "year":
-        return (
-          <YearSelector
-            options={filter.options || []}
-            selectedValue={value as string | undefined}
-            onChange={(val) => updateFilter(filter.id, val)}
-          />
-        );
-      case "minRating":
-        return (
-          <RatingSelector
-            options={filter.options || []}
-            selectedValue={value as string | undefined}
-            onChange={(val) => updateFilter(filter.id, val)}
-          />
-        );
-      case "status":
-        return (
-          <StatusSelector
-            options={filter.options || []}
-            selectedValue={value as string | undefined}
-            onChange={(val) => updateFilter(filter.id, val)}
-          />
-        );
-      default:
-        return null;
-    }
-  };
+  const hasChanges = JSON.stringify(localFilters) !== JSON.stringify(activeFilters);
+
+  const getFilterConfig = (filterId: string) => filters.find((f) => f.id === filterId);
 
   return (
     <Modal
@@ -468,67 +506,128 @@ export function FilterSheet({
       transparent
       animationType="slide"
       onRequestClose={onClose}
+      statusBarTranslucent
     >
-      <View className="flex-1 justify-end">
-        {/* Solid Backdrop */}
-        <Pressable 
-          className="flex-1 bg-black/60" 
-          onPress={onClose}
-        />
+      {/* Full screen container */}
+      <View className="flex-1 bg-black/80">
+        {/* Backdrop - closes on press */}
+        <Pressable className="flex-1" onPress={onClose} />
 
-        {/* Sheet Content - No Transparency */}
-        <View className="max-h-[90%] overflow-hidden rounded-t-3xl bg-bg-primary shadow-2xl">
-          {/* Handle bar */}
-          <View className="items-center pt-3 pb-2 bg-bg-primary">
-            <View className="h-1 w-12 rounded-full bg-border-default" />
+        {/* Sheet */}
+        <View className="max-h-[85%] rounded-t-3xl bg-bg-primary">
+          {/* Handle */}
+          <View className="items-center py-2">
+            <View className="h-1 w-10 rounded-full bg-border-default" />
           </View>
 
           {/* Header */}
-          <View className="flex-row items-center justify-between border-b border-border-default bg-bg-primary px-5 py-4">
-            <View>
-              <Text className="text-xl font-black text-text-primary">
-                Filters
-              </Text>
-              {totalActiveFilters > 0 && (
-                <Text className="mt-0.5 text-sm text-primary font-semibold">
-                  {totalActiveFilters} selected
-                </Text>
-              )}
-            </View>
+          <View className="flex-row items-center justify-between border-b border-border-default px-5 py-3">
+            <Text className="text-lg font-black text-text-primary">Filters</Text>
+            {totalActive > 0 && (
+              <View className="rounded-full bg-primary px-2 py-0.5">
+                <Text className="text-xs font-bold text-white">{totalActive}</Text>
+              </View>
+            )}
             <Pressable
               onPress={onClose}
-              className="rounded-full bg-bg-surface px-4 py-2 border border-border-default"
+              className="rounded-full bg-bg-surface px-4 py-2"
             >
-              <Text className="text-sm font-bold text-text-secondary">
-                Close
-              </Text>
+              <Text className="text-sm font-semibold text-text-secondary">Close</Text>
             </Pressable>
           </View>
 
-          {/* Filter Content */}
-          <ScrollView 
-            className="bg-bg-primary"
-            showsVerticalScrollIndicator={false}
-          >
-            {filters.map((filter) => (
-              <FilterSection
-                key={filter.id}
-                title={filter.label}
-                isExpanded={expandedSections[filter.id] ?? false}
-                onToggle={() => toggleSection(filter.id)}
-                badgeCount={getActiveCountForFilter(filter)}
-              >
-                {renderFilterContent(filter)}
-              </FilterSection>
-            ))}
-            <View className="h-32" />
+          {/* Content */}
+          <ScrollView className="px-5" showsVerticalScrollIndicator={false}>
+            {/* Genres Section */}
+            {getFilterConfig("genres") && (
+              <View className="border-b border-border-default">
+                <SectionHeader
+                  title="Genres"
+                  isExpanded={expandedSections.genres}
+                  onToggle={() => toggleSection("genres")}
+                  badgeCount={getActiveCount("genres")}
+                />
+                {expandedSections.genres && (
+                  <View className="pb-4">
+                    <GenreGrid
+                      options={getFilterConfig("genres")?.options || []}
+                      selectedValues={(getFilterValue("genres") as string[]) || []}
+                      onChange={(vals) => updateFilter("genres", vals)}
+                    />
+                  </View>
+                )}
+              </View>
+            )}
+
+            {/* Year Section */}
+            {getFilterConfig("year") && (
+              <View className="border-b border-border-default">
+                <SectionHeader
+                  title="Year"
+                  isExpanded={expandedSections.year}
+                  onToggle={() => toggleSection("year")}
+                  badgeCount={getActiveCount("year")}
+                />
+                {expandedSections.year && (
+                  <View className="pb-4">
+                    <YearSelector
+                      selectedValue={getFilterValue("year") as string | undefined}
+                      onChange={(val) => updateFilter("year", val)}
+                    />
+                  </View>
+                )}
+              </View>
+            )}
+
+            {/* Rating Section */}
+            {getFilterConfig("minRating") && (
+              <View className="border-b border-border-default">
+                <SectionHeader
+                  title="Min Rating"
+                  isExpanded={expandedSections.minRating}
+                  onToggle={() => toggleSection("minRating")}
+                  badgeCount={getActiveCount("minRating")}
+                />
+                {expandedSections.minRating && (
+                  <View className="pb-4">
+                    <RatingSelector
+                      selectedValue={getFilterValue("minRating") as string | undefined}
+                      onChange={(val) => updateFilter("minRating", val)}
+                    />
+                  </View>
+                )}
+              </View>
+            )}
+
+            {/* Status Section */}
+            {getFilterConfig("status") && (
+              <View className="border-b border-border-default">
+                <SectionHeader
+                  title="Status"
+                  isExpanded={expandedSections.status}
+                  onToggle={() => toggleSection("status")}
+                  badgeCount={getActiveCount("status")}
+                />
+                {expandedSections.status && (
+                  <View className="pb-4">
+                    <StatusSelector
+                      options={getFilterConfig("status")?.options || []}
+                      selectedValue={getFilterValue("status") as string | undefined}
+                      onChange={(val) => updateFilter("status", val)}
+                    />
+                  </View>
+                )}
+              </View>
+            )}
+
+            <View className="h-24" />
           </ScrollView>
 
-          {/* Footer Actions */}
-          <View className="absolute bottom-0 left-0 right-0 border-t-2 border-border-default bg-bg-primary px-5 py-4 shadow-lg">
+          {/* Footer */}
+          <View className="absolute bottom-0 left-0 right-0 border-t border-border-default bg-bg-primary px-5 py-4">
             <View className="flex-row gap-3">
               <Button
-                label="Clear All"
+                label="Clear"
                 variant="secondary"
                 onPress={handleClear}
                 className="flex-1"
