@@ -161,18 +161,23 @@ This document provides comprehensive test cases for watch action functionality a
 
 ## Automation Commands
 
-Run these test commands:
+Run these test commands (when tests are implemented):
 
 ```bash
-# Unit tests for watch actions
-npx jest lib/metadata-utils.test.ts
+# Run all unit tests
+npx jest
 
-# Integration tests for episode tracking
-npx jest convex/shows.test.ts --testNamePattern="episode"
+# Run all integration tests  
+npx jest --testPathPattern="convex"
 
-# E2E tests for watch flows
-npx playwright test e2e/watch-actions.spec.ts
+# Run E2E tests (when implemented)
+npx playwright test
 ```
+
+Note: Unit/integration/E2E tests for watch actions are not yet implemented. 
+To add tests, create test files in the appropriate directories (e.g., 
+`lib/*.test.ts` for unit tests, `convex/*.test.ts` for integration tests, 
+or `e2e/*.spec.ts` for E2E tests).
 
 ## Test Data Requirements
 

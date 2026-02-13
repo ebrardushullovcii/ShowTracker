@@ -16,10 +16,12 @@ This document provides instructions for running automated tests using the browse
 
 ## Test Credentials
 
-Test credentials are stored in `.env.test` (do not commit this file):
+Test credentials are stored in `.env.test` (do not commit this file).
+Copy `.env.example` to `.env.test` and fill in your test credentials:
+
 ```
-TEST_EMAIL=ebrarzzz@gmail.com
-TEST_PASSWORD=neveragain13
+TEST_EMAIL=your-test-email@example.com
+TEST_PASSWORD=your-test-password
 ```
 
 ## Using the Browser Automation Tool
@@ -60,9 +62,9 @@ agent-browser open http://localhost:8081/login
 agent-browser wait --load networkidle
 agent-browser snapshot -i
 
-# Fill credentials
-agent-browser fill @e1 "ebrarzzz@gmail.com"  # Email
-agent-browser fill @e2 "neveragain13"        # Password
+# Fill credentials (use values from .env.test)
+agent-browser fill @e1 "$TEST_EMAIL"  # Email
+agent-browser fill @e2 "$TEST_PASSWORD"        # Password
 
 # Submit (press Enter or find Sign In button)
 agent-browser press Enter

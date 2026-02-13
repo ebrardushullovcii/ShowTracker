@@ -5,9 +5,9 @@
 # Tests require the app to be running:
 #   npx expo start --web
 #
-# Environment variables (from .env.test or set directly):
-#   TEST_EMAIL=ebrarzzz@gmail.com
-#   TEST_PASSWORD=neveragain13
+# Environment variables (set in .env.test):
+#   TEST_EMAIL
+#   TEST_PASSWORD
 
 set -e
 
@@ -22,13 +22,21 @@ if [ -f "$(dirname "$0")/../.env.test" ]; then
     source "$(dirname "$0")/../.env.test"
 fi
 
-# Default values
-TEST_EMAIL="${TEST_EMAIL:-ebrarzzz@gmail.com}"
-TEST_PASSWORD="${TEST_PASSWORD:-neveragain13}"
+# Fail fast if required environment variables are not set
+if [ -z "$TEST_EMAIL" ] || [ -z "$TEST_PASSWORD" ]; then
+    echo -e "${RED}Error: Missing required environment variables${NC}"
+    echo "Please create .env.test with TEST_EMAIL and TEST_PASSWORD"
+    echo ""
+    echo "Example .env.test:"
+    echo "  TEST_EMAIL=your-test-email@example.com"
+    echo "  TEST_PASSWORD=your-test-password"
+    exit 1
+fi
+
 BASE_URL="${BASE_URL:-http://localhost:8081}"
 
 echo -e "${GREEN}=== ShowTracker Automated Tests ===${NC}"
-echo "Email: $TEST_EMAIL"
+echo "Email: configured"
 echo "Base URL: $BASE_URL"
 echo ""
 

@@ -1287,6 +1287,10 @@ export const setWatchlistStatus = mutation({
         insertData.completedAt = now;
       }
       
+      if (args.status === "watching") {
+        insertData.lastWatchedAt = now;
+      }
+      
       if (args.status === "dropped") {
         insertData.droppedAt = now;
       }
@@ -1321,6 +1325,10 @@ export const setWatchlistStatus = mutation({
       }
       patch.completedAt = now;
       patch.droppedAt = undefined; // Clear dropped date if completed
+    }
+
+    if (args.status === "watching" && typeof existing.lastWatchedAt !== "number") {
+      patch.lastWatchedAt = now;
     }
     
     if (args.status === "dropped") {
@@ -1462,6 +1470,13 @@ export const toggleEpisodeWatched = mutation({
       
       if (statusChanged) {
         updateData.statusChangedAt = now;
+        // Clear stale automation fields when status changes
+        if (userShow.autoPausedAt) {
+          updateData.autoPausedAt = undefined;
+        }
+        if (userShow.droppedAt) {
+          updateData.droppedAt = undefined;
+        }
       }
       
       if (nextStatus === "completed") {
@@ -2539,6 +2554,7 @@ async function updateStatusBasedOnProgress(
 export const getUserAutomationPreferences = query({
   args: {},
   handler: async (ctx) => {
+    await getCurrentUserId(ctx);
     // Return default preferences until user settings are implemented
     return {
       autoPauseEnabled: true,

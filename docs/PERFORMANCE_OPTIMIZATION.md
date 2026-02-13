@@ -164,12 +164,14 @@ Add performance monitoring:
 
 ```typescript
 // Log render times in development
-if (__DEV__) {
-  const start = performance.now();
-  useEffect(() => {
-    console.log(`Render time: ${performance.now() - start}ms`);
-  });
-}
+useEffect(() => {
+  if (__DEV__) {
+    const start = performance.now();
+    requestAnimationFrame(() => {
+      console.log(`Render time: ${performance.now() - start}ms`);
+    });
+  }
+}, []);
 ```
 
 ## Tools Used
