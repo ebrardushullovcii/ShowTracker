@@ -263,21 +263,104 @@ async function resolveTmdbTvRuntimeFallback(details: TmdbShowDetails) {
   return undefined;
 }
 
+export type TmdbFilterParams = {
+  with_genres?: string;
+  first_air_date_year?: number;
+  primary_release_year?: number;
+  vote_average_gte?: number;
+  with_status?: string;
+};
+
 export async function searchTmdb(
   query: string,
   mediaType: "multi" | "tv" | "movie" = "multi",
-  page = 1
+  page = 1,
+  filters?: TmdbFilterParams
 ) {
-  const cacheKey = `tmdb-search:${mediaType}:${query}:${page}`;
+  const filterKey = filters
+    ? Object.entries(filters)
+        .map(([k, v]) => `${k}:${v}`)
+        .join(",")
+    : "";
+  const cacheKey = `tmdb-search:${mediaType}:${query}:${page}:${filterKey}`;
   const cached = getCached<TmdbSearchResult>(cacheKey);
   if (cached) {
     return cached;
   }
-  const data = await request<TmdbSearchResult>(`/search/${mediaType}`, {
+
+  const params: Record<string, string | number> = {
     query,
     page,
     include_adult: "false",
-  });
+  };
+
+  // Add filter params if provided
+  if (filters) {
+    if (filters.with_genres) {
+      params.with_genres = filters.with_genres;
+    }
+    if (filters.first_air_date_year) {
+      params.first_air_date_year = filters.first_air_date_year;
+    }
+    if (filters.primary_release_year) {
+      params.primary_release_year = filters.primary_release_year;
+    }
+    if (filters.vote_average_gte) {
+      params["vote_average.gte"] = filters.vote_average_gte;
+    }
+    if (filters.with_status) {
+      params.with_status = filters.with_status;
+    }
+  }
+
+  const data = await request<TmdbSearchResult>(`/search/${mediaType}`, params);
+  setCached(cacheKey, data, cacheTtlMs);
+  return data;
+}
+
+// Discover endpoint for filtered browsing (better for filters than search)
+export async function discoverTmdb(
+  mediaType: "tv" | "movie",
+  page = 1,
+  filters?: TmdbFilterParams
+) {
+  const filterKey = filters
+    ? Object.entries(filters)
+        .map(([k, v]) => `${k}:${v}`)
+        .join(",")
+    : "";
+  const cacheKey = `tmdb-discover:${mediaType}:${page}:${filterKey}`;
+  const cached = getCached<TmdbSearchResult>(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
+  const params: Record<string, string | number> = {
+    page,
+    include_adult: "false",
+    sort_by: "popularity.desc",
+  };
+
+  // Add filter params
+  if (filters) {
+    if (filters.with_genres) {
+      params.with_genres = filters.with_genres;
+    }
+    if (filters.first_air_date_year) {
+      params.first_air_date_year = filters.first_air_date_year;
+    }
+    if (filters.primary_release_year) {
+      params.primary_release_year = filters.primary_release_year;
+    }
+    if (filters.vote_average_gte) {
+      params["vote_average.gte"] = filters.vote_average_gte;
+    }
+    if (filters.with_status) {
+      params.with_status = filters.with_status;
+    }
+  }
+
+  const data = await request<TmdbSearchResult>(`/discover/${mediaType}`, params);
   setCached(cacheKey, data, cacheTtlMs);
   return data;
 }

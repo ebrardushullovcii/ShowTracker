@@ -205,46 +205,120 @@ async function request<T>(query: string, variables: Record<string, unknown>) {
   throw new Error("AniList request failed: exceeded retry attempts");
 }
 
-export async function searchAniList(query: string, page = 1, perPage = 20) {
-  const cacheKey = `anilist-search:${query}:${page}:${perPage}`;
+export type AniListFilterParams = {
+  genres?: string[];
+  seasonYear?: number;
+  minScore?: number;
+  status?: string;
+};
+
+export async function searchAniList(
+  query: string,
+  page = 1,
+  perPage = 20,
+  filters?: AniListFilterParams
+) {
+  const filterKey = filters
+    ? Object.entries(filters)
+        .map(([k, v]) => `${k}:${JSON.stringify(v)}`)
+        .join(",")
+    : "";
+  const cacheKey = `anilist-search:${query}:${page}:${perPage}:${filterKey}`;
   const cached = getCached<AniListSearchResult>(cacheKey);
   if (cached) {
     return cached;
   }
 
+  // Build filter conditions dynamically
+  const conditions: string[] = ["type: ANIME"];
+  if (query.trim()) {
+    conditions.push(`search: $search`);
+  }
+  if (filters?.genres?.length) {
+    conditions.push(`genre_in: $genres`);
+  }
+  if (filters?.seasonYear) {
+    conditions.push(`seasonYear: $seasonYear`);
+  }
+  if (filters?.minScore) {
+    conditions.push(`averageScore_greater: $minScore`);
+  }
+  if (filters?.status) {
+    conditions.push(`status: $status`);
+  }
+
   const data = await request<AniListSearchResult>(
-    `query ($search: String, $page: Int, $perPage: Int) {
+    `query ($search: String, $page: Int, $perPage: Int, $genres: [String], $seasonYear: Int, $minScore: Int, $status: MediaStatus) {
       Page(page: $page, perPage: $perPage) {
         pageInfo { total currentPage lastPage }
-        media(search: $search, type: ANIME, sort: POPULARITY_DESC) {
+        media(${conditions.join(", ")}, sort: POPULARITY_DESC) {
           ${anilistMediaSelection}
         }
       }
     }`,
-    { search: query, page, perPage }
+    {
+      search: query || undefined,
+      page,
+      perPage,
+      genres: filters?.genres,
+      seasonYear: filters?.seasonYear,
+      minScore: filters?.minScore,
+      status: filters?.status,
+    }
   );
 
   setCached(cacheKey, data, cacheTtlMs);
   return data;
 }
 
-export async function getTrendingAniList(page = 1, perPage = 20) {
-  const cacheKey = `anilist-trending:${page}:${perPage}`;
+export async function getTrendingAniList(
+  page = 1,
+  perPage = 20,
+  filters?: AniListFilterParams
+) {
+  const filterKey = filters
+    ? Object.entries(filters)
+        .map(([k, v]) => `${k}:${JSON.stringify(v)}`)
+        .join(",")
+    : "";
+  const cacheKey = `anilist-trending:${page}:${perPage}:${filterKey}`;
   const cached = getCached<AniListSearchResult>(cacheKey);
   if (cached) {
     return cached;
   }
 
+  // Build filter conditions dynamically
+  const conditions: string[] = ["type: ANIME"];
+  if (filters?.genres?.length) {
+    conditions.push(`genre_in: $genres`);
+  }
+  if (filters?.seasonYear) {
+    conditions.push(`seasonYear: $seasonYear`);
+  }
+  if (filters?.minScore) {
+    conditions.push(`averageScore_greater: $minScore`);
+  }
+  if (filters?.status) {
+    conditions.push(`status: $status`);
+  }
+
   const data = await request<AniListSearchResult>(
-    `query ($page: Int, $perPage: Int) {
+    `query ($page: Int, $perPage: Int, $genres: [String], $seasonYear: Int, $minScore: Int, $status: MediaStatus) {
       Page(page: $page, perPage: $perPage) {
         pageInfo { total currentPage lastPage }
-        media(type: ANIME, sort: TRENDING_DESC) {
+        media(${conditions.join(", ")}, sort: TRENDING_DESC) {
           ${anilistMediaSelection}
         }
       }
     }`,
-    { page, perPage }
+    {
+      page,
+      perPage,
+      genres: filters?.genres,
+      seasonYear: filters?.seasonYear,
+      minScore: filters?.minScore,
+      status: filters?.status,
+    }
   );
 
   setCached(cacheKey, data, cacheTtlMs);
