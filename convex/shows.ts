@@ -1921,6 +1921,13 @@ export const getWatchlist = query({
     const groupedAnime = new Map<string, (typeof hydrated)[number][]>();
     const selectedEntries: (typeof hydrated)[number][] = [];
 
+    const isCompletedEntry = (entry: {
+      status: "watching" | "paused" | "dropped" | "completed" | "plan_to_watch";
+      remainingEpisodes: number | null;
+    }) =>
+      entry.status === "completed" ||
+      (typeof entry.remainingEpisodes === "number" && entry.remainingEpisodes <= 0);
+
     for (const item of hydrated) {
       if (item.mediaType !== "anime") {
         selectedEntries.push(item);
@@ -1942,7 +1949,25 @@ export const getWatchlist = query({
     }
 
     for (const entries of groupedAnime.values()) {
-      const displayable = entries;
+      const nonCompleted = entries.filter((entry) => !isCompletedEntry(entry));
+      const watchingEntries = nonCompleted.filter((entry) => entry.status === "watching");
+      const pausedEntries = nonCompleted.filter((entry) => entry.status === "paused");
+      const plannedEntries = nonCompleted.filter((entry) => entry.status === "plan_to_watch");
+      const droppedEntries = nonCompleted.filter((entry) => entry.status === "dropped");
+
+      const displayable =
+        watchingEntries.length > 0
+          ? watchingEntries
+          : pausedEntries.length > 0
+            ? pausedEntries
+            : plannedEntries.length > 0
+              ? plannedEntries
+              : droppedEntries.length > 0
+                ? droppedEntries
+                : nonCompleted.length > 0
+                  ? nonCompleted
+                  : entries;
+
       if (displayable.length === 0) {
         continue;
       }

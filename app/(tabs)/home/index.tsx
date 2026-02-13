@@ -671,7 +671,7 @@ export function HomeScreen() {
   const isUpcomingLoading =
     activeTab === "upcoming" &&
     upcomingGroups.length === 0 &&
-    upcoming === undefined;
+    (upcoming === undefined || isHydratingInitialUpcoming);
 
   const headerText =
     activeTab === "watchlist"
