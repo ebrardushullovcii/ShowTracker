@@ -963,6 +963,7 @@ export const getHomeDashboard = query({
           progressPercent,
           lastActivityAt: userShow.lastWatchedAt ?? userShow.addedAt,
           genres: show.genres ?? [],
+          rating: show.rating ?? null,
         };
       })
     );
