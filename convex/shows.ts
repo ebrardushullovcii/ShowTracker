@@ -2632,6 +2632,133 @@ async function updateStatusBasedOnProgress(
 }
 
 /**
+ * Get recommended shows based on user's watch history
+ * Returns shows that are similar to what the user has watched
+ */
+export const getRecommendations = query({
+  args: {
+    mediaType: v.optional(v.union(v.literal("tv"), v.literal("movie"))),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const userId = await auth.getUserId(ctx);
+    
+    // Return empty if not authenticated
+    if (!userId) {
+      return [];
+    }
+
+    const limit = Math.max(1, Math.min(args.limit ?? 8, 20));
+
+    // Get user's watched shows
+    const [userShows, watchedEpisodes] = await Promise.all([
+      ctx.db
+        .query("userShows")
+        .withIndex("by_user", (q) => q.eq("userId", userId))
+        .collect(),
+      ctx.db
+        .query("watchedEpisodes")
+        .withIndex("by_user", (q) => q.eq("userId", userId))
+        .collect(),
+    ]);
+
+    const watchedCountByShow = new Map<string, number>();
+    const lastWatchedAtByShow = new Map<string, number>();
+
+    for (const entry of watchedEpisodes) {
+      const key = entry.showId as string;
+      watchedCountByShow.set(key, (watchedCountByShow.get(key) ?? 0) + 1);
+
+      const prevLastWatched = lastWatchedAtByShow.get(key) ?? 0;
+      if (entry.watchedAt > prevLastWatched) {
+        lastWatchedAtByShow.set(key, entry.watchedAt);
+      }
+    }
+
+    const candidateUserShows = userShows
+      .filter((userShow) => {
+        const watchedCount = watchedCountByShow.get(userShow.showId as string) ?? 0;
+        return watchedCount > 0 || userShow.status === "watching" || userShow.status === "completed";
+      })
+      .map((userShow) => {
+        const episodeLastWatched = lastWatchedAtByShow.get(userShow.showId as string) ?? 0;
+        const activityAt = Math.max(
+          episodeLastWatched,
+          userShow.lastWatchedAt ?? 0,
+          userShow.statusChangedAt ?? 0,
+          userShow.addedAt
+        );
+
+        return {
+          userShow,
+          activityAt,
+          watchedCount: watchedCountByShow.get(userShow.showId as string) ?? 0,
+        };
+      })
+      .sort((a, b) => b.activityAt - a.activityAt)
+      .slice(0, 25);
+
+    const hydratedSeeds = await Promise.all(
+      candidateUserShows.map(async ({ userShow, activityAt, watchedCount }) => {
+        const show = await ctx.db.get(userShow.showId as Id<"shows">);
+        if (!show || typeof show.tmdbId !== "number") {
+          return null;
+        }
+
+        if (show.mediaType !== "tv" && show.mediaType !== "movie") {
+          return null;
+        }
+
+        if (args.mediaType && show.mediaType !== args.mediaType) {
+          return null;
+        }
+
+        return {
+          id: String(show._id),
+          tmdbId: show.tmdbId,
+          mediaType: show.mediaType,
+          title: show.title,
+          activityAt,
+          watchedCount,
+        };
+      })
+    );
+
+    const dedupedByTmdb = new Map<string, {
+      id: string;
+      tmdbId: number;
+      mediaType: "tv" | "movie";
+      title: string;
+      activityAt: number;
+      watchedCount: number;
+    }>();
+
+    for (const seed of hydratedSeeds) {
+      if (!seed) continue;
+      const key = `${seed.mediaType}:${seed.tmdbId}`;
+      const existing = dedupedByTmdb.get(key);
+      if (!existing || seed.activityAt > existing.activityAt) {
+        dedupedByTmdb.set(key, seed);
+      }
+    }
+
+    return Array.from(dedupedByTmdb.values())
+      .sort((a, b) => {
+        if (b.activityAt !== a.activityAt) return b.activityAt - a.activityAt;
+        if (b.watchedCount !== a.watchedCount) return b.watchedCount - a.watchedCount;
+        return a.title.localeCompare(b.title);
+      })
+      .slice(0, limit)
+      .map(({ id, tmdbId, mediaType, title }) => ({
+        id,
+        tmdbId,
+        mediaType,
+        title,
+      }));
+  },
+});
+
+/**
  * Get user automation preferences (placeholder for future implementation)
  */
 export const getUserAutomationPreferences = query({

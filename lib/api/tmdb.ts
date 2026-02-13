@@ -54,6 +54,14 @@ export type TmdbSearchResult = {
   total_results: number;
 };
 
+export type TmdbFilterParams = {
+  with_genres?: string;
+  first_air_date_year?: number;
+  primary_release_year?: number;
+  vote_average_gte?: number;
+  with_status?: string;
+};
+
 export type TmdbMedia = {
   id: number;
   media_type?: "tv" | "movie" | "person";
@@ -266,18 +274,91 @@ async function resolveTmdbTvRuntimeFallback(details: TmdbShowDetails) {
 export async function searchTmdb(
   query: string,
   mediaType: "multi" | "tv" | "movie" = "multi",
-  page = 1
+  page = 1,
+  filters?: TmdbFilterParams
 ) {
-  const cacheKey = `tmdb-search:${mediaType}:${query}:${page}`;
+  const filterKey = filters
+    ? Object.entries(filters)
+        .map(([k, v]) => `${k}:${v}`)
+        .join(",")
+    : "";
+  const cacheKey = `tmdb-search:${mediaType}:${query}:${page}:${filterKey}`;
   const cached = getCached<TmdbSearchResult>(cacheKey);
   if (cached) {
     return cached;
   }
-  const data = await request<TmdbSearchResult>(`/search/${mediaType}`, {
+
+  const params: Record<string, string | number> = {
     query,
     page,
     include_adult: "false",
-  });
+  };
+
+  if (filters) {
+    if (filters.with_genres) {
+      params.with_genres = filters.with_genres;
+    }
+    if (filters.first_air_date_year) {
+      params.first_air_date_year = filters.first_air_date_year;
+    }
+    if (filters.primary_release_year) {
+      params.primary_release_year = filters.primary_release_year;
+    }
+    if (filters.vote_average_gte) {
+      params["vote_average.gte"] = filters.vote_average_gte;
+    }
+    if (filters.with_status) {
+      params.with_status = filters.with_status;
+    }
+  }
+
+  const data = await request<TmdbSearchResult>(`/search/${mediaType}`, params);
+  setCached(cacheKey, data, cacheTtlMs);
+  return data;
+}
+
+// Discover endpoint for filtered browsing
+export async function discoverTmdb(
+  mediaType: "tv" | "movie",
+  page = 1,
+  filters?: TmdbFilterParams
+) {
+  const filterKey = filters
+    ? Object.entries(filters)
+        .map(([k, v]) => `${k}:${v}`)
+        .join(",")
+    : "";
+  const cacheKey = `tmdb-discover:${mediaType}:${page}:${filterKey}`;
+  const cached = getCached<TmdbSearchResult>(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
+  const params: Record<string, string | number> = {
+    page,
+    include_adult: "false",
+    sort_by: "popularity.desc",
+  };
+
+  if (filters) {
+    if (filters.with_genres) {
+      params.with_genres = filters.with_genres;
+    }
+    if (filters.first_air_date_year) {
+      params.first_air_date_year = filters.first_air_date_year;
+    }
+    if (filters.primary_release_year) {
+      params.primary_release_year = filters.primary_release_year;
+    }
+    if (filters.vote_average_gte) {
+      params["vote_average.gte"] = filters.vote_average_gte;
+    }
+    if (filters.with_status) {
+      params.with_status = filters.with_status;
+    }
+  }
+
+  const data = await request<TmdbSearchResult>(`/discover/${mediaType}`, params);
   setCached(cacheKey, data, cacheTtlMs);
   return data;
 }
@@ -334,4 +415,64 @@ export async function getTmdbEpisodeDetails(
     `/tv/${id}/season/${seasonNumber}/episode/${episodeNumber}`
   );
   return normalizeTmdbEpisode(response);
+}
+
+// Get recommendations based on a movie
+export async function getMovieRecommendations(
+  movieId: number,
+  page = 1
+): Promise<TmdbSearchResult> {
+  const cacheKey = `tmdb-movie-recommendations:${movieId}:${page}`;
+  const cached = getCached<TmdbSearchResult>(cacheKey);
+  if (cached) {
+    return cached;
+  }
+  const data = await request<TmdbSearchResult>(`/movie/${movieId}/recommendations`, { page });
+  setCached(cacheKey, data, cacheTtlMs);
+  return data;
+}
+
+// Get recommendations based on a TV show
+export async function getTvRecommendations(
+  tvId: number,
+  page = 1
+): Promise<TmdbSearchResult> {
+  const cacheKey = `tmdb-tv-recommendations:${tvId}:${page}`;
+  const cached = getCached<TmdbSearchResult>(cacheKey);
+  if (cached) {
+    return cached;
+  }
+  const data = await request<TmdbSearchResult>(`/tv/${tvId}/recommendations`, { page });
+  setCached(cacheKey, data, cacheTtlMs);
+  return data;
+}
+
+// Get similar movies
+export async function getSimilarMovies(
+  movieId: number,
+  page = 1
+): Promise<TmdbSearchResult> {
+  const cacheKey = `tmdb-similar-movies:${movieId}:${page}`;
+  const cached = getCached<TmdbSearchResult>(cacheKey);
+  if (cached) {
+    return cached;
+  }
+  const data = await request<TmdbSearchResult>(`/movie/${movieId}/similar`, { page });
+  setCached(cacheKey, data, cacheTtlMs);
+  return data;
+}
+
+// Get similar TV shows
+export async function getSimilarTv(
+  tvId: number,
+  page = 1
+): Promise<TmdbSearchResult> {
+  const cacheKey = `tmdb-similar-tv:${tvId}:${page}`;
+  const cached = getCached<TmdbSearchResult>(cacheKey);
+  if (cached) {
+    return cached;
+  }
+  const data = await request<TmdbSearchResult>(`/tv/${tvId}/similar`, { page });
+  setCached(cacheKey, data, cacheTtlMs);
+  return data;
 }
