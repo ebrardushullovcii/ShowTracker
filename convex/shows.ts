@@ -1451,7 +1451,17 @@ export const toggleEpisodeWatched = mutation({
       nextStatus = "watching";
       statusChanged = true;
     }
-    
+
+    // Auto-resume from completed if new episodes added
+    if (
+      userShow?.status === "completed" &&
+      args.show.totalEpisodes &&
+      totalWatched < args.show.totalEpisodes
+    ) {
+      nextStatus = "watching";
+      statusChanged = true;
+    }
+
     // Auto-complete when all episodes watched
     if (
       args.show.totalEpisodes &&
@@ -1478,9 +1488,12 @@ export const toggleEpisodeWatched = mutation({
           updateData.droppedAt = undefined;
         }
       }
-      
+
       if (nextStatus === "completed") {
         updateData.completedAt = now;
+      } else if (userShow.status === "completed") {
+        // Clear completedAt when transitioning away from completed
+        updateData.completedAt = undefined;
       }
       
       await ctx.db.patch(userShow._id, updateData);
