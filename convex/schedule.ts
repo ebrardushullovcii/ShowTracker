@@ -415,7 +415,13 @@ export const getUpcomingSchedule = query({
     mediaFilter: v.optional(v.union(v.literal("tv"), v.literal("anime"))),
   },
   handler: async (ctx, args) => {
-    const userId = await getCurrentUserId(ctx);
+    const userId = await auth.getUserId(ctx);
+    
+    // Return empty array if user is not authenticated
+    if (!userId) {
+      return [];
+    }
+    
     const today = startOfDay(new Date());
 
     const userShows = await ctx.db

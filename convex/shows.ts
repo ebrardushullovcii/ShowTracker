@@ -1832,7 +1832,12 @@ export const clearShowWatched = mutation({
 export const getWatchlist = query({
   args: {},
   handler: async (ctx) => {
-    const userId = await getCurrentUserId(ctx);
+    const userId = await auth.getUserId(ctx);
+    
+    // Return empty array if user is not authenticated
+    if (!userId) {
+      return [];
+    }
 
     const userShows = await ctx.db
       .query("userShows")
