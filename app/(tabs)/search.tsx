@@ -294,21 +294,18 @@ export function SearchScreen() {
               className="mb-3"
             />
 
-            {/* Horizontal Filter Dropdowns */}
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              className="mb-4"
-              contentContainerStyle={{ gap: 8 }}
-            >
-              {/* Genre Dropdown */}
-              {genreOptions.length > 0 && (
-                <View>
+            {/* Filter Buttons Row */}
+            <View className="mb-2">
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ gap: 8 }}
+              >
+                {/* Genre Button */}
+                {genreOptions.length > 0 && (
                   <Pressable
                     onPress={() =>
-                      setOpenDropdown(
-                        openDropdown === "genres" ? null : "genres"
-                      )
+                      setOpenDropdown(openDropdown === "genres" ? null : "genres")
                     }
                     className={`flex-row items-center gap-2 rounded-full border px-4 py-2 ${
                       selectedGenres.length > 0
@@ -318,60 +315,21 @@ export function SearchScreen() {
                   >
                     <Text
                       className={`text-sm font-semibold ${
-                        selectedGenres.length > 0
-                          ? "text-white"
-                          : "text-text-secondary"
+                        selectedGenres.length > 0 ? "text-white" : "text-text-secondary"
                       }`}
                     >
                       {selectedGenres.length > 0
-                        ? `${selectedGenres.length} Genre${
-                            selectedGenres.length > 1 ? "s" : ""
-                          }`
+                        ? `${selectedGenres.length} Genre${selectedGenres.length > 1 ? "s" : ""}`
                         : "Genre"}
                     </Text>
-                    <Text
-                      className={
-                        selectedGenres.length > 0
-                          ? "text-white"
-                          : "text-text-secondary"
-                      }
-                    >
+                    <Text className={selectedGenres.length > 0 ? "text-white" : "text-text-secondary"}>
                       {openDropdown === "genres" ? "▲" : "▼"}
                     </Text>
                   </Pressable>
+                )}
 
-                  {openDropdown === "genres" && (
-                    <View className="absolute top-full left-0 z-50 mt-2 max-h-64 w-56 rounded-xl border border-border-default bg-bg-primary shadow-xl">
-                      <ScrollView className="p-2">
-                        {genreOptions.map((option) => (
-                          <Pressable
-                            key={option.value}
-                            onPress={() => toggleGenre(option.value)}
-                            className="flex-row items-center justify-between rounded-lg px-3 py-2.5"
-                          >
-                            <Text
-                              className={`text-sm ${
-                                selectedGenres.includes(option.value)
-                                  ? "font-semibold text-primary"
-                                  : "text-text-secondary"
-                              }`}
-                            >
-                              {option.label}
-                            </Text>
-                            {selectedGenres.includes(option.value) && (
-                              <Text className="text-primary">✓</Text>
-                            )}
-                          </Pressable>
-                        ))}
-                      </ScrollView>
-                    </View>
-                  )}
-                </View>
-              )}
-
-              {/* Year Dropdown */}
-              {yearOptions.length > 0 && (
-                <View>
+                {/* Year Button */}
+                {yearOptions.length > 0 && (
                   <Pressable
                     onPress={() =>
                       setOpenDropdown(openDropdown === "year" ? null : "year")
@@ -389,69 +347,17 @@ export function SearchScreen() {
                     >
                       {selectedYear || "Year"}
                     </Text>
-                    <Text
-                      className={
-                        selectedYear ? "text-white" : "text-text-secondary"
-                      }
-                    >
+                    <Text className={selectedYear ? "text-white" : "text-text-secondary"}>
                       {openDropdown === "year" ? "▲" : "▼"}
                     </Text>
                   </Pressable>
+                )}
 
-                  {openDropdown === "year" && (
-                    <View className="absolute top-full left-0 z-50 mt-2 max-h-64 w-32 rounded-xl border border-border-default bg-bg-primary shadow-xl">
-                      <ScrollView className="p-2">
-                        <Pressable
-                          onPress={() => {
-                            setSelectedYear("");
-                            setOpenDropdown(null);
-                          }}
-                          className="rounded-lg px-3 py-2.5"
-                        >
-                          <Text
-                            className={`text-sm ${
-                              !selectedYear
-                                ? "font-semibold text-primary"
-                                : "text-text-secondary"
-                            }`}
-                          >
-                            Any Year
-                          </Text>
-                        </Pressable>
-                        {yearOptions.slice(0, 20).map((option) => (
-                          <Pressable
-                            key={option.value}
-                            onPress={() => {
-                              setSelectedYear(option.value);
-                              setOpenDropdown(null);
-                            }}
-                            className="rounded-lg px-3 py-2.5"
-                          >
-                            <Text
-                              className={`text-sm ${
-                                selectedYear === option.value
-                                  ? "font-semibold text-primary"
-                                  : "text-text-secondary"
-                              }`}
-                            >
-                              {option.label}
-                            </Text>
-                          </Pressable>
-                        ))}
-                      </ScrollView>
-                    </View>
-                  )}
-                </View>
-              )}
-
-              {/* Rating Dropdown */}
-              {ratingOptions.length > 0 && (
-                <View>
+                {/* Rating Button */}
+                {ratingOptions.length > 0 && (
                   <Pressable
                     onPress={() =>
-                      setOpenDropdown(
-                        openDropdown === "rating" ? null : "rating"
-                      )
+                      setOpenDropdown(openDropdown === "rating" ? null : "rating")
                     }
                     className={`flex-row items-center gap-2 rounded-full border px-4 py-2 ${
                       selectedRating
@@ -466,69 +372,17 @@ export function SearchScreen() {
                     >
                       {selectedRating ? `${selectedRating}+ ⭐` : "Rating"}
                     </Text>
-                    <Text
-                      className={
-                        selectedRating ? "text-white" : "text-text-secondary"
-                      }
-                    >
+                    <Text className={selectedRating ? "text-white" : "text-text-secondary"}>
                       {openDropdown === "rating" ? "▲" : "▼"}
                     </Text>
                   </Pressable>
+                )}
 
-                  {openDropdown === "rating" && (
-                    <View className="absolute top-full left-0 z-50 mt-2 w-32 rounded-xl border border-border-default bg-bg-primary shadow-xl">
-                      <ScrollView className="p-2">
-                        <Pressable
-                          onPress={() => {
-                            setSelectedRating("");
-                            setOpenDropdown(null);
-                          }}
-                          className="rounded-lg px-3 py-2.5"
-                        >
-                          <Text
-                            className={`text-sm ${
-                              !selectedRating
-                                ? "font-semibold text-primary"
-                                : "text-text-secondary"
-                            }`}
-                          >
-                            Any Rating
-                          </Text>
-                        </Pressable>
-                        {ratingOptions.map((option) => (
-                          <Pressable
-                            key={option.value}
-                            onPress={() => {
-                              setSelectedRating(option.value);
-                              setOpenDropdown(null);
-                            }}
-                            className="rounded-lg px-3 py-2.5"
-                          >
-                            <Text
-                              className={`text-sm ${
-                                selectedRating === option.value
-                                  ? "font-semibold text-primary"
-                                  : "text-text-secondary"
-                              }`}
-                            >
-                              {option.label}
-                            </Text>
-                          </Pressable>
-                        ))}
-                      </ScrollView>
-                    </View>
-                  )}
-                </View>
-              )}
-
-              {/* Status Dropdown */}
-              {statusOptions.length > 0 && (
-                <View>
+                {/* Status Button */}
+                {statusOptions.length > 0 && (
                   <Pressable
                     onPress={() =>
-                      setOpenDropdown(
-                        openDropdown === "status" ? null : "status"
-                      )
+                      setOpenDropdown(openDropdown === "status" ? null : "status")
                     }
                     className={`flex-row items-center gap-2 rounded-full border px-4 py-2 ${
                       selectedStatus
@@ -542,77 +396,156 @@ export function SearchScreen() {
                       }`}
                     >
                       {selectedStatus
-                        ? statusOptions.find((o) => o.value === selectedStatus)
-                            ?.label || "Status"
+                        ? statusOptions.find((o) => o.value === selectedStatus)?.label || "Status"
                         : "Status"}
                     </Text>
-                    <Text
-                      className={
-                        selectedStatus ? "text-white" : "text-text-secondary"
-                      }
-                    >
+                    <Text className={selectedStatus ? "text-white" : "text-text-secondary"}>
                       {openDropdown === "status" ? "▲" : "▼"}
                     </Text>
                   </Pressable>
+                )}
 
-                  {openDropdown === "status" && (
-                    <View className="absolute top-full left-0 z-50 mt-2 w-40 rounded-xl border border-border-default bg-bg-primary shadow-xl">
-                      <ScrollView className="p-2">
-                        <Pressable
-                          onPress={() => {
-                            setSelectedStatus("");
-                            setOpenDropdown(null);
-                          }}
-                          className="rounded-lg px-3 py-2.5"
+                {/* Clear Button */}
+                {hasActiveFilters && (
+                  <Pressable
+                    onPress={clearFilters}
+                    className="rounded-full border border-border-default bg-bg-surface px-4 py-2"
+                  >
+                    <Text className="text-sm font-semibold text-text-secondary">Clear</Text>
+                  </Pressable>
+                )}
+              </ScrollView>
+            </View>
+
+            {/* Dropdown Menus - Outside ScrollView so they don't get clipped */}
+            <View className="relative mb-4">
+              {/* Genre Dropdown */}
+              {openDropdown === "genres" && genreOptions.length > 0 && (
+                <View className="absolute left-0 top-0 z-50 max-h-64 w-56 rounded-xl border border-border-default bg-bg-primary shadow-xl">
+                  <ScrollView className="p-2">
+                    {genreOptions.map((option) => (
+                      <Pressable
+                        key={option.value}
+                        onPress={() => toggleGenre(option.value)}
+                        className="flex-row items-center justify-between rounded-lg px-3 py-2.5"
+                      >
+                        <Text
+                          className={`text-sm ${
+                            selectedGenres.includes(option.value)
+                              ? "font-semibold text-primary"
+                              : "text-text-secondary"
+                          }`}
                         >
-                          <Text
-                            className={`text-sm ${
-                              !selectedStatus
-                                ? "font-semibold text-primary"
-                                : "text-text-secondary"
-                            }`}
-                          >
-                            Any Status
-                          </Text>
-                        </Pressable>
-                        {statusOptions.map((option) => (
-                          <Pressable
-                            key={option.value}
-                            onPress={() => {
-                              setSelectedStatus(option.value);
-                              setOpenDropdown(null);
-                            }}
-                            className="rounded-lg px-3 py-2.5"
-                          >
-                            <Text
-                              className={`text-sm ${
-                                selectedStatus === option.value
-                                  ? "font-semibold text-primary"
-                                  : "text-text-secondary"
-                              }`}
-                            >
-                              {option.label}
-                            </Text>
-                          </Pressable>
-                        ))}
-                      </ScrollView>
-                    </View>
-                  )}
+                          {option.label}
+                        </Text>
+                        {selectedGenres.includes(option.value) && (
+                          <Text className="text-primary">✓</Text>
+                        )}
+                      </Pressable>
+                    ))}
+                  </ScrollView>
                 </View>
               )}
 
-              {/* Clear Button */}
-              {hasActiveFilters && (
-                <Pressable
-                  onPress={clearFilters}
-                  className="rounded-full border border-border-default bg-bg-surface px-4 py-2"
-                >
-                  <Text className="text-sm font-semibold text-text-secondary">
-                    Clear
-                  </Text>
-                </Pressable>
+              {/* Year Dropdown */}
+              {openDropdown === "year" && yearOptions.length > 0 && (
+                <View className="absolute left-0 top-0 z-50 max-h-64 w-32 rounded-xl border border-border-default bg-bg-primary shadow-xl">
+                  <ScrollView className="p-2">
+                    <Pressable
+                      onPress={() => {
+                        setSelectedYear("");
+                        setOpenDropdown(null);
+                      }}
+                      className="rounded-lg px-3 py-2.5"
+                    >
+                      <Text className={`text-sm ${!selectedYear ? "font-semibold text-primary" : "text-text-secondary"}`}>
+                        Any
+                      </Text>
+                    </Pressable>
+                    {yearOptions.slice(0, 20).map((option) => (
+                      <Pressable
+                        key={option.value}
+                        onPress={() => {
+                          setSelectedYear(option.value);
+                          setOpenDropdown(null);
+                        }}
+                        className="rounded-lg px-3 py-2.5"
+                      >
+                        <Text className={`text-sm ${selectedYear === option.value ? "font-semibold text-primary" : "text-text-secondary"}`}>
+                          {option.label}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </ScrollView>
+                </View>
               )}
-            </ScrollView>
+
+              {/* Rating Dropdown */}
+              {openDropdown === "rating" && ratingOptions.length > 0 && (
+                <View className="absolute left-0 top-0 z-50 w-32 rounded-xl border border-border-default bg-bg-primary shadow-xl">
+                  <ScrollView className="p-2">
+                    <Pressable
+                      onPress={() => {
+                        setSelectedRating("");
+                        setOpenDropdown(null);
+                      }}
+                      className="rounded-lg px-3 py-2.5"
+                    >
+                      <Text className={`text-sm ${!selectedRating ? "font-semibold text-primary" : "text-text-secondary"}`}>
+                        Any
+                      </Text>
+                    </Pressable>
+                    {ratingOptions.map((option) => (
+                      <Pressable
+                        key={option.value}
+                        onPress={() => {
+                          setSelectedRating(option.value);
+                          setOpenDropdown(null);
+                        }}
+                        className="rounded-lg px-3 py-2.5"
+                      >
+                        <Text className={`text-sm ${selectedRating === option.value ? "font-semibold text-primary" : "text-text-secondary"}`}>
+                          {option.label}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
+
+              {/* Status Dropdown */}
+              {openDropdown === "status" && statusOptions.length > 0 && (
+                <View className="absolute left-0 top-0 z-50 w-40 rounded-xl border border-border-default bg-bg-primary shadow-xl">
+                  <ScrollView className="p-2">
+                    <Pressable
+                      onPress={() => {
+                        setSelectedStatus("");
+                        setOpenDropdown(null);
+                      }}
+                      className="rounded-lg px-3 py-2.5"
+                    >
+                      <Text className={`text-sm ${!selectedStatus ? "font-semibold text-primary" : "text-text-secondary"}`}>
+                        Any
+                      </Text>
+                    </Pressable>
+                    {statusOptions.map((option) => (
+                      <Pressable
+                        key={option.value}
+                        onPress={() => {
+                          setSelectedStatus(option.value);
+                          setOpenDropdown(null);
+                        }}
+                        className="rounded-lg px-3 py-2.5"
+                      >
+                        <Text className={`text-sm ${selectedStatus === option.value ? "font-semibold text-primary" : "text-text-secondary"}`}>
+                          {option.label}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
+            </View>
 
             {/* Active Filter Tags */}
             {hasActiveFilters && (
