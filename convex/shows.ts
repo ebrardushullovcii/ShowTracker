@@ -1603,10 +1603,30 @@ export const batchRewatchEpisodes = mutation({
         : "watching";
 
     if (userShow) {
-      await ctx.db.patch(userShow._id, {
+      const statusChanged = userShow.status !== nextStatus;
+      const updateData: Partial<Doc<"userShows">> = {
         status: nextStatus,
         lastWatchedAt: now,
-      });
+      };
+
+      if (statusChanged) {
+        updateData.statusChangedAt = now;
+        if (userShow.autoPausedAt) {
+          updateData.autoPausedAt = undefined;
+        }
+        if (userShow.droppedAt) {
+          updateData.droppedAt = undefined;
+        }
+        if (userShow.status === "completed") {
+          updateData.completedAt = undefined;
+        }
+      }
+
+      if (nextStatus === "completed") {
+        updateData.completedAt = now;
+      }
+
+      await ctx.db.patch(userShow._id, updateData);
     }
 
     return {
@@ -1691,10 +1711,30 @@ export const markSeasonWatched = mutation({
         : "watching";
 
     if (userShow) {
-      await ctx.db.patch(userShow._id, {
+      const statusChanged = userShow.status !== nextStatus;
+      const updateData: Partial<Doc<"userShows">> = {
         status: nextStatus,
         lastWatchedAt: now,
-      });
+      };
+
+      if (statusChanged) {
+        updateData.statusChangedAt = now;
+        if (userShow.autoPausedAt) {
+          updateData.autoPausedAt = undefined;
+        }
+        if (userShow.droppedAt) {
+          updateData.droppedAt = undefined;
+        }
+        if (userShow.status === "completed") {
+          updateData.completedAt = undefined;
+        }
+      }
+
+      if (nextStatus === "completed") {
+        updateData.completedAt = now;
+      }
+
+      await ctx.db.patch(userShow._id, updateData);
     }
 
     return {
@@ -2190,10 +2230,30 @@ export const batchMarkWatched = mutation({
         : "watching";
 
     if (userShow) {
-      await ctx.db.patch(userShow._id, {
+      const statusChanged = userShow.status !== nextStatus;
+      const updateData: Partial<Doc<"userShows">> = {
         status: nextStatus,
         lastWatchedAt: now,
-      });
+      };
+
+      if (statusChanged) {
+        updateData.statusChangedAt = now;
+        if (userShow.autoPausedAt) {
+          updateData.autoPausedAt = undefined;
+        }
+        if (userShow.droppedAt) {
+          updateData.droppedAt = undefined;
+        }
+        if (userShow.status === "completed") {
+          updateData.completedAt = undefined;
+        }
+      }
+
+      if (nextStatus === "completed") {
+        updateData.completedAt = now;
+      }
+
+      await ctx.db.patch(userShow._id, updateData);
     }
 
     return {
