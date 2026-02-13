@@ -2,11 +2,11 @@
 
 ## Current Phase
 
-Phase 8b: Polish and validation - remaining items (in progress)
+Phase 9: UI polish + tracking UX (in progress)
 
 ## Next Up
 
-Phase 9: UI Polish - filters, stats redesign, watchlist removal, scroll fixes
+Phase 8b: Finish remaining data-quality validation tasks
 
 ## Completed
 
@@ -148,6 +148,20 @@ Phase 9: UI Polish - filters, stats redesign, watchlist removal, scroll fixes
     - [x] Added `scripts/data-quality-audit.mjs`
     - [x] Added `scripts/anime-relations-audit.mjs`
     - [x] Added browser smoke checks and screenshot artifacts for relation + season flows
+- [x] Phase 9a: Filters + tracking UX foundation
+  - [x] Added reusable filter primitives (`components/FilterChipGroup.tsx`, `lib/filters/tracking-filters.ts`)
+  - [x] Refactored tab routes into folder index modules (`home/index`, `discover/index`, `library/index`) and updated tab mapping
+  - [x] Home filters expanded to support media + watch-state segmentation
+  - [x] Library split into dedicated TV/Anime/Movie segments with status filtering
+  - [x] Profile rails split to separate TV and anime favorites/active sections
+  - [x] Show details now supports add/remove watchlist and editable tracking statuses (`watching`, `planned`, `paused`, `dropped`, `completed`)
+  - [x] Added Convex mutations for tracking management (`removeFromWatchlist`, `setWatchlistStatus`)
+- [x] Upcoming schedule UX reliability hardening
+  - [x] Static header controls + explicit `Load Earlier` / `Load Later` / `Jump to Today`
+  - [x] Reset relation-sync trigger on failure so background sync retries are possible
+  - [x] Clear hydrated-range cache keys on failed schedule hydration to allow retries
+  - [x] Switched day-diff/inclusive-day calculations to UTC calendar-day math (DST-safe)
+  - [x] Updated today-visibility callback to refresh with current `todayKey` after date rollover
 
 ## PR Readiness Snapshot (current branch)
 
@@ -167,12 +181,9 @@ Phase 9: UI Polish - filters, stats redesign, watchlist removal, scroll fixes
 
 - [ ] Phase 9: UI Polish
   - [ ] Profile page stats redesign - improve visual layout and design of stats section
-  - [ ] Add category filters to Home page (TV, Anime, Movies)
-  - [ ] Add category filters to Library page
-  - [ ] Add category filters to Schedule page
-  - [ ] Add category filters to Discover page
-  - [ ] Schedule/Upcoming page scroll optimization - fix initial load scroll position and jarring scroll behavior
-  - [ ] Add watchlist removal - implement ability to remove shows/movies/anime from watchlist (currently only supports adding)
+  - [ ] Discover page advanced filters beyond media tabs (genre/status/sort refinements)
+  - [ ] Additional schedule polish for rare short-viewport and long-session edge cases
+  - [ ] Cross-platform UX QA pass for tracking status modal interactions (web/iOS/Android)
 
 ## Known Issues
 
