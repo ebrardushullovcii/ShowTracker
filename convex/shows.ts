@@ -1334,7 +1334,17 @@ export const setWatchlistStatus = mutation({
     if (args.status === "dropped") {
       patch.droppedAt = now;
     }
-    
+
+    // Clear completedAt when transitioning away from completed
+    if (existing.status === "completed" && args.status !== "completed") {
+      patch.completedAt = undefined;
+    }
+
+    // Clear droppedAt when transitioning away from dropped
+    if (existing.status === "dropped" && args.status !== "dropped") {
+      patch.droppedAt = undefined;
+    }
+
     // Clear autoPausedAt when manually changing status
     if (existing.autoPausedAt) {
       patch.autoPausedAt = undefined;
