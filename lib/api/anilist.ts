@@ -175,14 +175,10 @@ async function request<T>(query: string, variables: Record<string, unknown>) {
   };
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-    const body = new URLSearchParams();
-    body.set("query", query);
-    body.set("variables", JSON.stringify(variables));
-
     const response = await fetch(anilistUrl, {
       method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: body.toString(),
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query, variables }),
     });
     if (response.ok) {
       return (await response.json()) as T;

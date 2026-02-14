@@ -147,7 +147,15 @@ function buildUrl(path: string, params: Record<string, string | number> = {}) {
   return url;
 }
 
-async function request<T>(path: string, params?: Record<string, string | number>) {
+type RequestOptions = {
+  signal?: AbortSignal;
+};
+
+async function request<T>(
+  path: string,
+  params?: Record<string, string | number>,
+  options?: RequestOptions
+) {
   assertTmdbCredentials();
   const url = buildUrl(path, params);
   const maxAttempts = 4;
@@ -172,7 +180,10 @@ async function request<T>(path: string, params?: Record<string, string | number>
   };
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-    const response = await fetch(url.toString(), { headers });
+    const response = await fetch(url.toString(), {
+      headers,
+      signal: options?.signal,
+    });
     if (response.ok) {
       return (await response.json()) as T;
     }
@@ -301,20 +312,11 @@ export async function searchTmdb(
   };
 
   if (filters) {
-    if (filters.with_genres) {
-      params.with_genres = filters.with_genres;
-    }
-    if (filters.first_air_date_year) {
+    if (mediaType === "tv" && filters.first_air_date_year) {
       params.first_air_date_year = filters.first_air_date_year;
     }
-    if (filters.primary_release_year) {
+    if (mediaType === "movie" && filters.primary_release_year) {
       params.primary_release_year = filters.primary_release_year;
-    }
-    if (filters.vote_average_gte) {
-      params["vote_average.gte"] = filters.vote_average_gte;
-    }
-    if (filters.with_status) {
-      params.with_status = filters.with_status;
     }
   }
 
@@ -466,14 +468,19 @@ export async function getTmdbEpisodeDetails(
 // Get recommendations based on a movie
 export async function getMovieRecommendations(
   movieId: number,
-  page = 1
+  page = 1,
+  options?: RequestOptions
 ): Promise<TmdbSearchResult> {
   const cacheKey = `tmdb-movie-recommendations:${movieId}:${page}`;
   const cached = getCached<TmdbSearchResult>(cacheKey);
   if (cached) {
     return cached;
   }
-  const data = await request<TmdbSearchResult>(`/movie/${movieId}/recommendations`, { page });
+  const data = await request<TmdbSearchResult>(
+    `/movie/${movieId}/recommendations`,
+    { page },
+    options
+  );
   setCached(cacheKey, data, cacheTtlMs);
   return data;
 }
@@ -481,14 +488,19 @@ export async function getMovieRecommendations(
 // Get recommendations based on a TV show
 export async function getTvRecommendations(
   tvId: number,
-  page = 1
+  page = 1,
+  options?: RequestOptions
 ): Promise<TmdbSearchResult> {
   const cacheKey = `tmdb-tv-recommendations:${tvId}:${page}`;
   const cached = getCached<TmdbSearchResult>(cacheKey);
   if (cached) {
     return cached;
   }
-  const data = await request<TmdbSearchResult>(`/tv/${tvId}/recommendations`, { page });
+  const data = await request<TmdbSearchResult>(
+    `/tv/${tvId}/recommendations`,
+    { page },
+    options
+  );
   setCached(cacheKey, data, cacheTtlMs);
   return data;
 }
@@ -496,14 +508,19 @@ export async function getTvRecommendations(
 // Get similar movies
 export async function getSimilarMovies(
   movieId: number,
-  page = 1
+  page = 1,
+  options?: RequestOptions
 ): Promise<TmdbSearchResult> {
   const cacheKey = `tmdb-similar-movies:${movieId}:${page}`;
   const cached = getCached<TmdbSearchResult>(cacheKey);
   if (cached) {
     return cached;
   }
-  const data = await request<TmdbSearchResult>(`/movie/${movieId}/similar`, { page });
+  const data = await request<TmdbSearchResult>(
+    `/movie/${movieId}/similar`,
+    { page },
+    options
+  );
   setCached(cacheKey, data, cacheTtlMs);
   return data;
 }
@@ -511,14 +528,19 @@ export async function getSimilarMovies(
 // Get similar TV shows
 export async function getSimilarTv(
   tvId: number,
-  page = 1
+  page = 1,
+  options?: RequestOptions
 ): Promise<TmdbSearchResult> {
   const cacheKey = `tmdb-similar-tv:${tvId}:${page}`;
   const cached = getCached<TmdbSearchResult>(cacheKey);
   if (cached) {
     return cached;
   }
-  const data = await request<TmdbSearchResult>(`/tv/${tvId}/similar`, { page });
+  const data = await request<TmdbSearchResult>(
+    `/tv/${tvId}/similar`,
+    { page },
+    options
+  );
   setCached(cacheKey, data, cacheTtlMs);
   return data;
 }

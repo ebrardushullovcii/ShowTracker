@@ -766,7 +766,7 @@ async function resolveImportedItem(item: ParsedImportItem): Promise<NormalizedSh
   return movieByTmdb?.show ?? null;
 }
 
-export default function ImportScreen() {
+export function ImportScreen() {
   const importTrackedShows = useMutation(api.shows.importTrackedShows);
   const resetUserTrackingData = useAction(api.shows.resetUserTrackingData);
   const loadedFileContentRef = useRef<string | null>(null);
@@ -1318,3 +1318,5 @@ export default function ImportScreen() {
     </ScreenWrapper>
   );
 }
+
+export default ImportScreen;

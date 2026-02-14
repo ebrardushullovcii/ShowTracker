@@ -23,6 +23,7 @@ import type { NormalizedShow } from "../lib/api/types";
 const RELATION_SYNC_THROTTLE_MS = 1000 * 60 * 60 * 6;
 const RELATION_SYNC_BATCH_LIMIT = 6;
 const RELATION_SYNC_MAX_GRAPH_NODES = 30;
+const IMPORT_TRACKED_SHOWS_MAX_ITEMS = 20;
 const RELATION_INCLUDE_TYPES = new Set(["PREQUEL", "SEQUEL"]);
 
 const showInput = {
@@ -1385,6 +1386,8 @@ export const getLibrary = query({
           totalEpisodes,
           remainingEpisodes,
           progressPercent,
+          genres: show.genres ?? [],
+          rating: show.rating ?? null,
           lastActivityAt: userShow.lastWatchedAt ?? userShow.addedAt,
         };
       })
@@ -1624,6 +1627,12 @@ export const importTrackedShows = mutation({
   },
   handler: async (ctx, args) => {
     const userId = await getCurrentUserId(ctx);
+    if (args.items.length > IMPORT_TRACKED_SHOWS_MAX_ITEMS) {
+      throw new Error(
+        `Too many items in one import request. Max ${IMPORT_TRACKED_SHOWS_MAX_ITEMS} items per request.`
+      );
+    }
+
     const now = Date.now();
     const processedShowIds = new Set<string>();
 

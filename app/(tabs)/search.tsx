@@ -19,6 +19,7 @@ import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { searchAniList, type AniListFilterParams } from "@/lib/api/anilist";
 import { searchJikan } from "@/lib/api/jikan";
 import { normalizeAniListMedia, normalizeTmdbMedia } from "@/lib/api/normalize";
+import { normalizeStatus } from "@/lib/metadata-utils";
 import { searchTmdb, discoverTmdb, type TmdbFilterParams } from "@/lib/api/tmdb";
 import type { NormalizedShow } from "@/lib/api/types";
 import { createShowRouteId } from "@/lib/show-route";
@@ -53,6 +54,47 @@ function getGridColumnCount(width: number, isWeb: boolean) {
   if (width >= 1040) return 5;
   if (width >= 920) return 4;
   return 3;
+}
+
+function matchesAnimeFilterSet(
+  show: NormalizedShow,
+  filters: AniListFilterParams
+) {
+  if (filters.genres?.length) {
+    const showGenres = new Set((show.genres ?? []).map((genre) => genre.toLowerCase()));
+    const hasAnyGenre = filters.genres.some((genre) =>
+      showGenres.has(genre.toLowerCase())
+    );
+    if (!hasAnyGenre) {
+      return false;
+    }
+  }
+
+  if (typeof filters.seasonYear === "number") {
+    const yearText = show.firstAired?.slice(0, 4);
+    if (!yearText || Number(yearText) !== filters.seasonYear) {
+      return false;
+    }
+  }
+
+  if (typeof filters.minScore === "number") {
+    const minimumRating = filters.minScore / 10;
+    if ((show.rating ?? 0) < minimumRating) {
+      return false;
+    }
+  }
+
+  if (typeof filters.status === "string" && filters.status.trim()) {
+    const expectedStatus = normalizeStatus(filters.status);
+    if (!expectedStatus) {
+      return false;
+    }
+    if ((show.status ?? "") !== expectedStatus) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 const GRID_GAP = 12;
@@ -138,9 +180,13 @@ export function SearchScreen() {
       const tmdbFilters: TmdbFilterParams = {
         with_genres: selectedGenres.join(","),
         first_air_date_year:
-          filter === "tv" && selectedYear ? Number(selectedYear) : undefined,
+          selectedYear && (filter === "tv" || filter === "all")
+            ? Number(selectedYear)
+            : undefined,
         primary_release_year:
-          filter === "movie" && selectedYear ? Number(selectedYear) : undefined,
+          selectedYear && (filter === "movie" || filter === "all")
+            ? Number(selectedYear)
+            : undefined,
         vote_average_gte: selectedRating ? Number(selectedRating) : undefined,
         with_status: filter === "tv" ? selectedStatus : undefined,
       };
@@ -155,8 +201,30 @@ export function SearchScreen() {
       if (filter === "all" || filter === "tv" || filter === "movie") {
         const tmdbType: "multi" | "tv" | "movie" =
           filter === "all" ? "multi" : filter;
+        const isFilterOnlySearch = !normalizedQuery && hasActiveFilters;
 
-        if (hasActiveFilters && filter !== "all") {
+        if (isFilterOnlySearch) {
+          if (tmdbType === "multi") {
+            requests.push(
+              Promise.all([
+                discoverTmdb("tv", 1, tmdbFilters),
+                discoverTmdb("movie", 1, tmdbFilters),
+              ]).then(([tvResults, movieResults]) =>
+                [...tvResults.results, ...movieResults.results]
+                  .filter((item) => item.media_type !== "person")
+                  .map(normalizeTmdbMedia)
+              )
+            );
+          } else {
+            requests.push(
+              discoverTmdb(tmdbType, 1, tmdbFilters).then((r) =>
+                r.results
+                  .filter((item) => item.media_type !== "person")
+                  .map(normalizeTmdbMedia)
+              )
+            );
+          }
+        } else if (hasActiveFilters && filter !== "all") {
           requests.push(
             discoverTmdb(filter, 1, tmdbFilters).then((r) =>
               r.results.map(normalizeTmdbMedia)
@@ -165,7 +233,7 @@ export function SearchScreen() {
         } else {
           requests.push(
             searchTmdb(
-              normalizedQuery || "a",
+              normalizedQuery,
               tmdbType,
               1,
               tmdbFilters
@@ -181,8 +249,15 @@ export function SearchScreen() {
       if (filter === "all" || filter === "anime") {
         requests.push(
           searchAniList(normalizedQuery || "", 1, 20, anilistFilters)
-            .then((r) => r.data.Page.media.map(normalizeAniListMedia))
-            .catch(() => searchJikan(normalizedQuery || "", 1))
+            .then((r) =>
+              r.data.Page.media
+                .map(normalizeAniListMedia)
+                .filter((show) => matchesAnimeFilterSet(show, anilistFilters))
+            )
+            .catch(async () => {
+              const fallback = await searchJikan(normalizedQuery || "", 1);
+              return fallback.filter((show) => matchesAnimeFilterSet(show, anilistFilters));
+            })
         );
       }
 

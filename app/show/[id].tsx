@@ -686,6 +686,21 @@ export function ShowDetailScreen() {
     [show?.mediaType]
   );
 
+  const activeTrackingStatusForMenu = useMemo<ShowTrackingStatus>(() => {
+    const isCurrentStatusInMenu = trackingStatusOptions.some(
+      (option) => option.value === activeTrackingStatus
+    );
+    if (isCurrentStatusInMenu) {
+      return activeTrackingStatus;
+    }
+
+    if (show?.mediaType === "movie") {
+      return "plan_to_watch";
+    }
+
+    return activeTrackingStatus;
+  }, [activeTrackingStatus, show?.mediaType, trackingStatusOptions]);
+
   const relatedAnimeTrackingArgs = useMemo(() => {
     if (!show || show.mediaType !== "anime") {
       return "skip" as const;
@@ -2013,7 +2028,7 @@ export function ShowDetailScreen() {
   const isWatchlistActionPending = isAddingToWatchlist || isRemovingFromWatchlist;
   const isStatusMenuBusy = isSettingStatus || isWatchlistActionPending;
   const activeTrackingOption =
-    trackingStatusOptions.find((option) => option.value === activeTrackingStatus) ??
+    trackingStatusOptions.find((option) => option.value === activeTrackingStatusForMenu) ??
     trackingStatusOptions.find((option) => option.value === "plan_to_watch") ??
     trackingStatusOptions[0];
   const watchlistActionLabel = isAddingToWatchlist
@@ -2756,7 +2771,8 @@ export function ShowDetailScreen() {
 
             <View className="gap-2 p-4">
               {trackingStatusOptions.map((option) => {
-                const isActive = !!tracking?.inWatchlist && activeTrackingStatus === option.value;
+                const isActive =
+                  !!tracking?.inWatchlist && activeTrackingStatusForMenu === option.value;
                 return (
                   <Pressable
                     key={option.value}

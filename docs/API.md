@@ -149,7 +149,7 @@ query TrendingAnime($page: Int, $perPage: Int) {
 **Rate Limit**: None (CDN-hosted)
 **Update Frequency**: Every 6 hours
 
-```
+```text
 https://data.simkl.in/calendar/tv.json       # TV show schedule
 https://data.simkl.in/calendar/anime.json     # Anime schedule
 https://data.simkl.in/calendar/movies.json    # Movie releases

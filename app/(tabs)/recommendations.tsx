@@ -33,6 +33,13 @@ const tabOptions = [
 
 const GRID_GAP = 12;
 
+function isAbortError(error: unknown) {
+  return (
+    (error instanceof DOMException && error.name === "AbortError") ||
+    (error instanceof Error && error.name === "AbortError")
+  );
+}
+
 function getGridColumnCount(width: number, isWeb: boolean) {
   if (!isWeb) return 2;
   if (width >= 1800) return 8;
@@ -60,15 +67,27 @@ export default function RecommendationsScreen() {
   });
 
   useEffect(() => {
+    const controller = new AbortController();
+
     const fetchRecommendations = async () => {
+      const { signal } = controller;
+
       if (seedShows === undefined) {
-        setIsLoading(true);
+        if (!signal.aborted) {
+          setIsLoading(true);
+        }
         return;
       }
 
       if (seedShows.length === 0) {
-        setRecommendations([]);
-        setIsLoading(false);
+        if (!signal.aborted) {
+          setRecommendations([]);
+          setIsLoading(false);
+        }
+        return;
+      }
+
+      if (signal.aborted) {
         return;
       }
 
@@ -81,6 +100,9 @@ export default function RecommendationsScreen() {
 
         const seedResults = await Promise.all(
           seedShows.slice(0, 5).map(async (seed) => {
+            if (signal.aborted) {
+              return [];
+            }
             if (!seed.tmdbId) {
               return [];
             }
@@ -88,9 +110,13 @@ export default function RecommendationsScreen() {
             try {
               if (seed.mediaType === "movie") {
                 const [recs, similar] = await Promise.all([
-                  getMovieRecommendations(seed.tmdbId, 1),
-                  getSimilarMovies(seed.tmdbId, 1),
+                  getMovieRecommendations(seed.tmdbId, 1, { signal }),
+                  getSimilarMovies(seed.tmdbId, 1, { signal }),
                 ]);
+
+                if (signal.aborted) {
+                  return [];
+                }
 
                 return [
                   ...recs.results,
@@ -101,49 +127,73 @@ export default function RecommendationsScreen() {
               }
 
               const [recs, similar] = await Promise.all([
-                getTvRecommendations(seed.tmdbId, 1),
-                getSimilarTv(seed.tmdbId, 1),
+                getTvRecommendations(seed.tmdbId, 1, { signal }),
+                getSimilarTv(seed.tmdbId, 1, { signal }),
               ]);
+
+              if (signal.aborted) {
+                return [];
+              }
 
               return [
                 ...recs.results,
                 ...similar.results.filter(
                   (s) => !recs.results.some((r) => r.id === s.id)
-                ),
-              ].map((item) => ({ item, seedMediaType: seed.mediaType, seedTitle: seed.title }));
+                  ),
+                ].map((item) => ({ item, seedMediaType: seed.mediaType, seedTitle: seed.title }));
             } catch (err) {
+              if (signal.aborted || isAbortError(err)) {
+                return [];
+              }
               console.error(`Failed to get recommendations for ${seed.title}:`, err);
               return [];
             }
           })
         );
 
+        if (signal.aborted) {
+          return;
+        }
+
         for (const resultSet of seedResults) {
-          for (const { item, seedMediaType } of resultSet) {
-            const key = `${item.id}:${seedMediaType}`;
-            if (seenIds.has(key)) continue;
-            seenIds.add(key);
+          for (const { item } of resultSet) {
+            if (signal.aborted) {
+              return;
+            }
 
             const normalized = normalizeTmdbMedia(item);
+            const key = `${item.id}:${normalized.mediaType}`;
+            if (seenIds.has(key)) continue;
 
             if (activeTab !== "all" && normalized.mediaType !== activeTab) {
               continue;
             }
 
+            seenIds.add(key);
             allRecommendations.push(normalized);
           }
         }
 
-        setRecommendations(allRecommendations.slice(0, 50));
+        if (!signal.aborted) {
+          setRecommendations(allRecommendations.slice(0, 50));
+        }
       } catch (err) {
-        setError("Failed to load recommendations. Please try again.");
-        console.error(err);
+        if (!signal.aborted && !isAbortError(err)) {
+          setError("Failed to load recommendations. Please try again.");
+          console.error(err);
+        }
       } finally {
-        setIsLoading(false);
+        if (!signal.aborted) {
+          setIsLoading(false);
+        }
       }
     };
 
-    fetchRecommendations();
+    void fetchRecommendations();
+
+    return () => {
+      controller.abort();
+    };
   }, [seedShows, activeTab]);
 
   const headerTitle = useMemo(() => {
