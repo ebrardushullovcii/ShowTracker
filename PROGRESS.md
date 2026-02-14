@@ -197,8 +197,11 @@ Phase 10: Reliability & Quality Hardening
 
 - [ ] Add filters from api data like category of show/movie etc whatever we can.
 - [ ] Notifications for new episodes (push notifications)
-- [ ] Import from TVTime/Trakt
+- [ ] Import from TVTime/Trakt/other sites if they all have a standard for shows anime or movies.
 - [ ] Recommendations based on watch history
+- [ ] Make sure the imports don't duplicate anything
+- [ ] Add more detail to the stats like tv time
+- [ ] When things are removed or deleted send back to the last page not home always
 
 ## Known Issues
 

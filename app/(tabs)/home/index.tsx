@@ -93,7 +93,6 @@ const watchlistStatusOptions: { value: HomeStatusFilter; label: string }[] = [
   { value: "paused", label: "Paused" },
   { value: "dropped", label: "Dropped" },
   { value: "watched", label: "Watched" },
-  { value: "not_watched", label: "Not Watched" },
 ];
 
 function parseLocalDate(dateString: string) {
@@ -606,6 +605,12 @@ export function HomeScreen() {
       })),
     [mediaScopedWatchlist]
   );
+
+  useEffect(() => {
+    if (!watchlistStatusOptionsWithCount.some((option) => option.value === statusFilter)) {
+      setStatusFilter("all");
+    }
+  }, [statusFilter, watchlistStatusOptionsWithCount]);
 
   const upcomingGroups = useMemo(
     () => ((upcoming ?? upcomingSnapshot) as UpcomingGroup[]),
