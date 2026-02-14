@@ -72,7 +72,6 @@ const seriesStatusOptions: { value: LibraryStatusFilter; label: string }[] = [
   { value: "paused", label: "Paused" },
   { value: "completed", label: "Completed" },
   { value: "dropped", label: "Dropped" },
-  { value: "watched", label: "Watched" },
 ];
 
 const movieStatusOptions: { value: LibraryStatusFilter; label: string }[] = [

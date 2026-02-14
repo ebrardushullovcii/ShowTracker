@@ -92,7 +92,7 @@ const watchlistStatusOptions: { value: HomeStatusFilter; label: string }[] = [
   { value: "plan_to_watch", label: "Planned" },
   { value: "paused", label: "Paused" },
   { value: "dropped", label: "Dropped" },
-  { value: "watched", label: "Watched" },
+  { value: "completed", label: "Completed" },
 ];
 
 function parseLocalDate(dateString: string) {

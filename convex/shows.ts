@@ -77,6 +77,17 @@ type UserShowStatus =
   | "completed"
   | "plan_to_watch";
 
+const TERMINAL_SHOW_LIFECYCLE_STATUSES = new Set([
+  "ended",
+  "finished",
+  "finished airing",
+  "completed",
+  "complete",
+  "released",
+  "canceled",
+  "cancelled",
+]);
+
 function hasLookupArgs(args: {
   tmdbId?: number;
   tvdbId?: number;
@@ -299,6 +310,46 @@ async function refreshUserShowTrackingAggregates(
   });
 
   return aggregates;
+}
+
+function normalizePositiveEpisodeCount(value?: number | null) {
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
+    return null;
+  }
+  return Math.floor(value);
+}
+
+function isTerminalLifecycleStatus(status?: string) {
+  const normalized = status?.trim().toLowerCase();
+  if (!normalized) {
+    return false;
+  }
+  return TERMINAL_SHOW_LIFECYCLE_STATUSES.has(normalized);
+}
+
+function getImportedStatusFromProgress(
+  importedStatus: UserShowStatus,
+  show: Pick<ShowPayload, "mediaType" | "totalEpisodes" | "status">,
+  watchedEpisodesCount: number
+): UserShowStatus {
+  if (importedStatus !== "watching") {
+    return importedStatus;
+  }
+
+  if (show.mediaType === "movie") {
+    return watchedEpisodesCount > 0 ? "completed" : importedStatus;
+  }
+
+  const totalEpisodes = normalizePositiveEpisodeCount(show.totalEpisodes);
+  if (typeof totalEpisodes !== "number") {
+    return importedStatus;
+  }
+
+  if (!isTerminalLifecycleStatus(show.status)) {
+    return importedStatus;
+  }
+
+  return watchedEpisodesCount >= totalEpisodes ? "completed" : importedStatus;
 }
 
 async function findShowByLookup(
@@ -1588,6 +1639,8 @@ export const importTrackedShows = mutation({
         .withIndex("by_user_show", (q) => q.eq("userId", userId).eq("showId", showId))
         .unique();
 
+      let userShowId: Id<"userShows">;
+
       const hasWatchedEpisodes = item.watchedEpisodes.length > 0;
       const relationRootAnilistId =
         item.show.mediaType === "anime"
@@ -1620,8 +1673,9 @@ export const importTrackedShows = mutation({
           insertData.droppedAt = now;
         }
 
-        await ctx.db.insert("userShows", insertData);
+        userShowId = await ctx.db.insert("userShows", insertData);
       } else {
+        userShowId = existingUserShow._id;
         const patch: Partial<Doc<"userShows">> = {
           status: item.status,
           statusChangedAt: now,
@@ -1765,7 +1819,26 @@ export const importTrackedShows = mutation({
         insertedEpisodes += 1;
       }
 
-      await refreshUserShowTrackingAggregates(ctx, userId, showId);
+      const refreshed = await refreshUserShowTrackingAggregates(ctx, userId, showId);
+
+      const watchedEpisodesCount = Math.max(
+        0,
+        Math.floor(refreshed?.watchedEpisodesCount ?? item.watchedEpisodes.length)
+      );
+      const normalizedImportStatus = getImportedStatusFromProgress(
+        item.status,
+        item.show,
+        watchedEpisodesCount
+      );
+
+      if (normalizedImportStatus !== item.status) {
+        await ctx.db.patch(userShowId, {
+          status: normalizedImportStatus,
+          statusChangedAt: now,
+          completedAt: normalizedImportStatus === "completed" ? now : undefined,
+          droppedAt: normalizedImportStatus === "dropped" ? now : undefined,
+        });
+      }
 
       const showKey = String(showId);
       if (!processedShowIds.has(showKey)) {
@@ -2832,6 +2905,7 @@ export const resetGlobalMediaData = internalAction({
 });
 
 const TRACKING_BACKFILL_PAGE_SIZE = 120;
+const STATUS_NORMALIZATION_PAGE_SIZE = 120;
 
 export const getUserShowsPageForTrackingBackfill = internalQuery({
   args: {
@@ -2880,6 +2954,56 @@ export const backfillUserShowTrackingAggregatesBatch = internalMutation({
     }
 
     return { patched };
+  },
+});
+
+export const normalizeWatchingStatusesBatch = internalMutation({
+  args: {
+    userId: v.id("users"),
+    userShowIds: v.array(v.id("userShows")),
+  },
+  handler: async (ctx, args) => {
+    let normalized = 0;
+    const now = Date.now();
+
+    for (const userShowId of args.userShowIds) {
+      const userShow = await ctx.db.get(userShowId);
+      if (!userShow || userShow.userId !== args.userId || userShow.status !== "watching") {
+        continue;
+      }
+
+      const show = await ctx.db.get(userShow.showId);
+      if (!show) {
+        continue;
+      }
+
+      const watchedEpisodesCount = Math.max(
+        0,
+        Math.floor(userShow.watchedEpisodesCount ?? 0)
+      );
+
+      const nextStatus = getImportedStatusFromProgress(
+        userShow.status,
+        {
+          mediaType: show.mediaType,
+          totalEpisodes: show.totalEpisodes,
+          status: show.status,
+        },
+        watchedEpisodesCount
+      );
+
+      if (nextStatus !== userShow.status) {
+        await ctx.db.patch(userShowId, {
+          status: nextStatus,
+          statusChangedAt: now,
+          completedAt: nextStatus === "completed" ? now : undefined,
+          droppedAt: nextStatus === "dropped" ? now : undefined,
+        });
+        normalized += 1;
+      }
+    }
+
+    return { normalized };
   },
 });
 
@@ -2939,6 +3063,73 @@ export const rebuildUserShowTrackingAggregatesForUser = internalAction({
   },
   handler: async (ctx, args) => {
     return rebuildTrackingAggregatesForUser(ctx, args.userId);
+  },
+});
+
+async function normalizeWatchingStatusesForUser(
+  ctx: ActionCtx,
+  userId: Id<"users">
+) {
+  let cursor: string | null = null;
+  let scanned = 0;
+  let normalized = 0;
+  let batches = 0;
+
+  while (true) {
+    const page: {
+      page: Array<Doc<"userShows">>;
+      continueCursor: string;
+      isDone: boolean;
+    } = await ctx.runQuery(internal.shows.getUserShowsPageForTrackingBackfill, {
+      userId,
+      paginationOpts: {
+        cursor,
+        numItems: STATUS_NORMALIZATION_PAGE_SIZE,
+      },
+    });
+
+    scanned += page.page.length;
+
+    if (page.page.length > 0) {
+      const batchResult: { normalized: number } = await ctx.runMutation(
+        internal.shows.normalizeWatchingStatusesBatch,
+        {
+          userId,
+          userShowIds: page.page.map((entry) => entry._id),
+        }
+      );
+      normalized += batchResult.normalized;
+      batches += 1;
+    }
+
+    if (page.isDone) {
+      break;
+    }
+
+    cursor = page.continueCursor;
+  }
+
+  return {
+    scanned,
+    normalized,
+    batches,
+  };
+}
+
+export const normalizeWatchingStatusesFromProgressForUser = internalAction({
+  args: {
+    userId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    return normalizeWatchingStatusesForUser(ctx, args.userId);
+  },
+});
+
+export const normalizeWatchingStatusesFromProgress = action({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await getCurrentUserId(ctx);
+    return normalizeWatchingStatusesForUser(ctx, userId);
   },
 });
 
