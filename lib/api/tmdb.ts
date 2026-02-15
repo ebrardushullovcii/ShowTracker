@@ -144,6 +144,31 @@ type TmdbFindResponse = {
   person_results: TmdbMedia[];
 };
 
+export type TmdbFindNormalizedResult = {
+  items: NormalizedShow[];
+};
+
+function normalizeTmdbFindResponse(data: TmdbFindResponse): TmdbFindNormalizedResult {
+  const items = [
+    ...data.movie_results.map((entry) =>
+      normalizeTmdbMedia({ ...entry, media_type: "movie" })
+    ),
+    ...data.tv_results.map((entry) => normalizeTmdbMedia({ ...entry, media_type: "tv" })),
+  ];
+
+  const deduped = new Map<string, NormalizedShow>();
+  for (const item of items) {
+    const key = `${item.mediaType}:${item.tmdbId ?? item.id}`;
+    if (!deduped.has(key)) {
+      deduped.set(key, item);
+    }
+  }
+
+  return {
+    items: Array.from(deduped.values()),
+  };
+}
+
 function assertTmdbCredentials() {
   if (!tmdbApiKey && !tmdbReadAccessToken) {
     throw new Error(
@@ -417,7 +442,7 @@ export async function findTmdbByImdbId(imdbId: string) {
   }
 
   const cacheKey = `tmdb-find:imdb:${normalized}`;
-  const cached = getCached<TmdbFindResponse>(cacheKey);
+  const cached = getCached<TmdbFindNormalizedResult>(cacheKey);
   if (cached) {
     return cached;
   }
@@ -426,8 +451,9 @@ export async function findTmdbByImdbId(imdbId: string) {
     external_source: "imdb_id",
   });
 
-  setCached(cacheKey, data, cacheTtlMs);
-  return data;
+  const normalizedResult = normalizeTmdbFindResponse(data);
+  setCached(cacheKey, normalizedResult, cacheTtlMs);
+  return normalizedResult;
 }
 
 export async function findTmdbByTvdbId(tvdbId: number | string) {
@@ -437,7 +463,7 @@ export async function findTmdbByTvdbId(tvdbId: number | string) {
   }
 
   const cacheKey = `tmdb-find:tvdb:${normalized}`;
-  const cached = getCached<TmdbFindResponse>(cacheKey);
+  const cached = getCached<TmdbFindNormalizedResult>(cacheKey);
   if (cached) {
     return cached;
   }
@@ -446,8 +472,9 @@ export async function findTmdbByTvdbId(tvdbId: number | string) {
     external_source: "tvdb_id",
   });
 
-  setCached(cacheKey, data, cacheTtlMs);
-  return data;
+  const normalizedResult = normalizeTmdbFindResponse(data);
+  setCached(cacheKey, normalizedResult, cacheTtlMs);
+  return normalizedResult;
 }
 
 export async function getTmdbShowDetails(

@@ -10,7 +10,6 @@ import type { ActionCtx, MutationCtx, QueryCtx } from "./_generated/server.js";
 import type { Doc, Id } from "./_generated/dataModel";
 import { v } from "convex/values";
 import { paginationOptsValidator } from "convex/server";
-import { auth } from "./auth";
 import { api, internal } from "./_generated/api";
 import {
   getAniListAnimeRelations,
@@ -170,6 +169,12 @@ function mergeNumberArrays(...values: (number[] | undefined)[]) {
   return merged.size > 0 ? Array.from(merged) : undefined;
 }
 
+function sortFiniteTimestamps(values: number[]) {
+  return values
+    .filter((value) => Number.isFinite(value))
+    .sort((a, b) => a - b);
+}
+
 function buildShowPatch(
   incoming: ShowPayload,
   existing?: Doc<"shows">
@@ -228,11 +233,11 @@ type ShowPayload = {
 };
 
 async function getCurrentUserId(ctx: QueryCtx | MutationCtx | ActionCtx) {
-  const userId = await auth.getUserId(ctx);
-  if (!userId) {
+  const identity = await ctx.auth.getUserIdentity();
+  if (!identity) {
     throw new Error("Unauthorized");
   }
-  return userId;
+  return identity.subject as Id<"users">;
 }
 
 type UserShowTrackingAggregates = {
@@ -1734,8 +1739,11 @@ export const importTrackedShows = mutation({
       for (const episode of item.watchedEpisodes) {
         const episodeKey = `${episode.season}:${episode.episode}`;
         const incomingHistory = Array.isArray(episode.watchHistory)
-          ? episode.watchHistory.filter(
-              (entry): entry is number => typeof entry === "number" && Number.isFinite(entry)
+          ? sortFiniteTimestamps(
+              episode.watchHistory.filter(
+                (entry): entry is number =>
+                  typeof entry === "number" && Number.isFinite(entry)
+              )
             )
           : typeof episode.watchedAt === "number" && Number.isFinite(episode.watchedAt)
             ? [episode.watchedAt]
@@ -1760,8 +1768,13 @@ export const importTrackedShows = mutation({
           continue;
         }
 
-        const existingHistory = Array.isArray(existing.watchHistory) ? existing.watchHistory : [];
-        const mergedHistory = [...existingHistory, ...incomingHistory];
+        const existingHistory = sortFiniteTimestamps(
+          Array.isArray(existing.watchHistory) ? existing.watchHistory : []
+        );
+        const mergedHistory = sortFiniteTimestamps([
+          ...existingHistory,
+          ...incomingHistory,
+        ]);
         const mergedCount = (existing.watchCount ?? 1) + incomingCount;
 
         const watchedAtCandidates = [
@@ -1799,15 +1812,18 @@ export const importTrackedShows = mutation({
             : now;
 
         const watchHistory = Array.isArray(episode.watchHistory)
-          ? episode.watchHistory.filter(
-              (entry): entry is number => typeof entry === "number" && Number.isFinite(entry)
+          ? sortFiniteTimestamps(
+              episode.watchHistory.filter(
+                (entry): entry is number =>
+                  typeof entry === "number" && Number.isFinite(entry)
+              )
             )
           : [];
         const normalizedWatchHistory =
           watchHistory.length > 0 ? watchHistory : [watchedAt];
         const watchCount =
           typeof episode.watchCount === "number" && Number.isFinite(episode.watchCount)
-            ? Math.max(1, Math.floor(episode.watchCount))
+            ? Math.max(1, Math.floor(episode.watchCount), normalizedWatchHistory.length)
             : normalizedWatchHistory.length;
         const normalizedWatchedAt =
           normalizedWatchHistory.length > 0
@@ -2360,12 +2376,13 @@ export const clearShowWatched = mutation({
 export const getWatchlist = query({
   args: {},
   handler: async (ctx) => {
-    const userId = await auth.getUserId(ctx);
+    const identity = await ctx.auth.getUserIdentity();
     
     // Return empty array if user is not authenticated
-    if (!userId) {
+    if (!identity) {
       return [];
     }
+    const userId = identity.subject as Id<"users">;
 
     const userShows = await ctx.db
       .query("userShows")
@@ -3657,12 +3674,13 @@ export const getRecommendations = query({
     limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    const userId = await auth.getUserId(ctx);
+    const identity = await ctx.auth.getUserIdentity();
     
     // Return empty if not authenticated
-    if (!userId) {
+    if (!identity) {
       return [];
     }
+    const userId = identity.subject as Id<"users">;
 
     const limit = Math.max(1, Math.min(args.limit ?? 8, 20));
 
@@ -3709,7 +3727,7 @@ export const getRecommendations = query({
         }
 
         return {
-          id: String(show._id),
+          id: `tmdb:${show.mediaType}:${show.tmdbId}`,
           tmdbId: show.tmdbId,
           mediaType: show.mediaType,
           title: show.title,

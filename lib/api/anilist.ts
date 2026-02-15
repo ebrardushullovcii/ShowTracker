@@ -241,21 +241,10 @@ export async function searchAniList(
   }
 
   const conditions: string[] = ["type: ANIME"];
-  const variableDefinitions: string[] = [
-    "$page: Int",
-    "$perPage: Int",
-    "$genres: [String]",
-    "$seasonYear: Int",
-    "$minScore: Int",
-    "$status: MediaStatus",
-  ];
+  const variableDefinitions: string[] = ["$page: Int", "$perPage: Int"];
   const variables: Record<string, unknown> = {
     page,
     perPage,
-    genres: filters?.genres,
-    seasonYear: filters?.seasonYear,
-    minScore: filters?.minScore,
-    status: filters?.status,
   };
 
   if (hasSearch) {
@@ -265,15 +254,23 @@ export async function searchAniList(
   }
   if (filters?.genres?.length) {
     conditions.push(`genre_in: $genres`);
+    variableDefinitions.push("$genres: [String]");
+    variables.genres = filters.genres;
   }
   if (filters?.seasonYear) {
     conditions.push(`seasonYear: $seasonYear`);
+    variableDefinitions.push("$seasonYear: Int");
+    variables.seasonYear = filters.seasonYear;
   }
   if (filters?.minScore) {
     conditions.push(`averageScore_greater: $minScore`);
+    variableDefinitions.push("$minScore: Int");
+    variables.minScore = filters.minScore;
   }
   if (filters?.status) {
     conditions.push(`status: $status`);
+    variableDefinitions.push("$status: MediaStatus");
+    variables.status = filters.status;
   }
 
   const data = await request<AniListSearchResult>(
@@ -313,23 +310,36 @@ export async function getTrendingAniList(
     return cached;
   }
 
-  // Build filter conditions dynamically
   const conditions: string[] = ["type: ANIME"];
+  const variableDefinitions: string[] = ["$page: Int", "$perPage: Int"];
+  const variables: Record<string, unknown> = {
+    page,
+    perPage,
+  };
+
   if (filters?.genres?.length) {
     conditions.push(`genre_in: $genres`);
+    variableDefinitions.push("$genres: [String]");
+    variables.genres = filters.genres;
   }
   if (filters?.seasonYear) {
     conditions.push(`seasonYear: $seasonYear`);
+    variableDefinitions.push("$seasonYear: Int");
+    variables.seasonYear = filters.seasonYear;
   }
   if (filters?.minScore) {
     conditions.push(`averageScore_greater: $minScore`);
+    variableDefinitions.push("$minScore: Int");
+    variables.minScore = filters.minScore;
   }
   if (filters?.status) {
     conditions.push(`status: $status`);
+    variableDefinitions.push("$status: MediaStatus");
+    variables.status = filters.status;
   }
 
   const data = await request<AniListSearchResult>(
-    `query ($page: Int, $perPage: Int, $genres: [String], $seasonYear: Int, $minScore: Int, $status: MediaStatus) {
+    `query (${variableDefinitions.join(", ")}) {
       Page(page: $page, perPage: $perPage) {
         pageInfo { total currentPage lastPage }
         media(${conditions.join(", ")}, sort: TRENDING_DESC) {
@@ -337,14 +347,7 @@ export async function getTrendingAniList(
         }
       }
     }`,
-    {
-      page,
-      perPage,
-      genres: filters?.genres,
-      seasonYear: filters?.seasonYear,
-      minScore: filters?.minScore,
-      status: filters?.status,
-    }
+    variables
   );
 
   const normalized: AniListNormalizedResult = {

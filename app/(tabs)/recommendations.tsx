@@ -30,8 +30,6 @@ const tabOptions = [
   { value: "movie" as const, label: "Movies" },
 ];
 
-const GRID_GAP = 12;
-
 function isAbortError(error: unknown) {
   return (
     (error instanceof DOMException && error.name === "AbortError") ||
@@ -49,7 +47,7 @@ function getGridColumnCount(width: number, isWeb: boolean) {
   return 3;
 }
 
-export default function RecommendationsScreen() {
+export function RecommendationsScreen() {
   const [activeTab, setActiveTab] = useState<RecTab>("all");
   const { width } = useWindowDimensions();
   const isWeb = Platform.OS === "web";
@@ -81,6 +79,7 @@ export default function RecommendationsScreen() {
       if (seedShows.length === 0) {
         if (!signal.aborted) {
           setRecommendations([]);
+          setError(null);
           setIsLoading(false);
         }
         return;
@@ -221,8 +220,7 @@ export default function RecommendationsScreen() {
           numColumns={columns}
           keyExtractor={(item) => `${item.id}-${item.mediaType}`}
           showsVerticalScrollIndicator={false}
-          ItemSeparatorComponent={() => <View style={{ height: GRID_GAP }} />}
-          contentContainerStyle={{ paddingBottom: 32 }}
+          ItemSeparatorComponent={() => <View className="h-3" />}
           ListHeaderComponent={
             <View className="pb-2">
               <PageIntro
@@ -286,7 +284,7 @@ export default function RecommendationsScreen() {
             </View>
           }
           renderItem={({ item }) => (
-            <View style={{ flex: 1, paddingHorizontal: GRID_GAP / 2 }}>
+            <View className="flex-1 px-1.5">
               <MediaPosterCard
                 show={item}
                 href={{
@@ -298,9 +296,12 @@ export default function RecommendationsScreen() {
               />
             </View>
           )}
+          ListFooterComponent={<View className="h-8" />}
           ListEmptyComponent={null}
         />
       </View>
     </ScreenWrapper>
   );
 }
+
+export default RecommendationsScreen;

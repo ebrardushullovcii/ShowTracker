@@ -21,7 +21,6 @@ import {
   findTmdbByTvdbId,
   getTmdbShowDetails,
   searchTmdb,
-  type TmdbMedia,
 } from "@/lib/api/tmdb";
 import { lookupTvMazeShowByTvdb, type TvMazeShow } from "@/lib/api/tvmaze";
 import type { MediaType, NormalizedShow } from "@/lib/api/types";
@@ -449,9 +448,11 @@ async function resolveTmdbByImdbId(item: ParsedImportItem) {
   }
 
   const targetType = item.mediaType === "movie" ? "movie" : "tv";
-  const preferred = targetType === "movie" ? lookup.movie_results[0] : lookup.tv_results[0];
-  if (preferred) {
-    return resolveTmdbById(targetType, preferred.id).catch(() => null);
+  const preferred = lookup.items.find(
+    (entry) => entry.mediaType === targetType && typeof entry.tmdbId === "number"
+  );
+  if (preferred && typeof preferred.tmdbId === "number") {
+    return resolveTmdbById(targetType, preferred.tmdbId).catch(() => null);
   }
 
   return null;
@@ -496,23 +497,32 @@ async function resolveTmdbByTvdbId(item: ParsedImportItem): Promise<ScoredResolv
   }
 
   const targetType = item.mediaType === "movie" ? "movie" : "tv";
-  const preferred = targetType === "movie" ? lookup.movie_results[0] : lookup.tv_results[0];
+  const preferred = lookup.items.find(
+    (entry) => entry.mediaType === targetType && typeof entry.tmdbId === "number"
+  );
 
-  if (!preferred) {
+  if (!preferred || typeof preferred.tmdbId !== "number") {
     return null;
   }
 
-  const resolved = await resolveTmdbById(targetType, preferred.id).catch(() => null);
+  const resolved = await resolveTmdbById(targetType, preferred.tmdbId).catch(() => null);
   if (!resolved) {
     return null;
   }
 
-  const candidateScore = scoreTmdbCandidate(item, preferred);
+  const candidateScore = scoreCandidateMatch({
+    importTitle: item.title,
+    candidateTitle: preferred.title,
+    importYear: item.firstAiredYear,
+    candidateYear: extractYear(preferred.firstAired),
+  });
   return {
     show: resolved,
     score: Math.max(0.7, candidateScore),
     source: "tmdb",
-    isAnimation: preferred.genre_ids?.includes(16) ?? false,
+    isAnimation: (preferred.genres ?? []).some(
+      (genre) => genre.toLowerCase() === "animation"
+    ),
   };
 }
 
@@ -552,11 +562,17 @@ async function resolveViaTvMazeByTvdbId(
 
 function buildFallbackShowFromParsedItem(item: ParsedImportItem): NormalizedShow {
   const fallbackRuntime = DEFAULT_FALLBACK_RUNTIME[item.mediaType];
+  const uniqueWatchedEpisodeCount = new Set(
+    item.watchedEpisodes.map((entry) => `${entry.season}:${entry.episode}`)
+  ).size;
+  const maxEpisodeNumber = item.watchedEpisodes.reduce(
+    (max, entry) => Math.max(max, entry.episode),
+    0
+  );
   const inferredEpisodes =
     item.mediaType === "movie"
       ? 1
-      : item.watchedEpisodes.reduce((max, entry) => Math.max(max, entry.episode), 0) ||
-        item.watchedEpisodes.length ||
+      : Math.max(uniqueWatchedEpisodeCount, maxEpisodeNumber) ||
         undefined;
 
   return {
@@ -576,17 +592,6 @@ function buildFallbackShowFromParsedItem(item: ParsedImportItem): NormalizedShow
     totalEpisodes: inferredEpisodes,
     totalSeasons: item.mediaType === "movie" ? 0 : 1,
   };
-}
-
-function scoreTmdbCandidate(item: ParsedImportItem, candidate: TmdbMedia) {
-  const title = candidate.title ?? candidate.name ?? "";
-  const candidateYear = extractYear(candidate.first_air_date ?? candidate.release_date);
-  return scoreCandidateMatch({
-    importTitle: item.title,
-    candidateTitle: title,
-    importYear: item.firstAiredYear,
-    candidateYear,
-  });
 }
 
 async function resolveTmdbBySearch(item: ParsedImportItem): Promise<ScoredResolvedShow | null> {
@@ -1132,8 +1137,9 @@ export function ImportScreen() {
               void handleResetTrackingData();
             }}
             disabled={isParsing || isImporting || isResetting}
-            className="mt-3 flex-row items-center justify-center gap-2 rounded-lg border border-warning/50 bg-warning/20 py-2.5"
-            style={{ opacity: isParsing || isImporting || isResetting ? 0.6 : 1 }}
+            className={`mt-3 flex-row items-center justify-center gap-2 rounded-lg border border-warning/50 bg-warning/20 py-2.5 ${
+              isParsing || isImporting || isResetting ? "opacity-60" : "opacity-100"
+            }`}
           >
             {isResetting ? (
               <ActivityIndicator size="small" color="#f59e0b" />
@@ -1158,8 +1164,9 @@ export function ImportScreen() {
               disabled={isParsing || isImporting}
               accessibilityRole="button"
               testID="import-load-file-button"
-              className="flex-1 flex-row items-center justify-center gap-2 rounded-lg border border-border-default bg-bg-elevated py-2.5"
-              style={{ opacity: isParsing || isImporting ? 0.6 : 1 }}
+              className={`flex-1 flex-row items-center justify-center gap-2 rounded-lg border border-border-default bg-bg-elevated py-2.5 ${
+                isParsing || isImporting ? "opacity-60" : "opacity-100"
+              }`}
             >
               <Ionicons name="document-outline" size={14} color="#a1a1aa" />
               <Text className="text-xs font-semibold uppercase tracking-wider text-text-secondary">
@@ -1171,8 +1178,9 @@ export function ImportScreen() {
               disabled={isParsing || isImporting}
               accessibilityRole="button"
               testID="import-parse-button"
-              className="flex-1 flex-row items-center justify-center gap-2 rounded-lg border border-primary/40 bg-primary/10 py-2.5"
-              style={{ opacity: isParsing || isImporting ? 0.6 : 1 }}
+              className={`flex-1 flex-row items-center justify-center gap-2 rounded-lg border border-primary/40 bg-primary/10 py-2.5 ${
+                isParsing || isImporting ? "opacity-60" : "opacity-100"
+              }`}
             >
               {isParsing ? (
                 <ActivityIndicator size="small" color="#ef4444" />
@@ -1238,7 +1246,7 @@ export function ImportScreen() {
               </Text>
             </View>
 
-            <View className="mt-3 flex-row flex-wrap" style={{ gap: 8 }}>
+            <View className="mt-3 flex-row flex-wrap gap-2">
               <View className="rounded-md bg-bg-elevated px-2.5 py-1.5">
                 <Text className="text-xs text-text-secondary">TV {summary.tv}</Text>
               </View>
@@ -1282,8 +1290,9 @@ export function ImportScreen() {
               disabled={isParsing || isImporting}
               accessibilityRole="button"
               testID="import-run-button"
-              className="mt-4 flex-row items-center justify-center gap-2 rounded-lg border border-primary bg-primary py-3"
-              style={{ opacity: isParsing || isImporting ? 0.6 : 1 }}
+              className={`mt-4 flex-row items-center justify-center gap-2 rounded-lg border border-primary bg-primary py-3 ${
+                isParsing || isImporting ? "opacity-60" : "opacity-100"
+              }`}
             >
               {isImporting ? (
                 <ActivityIndicator size="small" color="#fff" />
