@@ -393,10 +393,14 @@ function mergeImportPayloads(items: ImportPayloadItem[]) {
       episodes.set(episodeKey, mergeWatchedEpisodeEntries(current, episode));
     }
 
+    const definedShowFields = Object.fromEntries(
+      Object.entries(item.show).filter(([, value]) => value !== undefined)
+    ) as Partial<ImportPayloadItem["show"]>;
+
     merged.set(key, {
       show: {
         ...existing.show,
-        ...item.show,
+        ...definedShowFields,
         title:
           existing.show.title.length >= item.show.title.length
             ? existing.show.title

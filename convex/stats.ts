@@ -1,6 +1,6 @@
-import { mutation, query } from "./_generated/server";
-import type { MutationCtx, QueryCtx } from "./_generated/server.js";
-import type { Doc, Id } from "./_generated/dataModel";
+import { mutation, query } from "@/convex/_generated/server";
+import type { MutationCtx, QueryCtx } from "@/convex/_generated/server";
+import type { Doc, Id } from "@/convex/_generated/dataModel";
 import { v } from "convex/values";
 import { auth } from "./auth";
 
@@ -242,6 +242,7 @@ export const getUserStats = query({
         watchedEpisodesCount,
         Math.floor(userShow.watchedTotalCount ?? watchedEpisodesCount)
       );
+      const rewatchCount = Math.max(watchedTotalCount - watchedEpisodesCount, 0);
       const fallbackRuntimeMinutes =
         Math.max(0, show.episodeRuntime ?? 0) * watchedTotalCount;
       const watchedRuntimeMinutes = Math.max(
@@ -254,10 +255,10 @@ export const getUserStats = query({
       );
 
       uniqueEpisodesWatched += watchedEpisodesCount;
-      totalWatchEvents += watchedTotalCount;
+      totalWatchEvents += rewatchCount;
 
-      if (watchedTotalCount > 0) {
-        showWatchCounts.set(show._id.toString(), watchedTotalCount);
+      if (rewatchCount > 0) {
+        showWatchCounts.set(show._id.toString(), rewatchCount);
       }
 
       if (show.mediaType === "tv") {
@@ -280,7 +281,7 @@ export const getUserStats = query({
       }
     }
 
-    const totalRewatches = Math.max(totalWatchEvents - uniqueEpisodesWatched, 0);
+    const totalRewatches = Math.max(totalWatchEvents, 0);
 
     // Bound streak computation to recent episode rows so large accounts stay under query limits.
     const streakEpisodeSamples = await ctx.db

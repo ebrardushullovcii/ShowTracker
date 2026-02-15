@@ -51,10 +51,7 @@ export function PageIntro({
               </View>
             ) : null}
 
-            <Text
-              className="text-[30px] text-text-primary"
-              style={{ fontFamily: "Courier New", fontWeight: "900" }}
-            >
+            <Text className="font-mono text-[30px] font-black text-text-primary">
               {title}
             </Text>
             <Text className="mt-1 text-sm text-text-secondary">{subtitle}</Text>
