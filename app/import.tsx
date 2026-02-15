@@ -920,7 +920,7 @@ export function ImportScreen() {
           );
         }
 
-        if (parseSummary.withEpisodeHistory === 0) {
+        if (!parseSummary.withEpisodeHistory) {
           setWarning(
             "No episode history was detected. Show status import still works, episode counts may be limited."
           );

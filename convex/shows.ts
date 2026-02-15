@@ -10,7 +10,6 @@ import type { ActionCtx, MutationCtx, QueryCtx } from "./_generated/server.js";
 import type { Doc, Id } from "./_generated/dataModel";
 import { v } from "convex/values";
 import { paginationOptsValidator } from "convex/server";
-import { auth } from "./auth";
 import { api, internal } from "./_generated/api";
 import {
   getAniListAnimeRelations,
@@ -234,11 +233,17 @@ type ShowPayload = {
 };
 
 async function getCurrentUserId(ctx: QueryCtx | MutationCtx | ActionCtx) {
-  const userId = await auth.getUserId(ctx);
+  const identity = await ctx.auth.getUserIdentity();
+  if (!identity) {
+    throw new Error("Unauthorized");
+  }
+
+  const [userId] = identity.subject.split("|");
   if (!userId) {
     throw new Error("Unauthorized");
   }
-  return userId;
+
+  return userId as Id<"users">;
 }
 
 type UserShowTrackingAggregates = {
@@ -1668,6 +1673,9 @@ export const importTrackedShows = mutation({
           showId,
           status: item.status,
           addedAt: now,
+          watchedEpisodesCount: 0,
+          watchedTotalCount: 0,
+          watchedRuntimeMinutes: 0,
           statusChangedAt: now,
         };
 
@@ -2377,16 +2385,21 @@ export const clearShowWatched = mutation({
 export const getWatchlist = query({
   args: {},
   handler: async (ctx) => {
-    const userId = await auth.getUserId(ctx);
+    const identity = await ctx.auth.getUserIdentity();
     
     // Return empty array if user is not authenticated
+    if (!identity) {
+      return [];
+    }
+
+    const [userId] = identity.subject.split("|");
     if (!userId) {
       return [];
     }
 
     const userShows = await ctx.db
       .query("userShows")
-      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .withIndex("by_user", (q) => q.eq("userId", userId as Id<"users">))
       .collect();
 
     const seasonMonthOffsetByName: Record<string, number> = {
@@ -3674,9 +3687,14 @@ export const getRecommendations = query({
     limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    const userId = await auth.getUserId(ctx);
+    const identity = await ctx.auth.getUserIdentity();
     
     // Return empty if not authenticated
+    if (!identity) {
+      return [];
+    }
+
+    const [userId] = identity.subject.split("|");
     if (!userId) {
       return [];
     }
@@ -3686,7 +3704,7 @@ export const getRecommendations = query({
     // Get user's tracked shows with aggregate fields.
     const userShows = await ctx.db
       .query("userShows")
-      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .withIndex("by_user", (q) => q.eq("userId", userId as Id<"users">))
       .collect();
 
     const candidateUserShows = userShows

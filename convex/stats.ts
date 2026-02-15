@@ -2,14 +2,19 @@ import { mutation, query } from "@/convex/_generated/server";
 import type { MutationCtx, QueryCtx } from "@/convex/_generated/server";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
 import { v } from "convex/values";
-import { auth } from "./auth";
 
 async function getCurrentUserId(ctx: QueryCtx | MutationCtx) {
-  const userId = await auth.getUserId(ctx);
+  const identity = await ctx.auth.getUserIdentity();
+  if (!identity) {
+    throw new Error("Unauthorized");
+  }
+
+  const [userId] = identity.subject.split("|");
   if (!userId) {
     throw new Error("Unauthorized");
   }
-  return userId;
+
+  return userId as Id<"users">;
 }
 
 function formatDuration(minutes: number): string {
