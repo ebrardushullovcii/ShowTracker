@@ -360,6 +360,36 @@ function getImportedStatusFromProgress(
   return watchedEpisodesCount >= totalEpisodes ? "completed" : importedStatus;
 }
 
+function normalizeLookupTitle(title?: string) {
+  if (!title) {
+    return "";
+  }
+
+  return title
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ");
+}
+
+function extractLookupYear(value?: string | null) {
+  if (!value) {
+    return undefined;
+  }
+
+  const match = value.match(/(19|20)\d{2}/);
+  if (!match) {
+    return undefined;
+  }
+
+  const year = Number.parseInt(match[0], 10);
+  if (!Number.isFinite(year) || year < 1900 || year > 2100) {
+    return undefined;
+  }
+
+  return year;
+}
+
 async function findShowByLookup(
   ctx: QueryCtx | MutationCtx,
   args: {
@@ -368,7 +398,10 @@ async function findShowByLookup(
     anilistId?: number;
     malId?: number;
     tvmazeId?: number;
+    imdbId?: string;
     mediaType?: "tv" | "anime" | "movie";
+    title?: string;
+    firstAired?: string;
   }
 ) {
   const byTmdbCandidates =
@@ -432,7 +465,53 @@ async function findShowByLookup(
     return byTvMaze;
   }
 
-  return null;
+  if (!args.mediaType) {
+    return null;
+  }
+  const mediaType = args.mediaType;
+
+  const byMediaTypeCandidates = await ctx.db
+    .query("shows")
+    .withIndex("by_mediaType", (q) => q.eq("mediaType", mediaType))
+    .order("desc")
+    .take(500);
+
+  const normalizedImdbId = args.imdbId?.trim().toLowerCase();
+  if (normalizedImdbId) {
+    const byImdb = byMediaTypeCandidates.find(
+      (candidate) => candidate.imdbId?.trim().toLowerCase() === normalizedImdbId
+    );
+    if (byImdb) {
+      return byImdb;
+    }
+  }
+
+  const normalizedTitle = normalizeLookupTitle(args.title);
+  if (!normalizedTitle) {
+    return null;
+  }
+
+  const titleMatches = byMediaTypeCandidates.filter(
+    (candidate) => normalizeLookupTitle(candidate.title) === normalizedTitle
+  );
+
+  if (titleMatches.length === 0) {
+    return null;
+  }
+
+  const requestedYear = extractLookupYear(args.firstAired);
+  if (typeof requestedYear !== "number") {
+    return pickBestLookupCandidate(titleMatches, mediaType);
+  }
+
+  const yearMatches = titleMatches.filter(
+    (candidate) => extractLookupYear(candidate.firstAired) === requestedYear
+  );
+
+  return pickBestLookupCandidate(
+    yearMatches.length > 0 ? yearMatches : titleMatches,
+    mediaType
+  );
 }
 
 async function ensureShowRecordId(

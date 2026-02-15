@@ -258,6 +258,14 @@ export function ListDetailScreen() {
   const reorderItems = useMutation(api.lists.reorderListItems);
   const removeShow = useMutation(api.lists.removeShowFromList);
 
+  const goBackToPreviousPage = useCallback(() => {
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+    router.replace("/home");
+  }, []);
+
   // Grid calculations
   const isDesktop = windowWidth >= 768;
   const containerPadding = isDesktop ? 24 : 0;
@@ -365,7 +373,7 @@ export function ListDetailScreen() {
         setLocalShows((prev) => prev.filter((s) => s.id !== confirmActionState.showId));
       } else {
         await deleteList({ listId });
-        router.replace("/home");
+        goBackToPreviousPage();
       }
 
       setConfirmActionState(null);

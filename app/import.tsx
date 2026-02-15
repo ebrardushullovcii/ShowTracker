@@ -345,37 +345,59 @@ async function mapWithConcurrency<T, R>(
   return results;
 }
 
-function buildImportKey(payload: ImportPayloadItem) {
+function buildImportAliasKeys(payload: ImportPayloadItem) {
   const show = payload.show;
+  const keys: string[] = [];
+
   if (typeof show.tmdbId === "number") {
-    return `tmdb:${show.mediaType}:${show.tmdbId}`;
+    keys.push(`tmdb:${show.mediaType}:${show.tmdbId}`);
   }
   if (typeof show.tvdbId === "number") {
-    return `tvdb:${show.mediaType}:${show.tvdbId}`;
+    keys.push(`tvdb:${show.mediaType}:${show.tvdbId}`);
   }
   if (typeof show.imdbId === "string" && show.imdbId.trim()) {
-    return `imdb:${show.imdbId.trim()}`;
+    keys.push(`imdb:${show.imdbId.trim().toLowerCase()}`);
   }
   if (typeof show.anilistId === "number") {
-    return `anilist:${show.anilistId}`;
+    keys.push(`anilist:${show.anilistId}`);
   }
   if (typeof show.malId === "number") {
-    return `mal:${show.malId}`;
+    keys.push(`mal:${show.malId}`);
   }
   if (typeof show.tvmazeId === "number") {
-    return `tvmaze:${show.tvmazeId}`;
+    keys.push(`tvmaze:${show.tvmazeId}`);
   }
-  return `${show.mediaType}:${normalizeSearchText(show.title)}:${show.firstAired ?? "na"}`;
+
+  const normalizedTitle = normalizeSearchText(show.title);
+  if (normalizedTitle) {
+    keys.push(
+      `title:${show.mediaType}:${normalizedTitle}:${extractYear(show.firstAired) ?? "na"}`
+    );
+  }
+
+  return keys;
 }
 
 function mergeImportPayloads(items: ImportPayloadItem[]) {
   const merged = new Map<string, ImportPayloadItem>();
+  const aliasToCanonicalKey = new Map<string, string>();
 
   for (const item of items) {
-    const key = buildImportKey(item);
-    const existing = merged.get(key);
+    const aliasKeys = buildImportAliasKeys(item);
+    if (aliasKeys.length === 0) {
+      continue;
+    }
+
+    const canonicalKey =
+      aliasKeys.map((key) => aliasToCanonicalKey.get(key)).find((key): key is string => !!key) ??
+      aliasKeys[0];
+
+    const existing = merged.get(canonicalKey);
     if (!existing) {
-      merged.set(key, item);
+      merged.set(canonicalKey, item);
+      for (const aliasKey of aliasKeys) {
+        aliasToCanonicalKey.set(aliasKey, canonicalKey);
+      }
       continue;
     }
 
@@ -397,7 +419,7 @@ function mergeImportPayloads(items: ImportPayloadItem[]) {
       Object.entries(item.show).filter(([, value]) => value !== undefined)
     ) as Partial<ImportPayloadItem["show"]>;
 
-    merged.set(key, {
+    merged.set(canonicalKey, {
       show: {
         ...existing.show,
         ...definedShowFields,
@@ -412,6 +434,16 @@ function mergeImportPayloads(items: ImportPayloadItem[]) {
           : existing.status,
       watchedEpisodes: Array.from(episodes.values()),
     });
+
+    const mergedItem = merged.get(canonicalKey);
+    if (!mergedItem) {
+      continue;
+    }
+
+    const mergedAliasKeys = buildImportAliasKeys(mergedItem);
+    for (const aliasKey of [...aliasKeys, ...mergedAliasKeys]) {
+      aliasToCanonicalKey.set(aliasKey, canonicalKey);
+    }
   }
 
   return Array.from(merged.values());
