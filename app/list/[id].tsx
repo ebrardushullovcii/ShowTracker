@@ -635,7 +635,7 @@ export function ListDetailScreen() {
                       ? "Confirm delete list"
                       : "Confirm remove show"
                   }
-                  className={`flex-1 items-center justify-center border-2 border-primary bg-primary py-3.5 ${
+                  className={`flex-1 items-center justify-center rounded-lg border-2 border-primary bg-primary py-3.5 ${
                     isConfirmingAction ? "opacity-60" : "opacity-100"
                   }`}
                 >
