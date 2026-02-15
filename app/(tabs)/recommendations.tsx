@@ -13,7 +13,6 @@ import { MediaPosterCard } from "@/components/MediaPosterCard";
 import { PageIntro } from "@/components/PageIntro";
 import { ScreenWrapper } from "@/components/ScreenWrapper";
 import { SegmentedControl } from "@/components/SegmentedControl";
-import { normalizeTmdbMedia } from "@/lib/api/normalize";
 import {
   getMovieRecommendations,
   getTvRecommendations,
@@ -119,9 +118,9 @@ export default function RecommendationsScreen() {
                 }
 
                 return [
-                  ...recs.results,
-                  ...similar.results.filter(
-                    (s) => !recs.results.some((r) => r.id === s.id)
+                  ...recs,
+                  ...similar.filter(
+                    (s) => !recs.some((r) => r.id === s.id && r.mediaType === s.mediaType)
                   ),
                 ].map((item) => ({ item, seedMediaType: seed.mediaType, seedTitle: seed.title }));
               }
@@ -136,11 +135,11 @@ export default function RecommendationsScreen() {
               }
 
               return [
-                ...recs.results,
-                ...similar.results.filter(
-                  (s) => !recs.results.some((r) => r.id === s.id)
-                  ),
-                ].map((item) => ({ item, seedMediaType: seed.mediaType, seedTitle: seed.title }));
+                ...recs,
+                ...similar.filter(
+                  (s) => !recs.some((r) => r.id === s.id && r.mediaType === s.mediaType)
+                ),
+              ].map((item) => ({ item, seedMediaType: seed.mediaType, seedTitle: seed.title }));
             } catch (err) {
               if (signal.aborted || isAbortError(err)) {
                 return [];
@@ -161,16 +160,15 @@ export default function RecommendationsScreen() {
               return;
             }
 
-            const normalized = normalizeTmdbMedia(item);
-            const key = `${item.id}:${normalized.mediaType}`;
+            const key = `${item.id}:${item.mediaType}`;
             if (seenIds.has(key)) continue;
 
-            if (activeTab !== "all" && normalized.mediaType !== activeTab) {
+            if (activeTab !== "all" && item.mediaType !== activeTab) {
               continue;
             }
 
             seenIds.add(key);
-            allRecommendations.push(normalized);
+            allRecommendations.push(item);
           }
         }
 

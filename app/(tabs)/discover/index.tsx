@@ -17,8 +17,7 @@ import { MediaPosterCard } from "@/components/MediaPosterCard";
 import { PageIntro } from "@/components/PageIntro";
 import { ScreenWrapper } from "@/components/ScreenWrapper";
 import { SegmentedControl } from "@/components/SegmentedControl";
-import { getTrendingAniList, searchAniList, type AniListFilterParams } from "@/lib/api/anilist";
-import { normalizeAniListMedia, normalizeTmdbMedia } from "@/lib/api/normalize";
+import { getTrendingAniList, searchAniList } from "@/lib/api/anilist";
 import { discoverTmdb, getTrendingTmdb, type TmdbFilterParams } from "@/lib/api/tmdb";
 import type { NormalizedShow } from "@/lib/api/types";
 import { createShowRouteId } from "@/lib/show-route";
@@ -202,12 +201,12 @@ export function DiscoverScreen() {
             vote_average_gte: selectedRating ? Number(selectedRating) : undefined,
           };
           const result = await discoverTmdb("tv", 1, filters);
-          tvItems = result.results.map(normalizeTmdbMedia);
-          tvHasMore = result.page < result.total_pages;
+          tvItems = result.items;
+          tvHasMore = result.page < result.totalPages;
         } else {
           const result = await getTrendingTmdb("tv", "week", 1);
-          tvItems = result.results.map(normalizeTmdbMedia);
-          tvHasMore = result.page < result.total_pages;
+          tvItems = result.items;
+          tvHasMore = result.page < result.totalPages;
         }
 
         if (!isCancelled) {
@@ -246,16 +245,12 @@ export function DiscoverScreen() {
             minScore: selectedRating ? Number(selectedRating) * 10 : undefined,
           };
           const result = await searchAniList("", 1, INITIAL_ITEMS_PER_PAGE, filters);
-          animeItems = result.data.Page.media.map(normalizeAniListMedia);
-          animeHasMore =
-            result.data.Page.pageInfo.currentPage <
-            result.data.Page.pageInfo.lastPage;
+          animeItems = result.items;
+          animeHasMore = result.pageInfo.currentPage < result.pageInfo.lastPage;
         } else {
           const result = await getTrendingAniList(1, INITIAL_ITEMS_PER_PAGE);
-          animeItems = result.data.Page.media.map(normalizeAniListMedia);
-          animeHasMore =
-            result.data.Page.pageInfo.currentPage <
-            result.data.Page.pageInfo.lastPage;
+          animeItems = result.items;
+          animeHasMore = result.pageInfo.currentPage < result.pageInfo.lastPage;
         }
 
         if (!isCancelled) {
@@ -294,12 +289,12 @@ export function DiscoverScreen() {
             vote_average_gte: selectedRating ? Number(selectedRating) : undefined,
           };
           const result = await discoverTmdb("movie", 1, filters);
-          movieItems = result.results.map(normalizeTmdbMedia);
-          movieHasMore = result.page < result.total_pages;
+          movieItems = result.items;
+          movieHasMore = result.page < result.totalPages;
         } else {
           const result = await getTrendingTmdb("movie", "week", 1);
-          movieItems = result.results.map(normalizeTmdbMedia);
-          movieHasMore = result.page < result.total_pages;
+          movieItems = result.items;
+          movieHasMore = result.page < result.totalPages;
         }
 
         if (!isCancelled) {
@@ -354,15 +349,13 @@ export function DiscoverScreen() {
         } else {
           result = await getTrendingAniList(nextPage, INITIAL_ITEMS_PER_PAGE);
         }
-        const newItems = result.data.Page.media.map(normalizeAniListMedia);
+        const newItems = result.items;
         setAnimeState((prev) => ({
           ...prev,
           items: [...prev.items, ...newItems],
           isLoadingMore: false,
           currentPage: nextPage,
-          hasMore:
-            result.data.Page.pageInfo.currentPage <
-            result.data.Page.pageInfo.lastPage,
+          hasMore: result.pageInfo.currentPage < result.pageInfo.lastPage,
         }));
       } else if (activeTab === "movie") {
         let result;
@@ -376,13 +369,13 @@ export function DiscoverScreen() {
         } else {
           result = await getTrendingTmdb("movie", "week", nextPage);
         }
-        const newItems = result.results.map(normalizeTmdbMedia);
+        const newItems = result.items;
         setMovieState((prev) => ({
           ...prev,
           items: [...prev.items, ...newItems],
           isLoadingMore: false,
           currentPage: nextPage,
-          hasMore: result.page < result.total_pages,
+          hasMore: result.page < result.totalPages,
         }));
       } else {
         let result;
@@ -396,13 +389,13 @@ export function DiscoverScreen() {
         } else {
           result = await getTrendingTmdb("tv", "week", nextPage);
         }
-        const newItems = result.results.map(normalizeTmdbMedia);
+        const newItems = result.items;
         setTvState((prev) => ({
           ...prev,
           items: [...prev.items, ...newItems],
           isLoadingMore: false,
           currentPage: nextPage,
-          hasMore: result.page < result.total_pages,
+          hasMore: result.page < result.totalPages,
         }));
       }
     } catch (error) {

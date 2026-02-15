@@ -3666,40 +3666,19 @@ export const getRecommendations = query({
 
     const limit = Math.max(1, Math.min(args.limit ?? 8, 20));
 
-    // Get user's watched shows
-    const [userShows, watchedEpisodes] = await Promise.all([
-      ctx.db
-        .query("userShows")
-        .withIndex("by_user", (q) => q.eq("userId", userId))
-        .collect(),
-      ctx.db
-        .query("watchedEpisodes")
-        .withIndex("by_user", (q) => q.eq("userId", userId))
-        .collect(),
-    ]);
-
-    const watchedCountByShow = new Map<string, number>();
-    const lastWatchedAtByShow = new Map<string, number>();
-
-    for (const entry of watchedEpisodes) {
-      const key = entry.showId as string;
-      watchedCountByShow.set(key, (watchedCountByShow.get(key) ?? 0) + 1);
-
-      const prevLastWatched = lastWatchedAtByShow.get(key) ?? 0;
-      if (entry.watchedAt > prevLastWatched) {
-        lastWatchedAtByShow.set(key, entry.watchedAt);
-      }
-    }
+    // Get user's tracked shows with aggregate fields.
+    const userShows = await ctx.db
+      .query("userShows")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .collect();
 
     const candidateUserShows = userShows
       .filter((userShow) => {
-        const watchedCount = watchedCountByShow.get(userShow.showId as string) ?? 0;
+        const watchedCount = userShow.watchedEpisodesCount ?? 0;
         return watchedCount > 0 || userShow.status === "watching" || userShow.status === "completed";
       })
       .map((userShow) => {
-        const episodeLastWatched = lastWatchedAtByShow.get(userShow.showId as string) ?? 0;
         const activityAt = Math.max(
-          episodeLastWatched,
           userShow.lastWatchedAt ?? 0,
           userShow.statusChangedAt ?? 0,
           userShow.addedAt
@@ -3708,7 +3687,7 @@ export const getRecommendations = query({
         return {
           userShow,
           activityAt,
-          watchedCount: watchedCountByShow.get(userShow.showId as string) ?? 0,
+          watchedCount: userShow.watchedEpisodesCount ?? 0,
         };
       })
       .sort((a, b) => b.activityAt - a.activityAt)

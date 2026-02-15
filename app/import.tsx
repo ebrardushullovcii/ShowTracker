@@ -300,7 +300,10 @@ function mergeWatchedEpisodeEntries(
   const incomingCount = getEpisodeWatchCountForMerge(incoming, incomingHistory);
   const watchCount = existingCount + incomingCount;
 
-  const latestWatchedAt = mergedHistory.length > 0 ? mergedHistory[mergedHistory.length - 1] : undefined;
+  const latestWatchedAt =
+    mergedHistory.length > 0
+      ? mergedHistory.reduce((max, value) => (value > max ? value : max), mergedHistory[0])
+      : undefined;
   const watchedAtCandidates = [existing.watchedAt, incoming.watchedAt, latestWatchedAt].filter(
     (value): value is number => typeof value === "number" && Number.isFinite(value)
   );
@@ -589,25 +592,38 @@ function scoreTmdbCandidate(item: ParsedImportItem, candidate: TmdbMedia) {
 async function resolveTmdbBySearch(item: ParsedImportItem): Promise<ScoredResolvedShow | null> {
   const tmdbType = item.mediaType === "movie" ? "movie" : "tv";
   const results = await searchTmdb(item.title, tmdbType, 1).catch(() => null);
-  if (!results?.results?.length) {
+  if (!results?.items?.length) {
     return null;
   }
 
-  const ranked = results.results
-    .filter((entry) => entry.media_type !== "person")
-    .map((entry) => ({ entry, score: scoreTmdbCandidate(item, entry) }))
+  const ranked = results.items
+    .map((entry) => ({
+      entry,
+      score: scoreCandidateMatch({
+        importTitle: item.title,
+        candidateTitle: entry.title,
+        importYear: item.firstAiredYear,
+        candidateYear: extractYear(entry.firstAired),
+      }),
+    }))
     .sort((a, b) => b.score - a.score);
 
   if (!ranked[0] || ranked[0].score < 0.52) {
     return null;
   }
 
-  const resolved = await resolveTmdbById(tmdbType, ranked[0].entry.id).catch(() => null);
+  if (typeof ranked[0].entry.tmdbId !== "number") {
+    return null;
+  }
+
+  const resolved = await resolveTmdbById(tmdbType, ranked[0].entry.tmdbId).catch(() => null);
   if (!resolved) {
     return null;
   }
 
-  const isAnimation = ranked[0].entry.genre_ids?.includes(16) ?? false;
+  const isAnimation = (ranked[0].entry.genres ?? []).some(
+    (genre) => genre.toLowerCase() === "animation"
+  );
   return {
     show: resolved,
     score: ranked[0].score,
@@ -618,37 +634,28 @@ async function resolveTmdbBySearch(item: ParsedImportItem): Promise<ScoredResolv
 
 async function resolveAnimeBySearch(item: ParsedImportItem): Promise<ScoredResolvedShow | null> {
   const aniList = await searchAniList(item.title, 1, 8).catch(() => null);
-  const aniListCandidates = aniList?.data.Page.media ?? [];
+  const aniListCandidates = aniList?.items ?? [];
 
   const aniListRanked = aniListCandidates
     .map((candidate) => {
-      const candidateTitles = [
-        candidate.title.english,
-        candidate.title.romaji,
-        candidate.title.native,
-      ].filter((value): value is string => !!value);
-      const bestTitle =
-        candidateTitles
-          .map((title) => ({
-            title,
-            score: scoreCandidateMatch({
-              importTitle: item.title,
-              candidateTitle: title,
-              importYear: item.firstAiredYear,
-              candidateYear: candidate.startDate?.year ?? undefined,
-            }),
-          }))
-          .sort((a, b) => b.score - a.score)[0] ?? null;
-
       return {
         candidate,
-        score: bestTitle?.score ?? 0,
+        score: scoreCandidateMatch({
+          importTitle: item.title,
+          candidateTitle: candidate.title,
+          importYear: item.firstAiredYear,
+          candidateYear: extractYear(candidate.firstAired),
+        }),
       };
     })
     .sort((a, b) => b.score - a.score);
 
   if (aniListRanked[0] && aniListRanked[0].score >= 0.54) {
-    const anime = await getAniListMediaById(aniListRanked[0].candidate.id).catch(() => null);
+    const anilistId = aniListRanked[0].candidate.anilistId;
+    const anime =
+      typeof anilistId === "number"
+        ? await getAniListMediaById(anilistId).catch(() => null)
+        : aniListRanked[0].candidate;
     if (anime) {
       return {
         show: anime,

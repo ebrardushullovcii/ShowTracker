@@ -18,7 +18,6 @@ import { getMainContentWidth } from "@/constants/navigation";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { searchAniList, type AniListFilterParams } from "@/lib/api/anilist";
 import { searchJikan } from "@/lib/api/jikan";
-import { normalizeAniListMedia, normalizeTmdbMedia } from "@/lib/api/normalize";
 import { normalizeStatus } from "@/lib/metadata-utils";
 import { searchTmdb, discoverTmdb, type TmdbFilterParams } from "@/lib/api/tmdb";
 import type { NormalizedShow } from "@/lib/api/types";
@@ -210,24 +209,20 @@ export function SearchScreen() {
                 discoverTmdb("tv", 1, tmdbFilters),
                 discoverTmdb("movie", 1, tmdbFilters),
               ]).then(([tvResults, movieResults]) =>
-                [...tvResults.results, ...movieResults.results]
-                  .filter((item) => item.media_type !== "person")
-                  .map(normalizeTmdbMedia)
+                [...tvResults.items, ...movieResults.items]
               )
             );
           } else {
             requests.push(
               discoverTmdb(tmdbType, 1, tmdbFilters).then((r) =>
-                r.results
-                  .filter((item) => item.media_type !== "person")
-                  .map(normalizeTmdbMedia)
+                r.items
               )
             );
           }
         } else if (hasActiveFilters && filter !== "all") {
           requests.push(
             discoverTmdb(filter, 1, tmdbFilters).then((r) =>
-              r.results.map(normalizeTmdbMedia)
+              r.items
             )
           );
         } else {
@@ -238,9 +233,7 @@ export function SearchScreen() {
               1,
               tmdbFilters
             ).then((r) =>
-              r.results
-                .filter((item) => item.media_type !== "person")
-                .map(normalizeTmdbMedia)
+              r.items
             )
           );
         }
@@ -249,11 +242,7 @@ export function SearchScreen() {
       if (filter === "all" || filter === "anime") {
         requests.push(
           searchAniList(normalizedQuery || "", 1, 20, anilistFilters)
-            .then((r) =>
-              r.data.Page.media
-                .map(normalizeAniListMedia)
-                .filter((show) => matchesAnimeFilterSet(show, anilistFilters))
-            )
+            .then((r) => r.items.filter((show) => matchesAnimeFilterSet(show, anilistFilters)))
             .catch(async () => {
               const fallback = await searchJikan(normalizedQuery || "", 1);
               return fallback.filter((show) => matchesAnimeFilterSet(show, anilistFilters));

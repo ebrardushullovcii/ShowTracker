@@ -1,6 +1,6 @@
 import { getCached, setCached } from "@/lib/api/cache";
-import { normalizeTmdbEpisode } from "@/lib/api/normalize";
-import type { NormalizedEpisode } from "@/lib/api/types";
+import { normalizeTmdbEpisode, normalizeTmdbMedia } from "@/lib/api/normalize";
+import type { NormalizedEpisode, NormalizedShow } from "@/lib/api/types";
 import {
   lookupTvMazeShowByImdb,
   searchTvMazeShows,
@@ -53,6 +53,24 @@ export type TmdbSearchResult = {
   total_pages: number;
   total_results: number;
 };
+
+export type TmdbNormalizedResult = {
+  page: number;
+  totalPages: number;
+  totalResults: number;
+  items: NormalizedShow[];
+};
+
+function normalizeTmdbSearchResult(data: TmdbSearchResult): TmdbNormalizedResult {
+  return {
+    page: data.page,
+    totalPages: data.total_pages,
+    totalResults: data.total_results,
+    items: data.results
+      .filter((item) => item.media_type !== "person")
+      .map((item) => normalizeTmdbMedia(item)),
+  };
+}
 
 export type TmdbFilterParams = {
   with_genres?: string;
@@ -300,7 +318,7 @@ export async function searchTmdb(
         .join(",")
     : "";
   const cacheKey = `tmdb-search:${mediaType}:${query}:${page}:${filterKey}`;
-  const cached = getCached<TmdbSearchResult>(cacheKey);
+  const cached = getCached<TmdbNormalizedResult>(cacheKey);
   if (cached) {
     return cached;
   }
@@ -321,8 +339,9 @@ export async function searchTmdb(
   }
 
   const data = await request<TmdbSearchResult>(`/search/${mediaType}`, params);
-  setCached(cacheKey, data, cacheTtlMs);
-  return data;
+  const normalized = normalizeTmdbSearchResult(data);
+  setCached(cacheKey, normalized, cacheTtlMs);
+  return normalized;
 }
 
 // Discover endpoint for filtered browsing (better for filters than search)
@@ -337,7 +356,7 @@ export async function discoverTmdb(
         .join(",")
     : "";
   const cacheKey = `tmdb-discover:${mediaType}:${page}:${filterKey}`;
-  const cached = getCached<TmdbSearchResult>(cacheKey);
+  const cached = getCached<TmdbNormalizedResult>(cacheKey);
   if (cached) {
     return cached;
   }
@@ -367,8 +386,9 @@ export async function discoverTmdb(
   }
 
   const data = await request<TmdbSearchResult>(`/discover/${mediaType}`, params);
-  setCached(cacheKey, data, cacheTtlMs);
-  return data;
+  const normalized = normalizeTmdbSearchResult(data);
+  setCached(cacheKey, normalized, cacheTtlMs);
+  return normalized;
 }
 
 export async function getTrendingTmdb(
@@ -377,7 +397,7 @@ export async function getTrendingTmdb(
   page = 1
 ) {
   const cacheKey = `tmdb-trending:${mediaType}:${timeWindow}:${page}`;
-  const cached = getCached<TmdbSearchResult>(cacheKey);
+  const cached = getCached<TmdbNormalizedResult>(cacheKey);
   if (cached) {
     return cached;
   }
@@ -385,8 +405,9 @@ export async function getTrendingTmdb(
     `/trending/${mediaType}/${timeWindow}`,
     { page }
   );
-  setCached(cacheKey, data, cacheTtlMs);
-  return data;
+  const normalized = normalizeTmdbSearchResult(data);
+  setCached(cacheKey, normalized, cacheTtlMs);
+  return normalized;
 }
 
 export async function findTmdbByImdbId(imdbId: string) {
@@ -470,9 +491,9 @@ export async function getMovieRecommendations(
   movieId: number,
   page = 1,
   options?: RequestOptions
-): Promise<TmdbSearchResult> {
+): Promise<NormalizedShow[]> {
   const cacheKey = `tmdb-movie-recommendations:${movieId}:${page}`;
-  const cached = getCached<TmdbSearchResult>(cacheKey);
+  const cached = getCached<NormalizedShow[]>(cacheKey);
   if (cached) {
     return cached;
   }
@@ -481,8 +502,11 @@ export async function getMovieRecommendations(
     { page },
     options
   );
-  setCached(cacheKey, data, cacheTtlMs);
-  return data;
+  const normalized = data.results
+    .filter((item) => item.media_type !== "person")
+    .map((item) => normalizeTmdbMedia(item));
+  setCached(cacheKey, normalized, cacheTtlMs);
+  return normalized;
 }
 
 // Get recommendations based on a TV show
@@ -490,9 +514,9 @@ export async function getTvRecommendations(
   tvId: number,
   page = 1,
   options?: RequestOptions
-): Promise<TmdbSearchResult> {
+): Promise<NormalizedShow[]> {
   const cacheKey = `tmdb-tv-recommendations:${tvId}:${page}`;
-  const cached = getCached<TmdbSearchResult>(cacheKey);
+  const cached = getCached<NormalizedShow[]>(cacheKey);
   if (cached) {
     return cached;
   }
@@ -501,8 +525,11 @@ export async function getTvRecommendations(
     { page },
     options
   );
-  setCached(cacheKey, data, cacheTtlMs);
-  return data;
+  const normalized = data.results
+    .filter((item) => item.media_type !== "person")
+    .map((item) => normalizeTmdbMedia(item));
+  setCached(cacheKey, normalized, cacheTtlMs);
+  return normalized;
 }
 
 // Get similar movies
@@ -510,9 +537,9 @@ export async function getSimilarMovies(
   movieId: number,
   page = 1,
   options?: RequestOptions
-): Promise<TmdbSearchResult> {
+): Promise<NormalizedShow[]> {
   const cacheKey = `tmdb-similar-movies:${movieId}:${page}`;
-  const cached = getCached<TmdbSearchResult>(cacheKey);
+  const cached = getCached<NormalizedShow[]>(cacheKey);
   if (cached) {
     return cached;
   }
@@ -521,8 +548,11 @@ export async function getSimilarMovies(
     { page },
     options
   );
-  setCached(cacheKey, data, cacheTtlMs);
-  return data;
+  const normalized = data.results
+    .filter((item) => item.media_type !== "person")
+    .map((item) => normalizeTmdbMedia(item));
+  setCached(cacheKey, normalized, cacheTtlMs);
+  return normalized;
 }
 
 // Get similar TV shows
@@ -530,9 +560,9 @@ export async function getSimilarTv(
   tvId: number,
   page = 1,
   options?: RequestOptions
-): Promise<TmdbSearchResult> {
+): Promise<NormalizedShow[]> {
   const cacheKey = `tmdb-similar-tv:${tvId}:${page}`;
-  const cached = getCached<TmdbSearchResult>(cacheKey);
+  const cached = getCached<NormalizedShow[]>(cacheKey);
   if (cached) {
     return cached;
   }
@@ -541,6 +571,9 @@ export async function getSimilarTv(
     { page },
     options
   );
-  setCached(cacheKey, data, cacheTtlMs);
-  return data;
+  const normalized = data.results
+    .filter((item) => item.media_type !== "person")
+    .map((item) => normalizeTmdbMedia(item));
+  setCached(cacheKey, normalized, cacheTtlMs);
+  return normalized;
 }
