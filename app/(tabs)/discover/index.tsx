@@ -10,7 +10,9 @@ import {
   type LayoutChangeEvent,
 } from "react-native";
 import { FlashList } from "@shopify/flash-list";
+import { useQuery } from "convex/react";
 import { Link } from "expo-router";
+import { api } from "@/convex/_generated/api";
 import { Button } from "@/components/Button";
 import { HeroSection } from "@/components/HeroSection";
 import { MediaPosterCard } from "@/components/MediaPosterCard";
@@ -60,6 +62,22 @@ function getSectionError(reason: unknown, fallback: string) {
     return `${fallback} (API ${(reason as { status: number }).status})`;
   }
   return fallback;
+}
+
+function toTrackedTmdbKey(mediaType: "tv" | "movie", tmdbId: number) {
+  return `${mediaType}:${tmdbId}`;
+}
+
+function filterTrackedTmdbItems(items: NormalizedShow[], trackedTmdbKeys: Set<string>) {
+  return items.filter((item) => {
+    if (
+      (item.mediaType === "tv" || item.mediaType === "movie") &&
+      typeof item.tmdbId === "number"
+    ) {
+      return !trackedTmdbKeys.has(toTrackedTmdbKey(item.mediaType, item.tmdbId));
+    }
+    return true;
+  });
 }
 
 function SectionHeader({ title, count }: { title: string; count: number }) {
@@ -116,6 +134,21 @@ export function DiscoverScreen() {
     currentPage: 0,
     hasMore: true,
   });
+
+  const trackedLibrary = useQuery(api.shows.getLibrary, {});
+  const trackedTmdbKeys = useMemo(() => {
+    const keys = new Set<string>();
+    for (const item of trackedLibrary ?? []) {
+      if (
+        (item.mediaType === "tv" || item.mediaType === "movie") &&
+        typeof item.tmdbId === "number"
+      ) {
+        keys.add(toTrackedTmdbKey(item.mediaType, item.tmdbId));
+      }
+    }
+    return keys;
+  }, [trackedLibrary]);
+  const isTrackedLibraryLoading = trackedLibrary === undefined;
 
   const activeState = useMemo(() => {
     if (activeTab === "anime") return animeState;
@@ -185,6 +218,10 @@ export function DiscoverScreen() {
   };
 
   useEffect(() => {
+    if (isTrackedLibraryLoading) {
+      return;
+    }
+
     let isCancelled = false;
 
     const loadInitialData = async () => {
@@ -201,11 +238,11 @@ export function DiscoverScreen() {
             vote_average_gte: selectedRating ? Number(selectedRating) : undefined,
           };
           const result = await discoverTmdb("tv", 1, filters);
-          tvItems = result.items;
+          tvItems = filterTrackedTmdbItems(result.items, trackedTmdbKeys);
           tvHasMore = result.page < result.totalPages;
         } else {
           const result = await getTrendingTmdb("tv", "week", 1);
-          tvItems = result.items;
+          tvItems = filterTrackedTmdbItems(result.items, trackedTmdbKeys);
           tvHasMore = result.page < result.totalPages;
         }
 
@@ -289,11 +326,11 @@ export function DiscoverScreen() {
             vote_average_gte: selectedRating ? Number(selectedRating) : undefined,
           };
           const result = await discoverTmdb("movie", 1, filters);
-          movieItems = result.items;
+          movieItems = filterTrackedTmdbItems(result.items, trackedTmdbKeys);
           movieHasMore = result.page < result.totalPages;
         } else {
           const result = await getTrendingTmdb("movie", "week", 1);
-          movieItems = result.items;
+          movieItems = filterTrackedTmdbItems(result.items, trackedTmdbKeys);
           movieHasMore = result.page < result.totalPages;
         }
 
@@ -325,7 +362,14 @@ export function DiscoverScreen() {
     return () => {
       isCancelled = true;
     };
-  }, [hasActiveFilters, selectedGenres, selectedYear, selectedRating]);
+  }, [
+    hasActiveFilters,
+    isTrackedLibraryLoading,
+    selectedGenres,
+    selectedRating,
+    selectedYear,
+    trackedTmdbKeys,
+  ]);
 
   const loadMoreItems = useCallback(async () => {
     if (activeState.isLoading || activeState.isLoadingMore || !activeState.hasMore) {
@@ -369,7 +413,7 @@ export function DiscoverScreen() {
         } else {
           result = await getTrendingTmdb("movie", "week", nextPage);
         }
-        const newItems = result.items;
+        const newItems = filterTrackedTmdbItems(result.items, trackedTmdbKeys);
         setMovieState((prev) => ({
           ...prev,
           items: [...prev.items, ...newItems],
@@ -389,7 +433,7 @@ export function DiscoverScreen() {
         } else {
           result = await getTrendingTmdb("tv", "week", nextPage);
         }
-        const newItems = result.items;
+        const newItems = filterTrackedTmdbItems(result.items, trackedTmdbKeys);
         setTvState((prev) => ({
           ...prev,
           items: [...prev.items, ...newItems],
@@ -414,7 +458,16 @@ export function DiscoverScreen() {
         ),
       }));
     }
-  }, [activeState, activeTab, setActiveState, hasActiveFilters, selectedGenres, selectedYear, selectedRating]);
+  }, [
+    activeState,
+    activeTab,
+    hasActiveFilters,
+    selectedGenres,
+    selectedRating,
+    selectedYear,
+    setActiveState,
+    trackedTmdbKeys,
+  ]);
 
   const heroShow = activeState.items[0] ?? null;
 

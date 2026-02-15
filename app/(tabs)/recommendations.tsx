@@ -47,6 +47,10 @@ function getGridColumnCount(width: number, isWeb: boolean) {
   return 3;
 }
 
+function toTrackedTmdbKey(mediaType: "tv" | "movie", tmdbId: number) {
+  return `${mediaType}:${tmdbId}`;
+}
+
 export function RecommendationsScreen() {
   const [activeTab, setActiveTab] = useState<RecTab>("all");
   const { width } = useWindowDimensions();
@@ -56,6 +60,20 @@ export function RecommendationsScreen() {
   const [recommendations, setRecommendations] = useState<NormalizedShow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const trackedLibrary = useQuery(api.shows.getLibrary, {});
+  const trackedTmdbKeys = useMemo(() => {
+    const keys = new Set<string>();
+    for (const item of trackedLibrary ?? []) {
+      if (
+        (item.mediaType === "tv" || item.mediaType === "movie") &&
+        typeof item.tmdbId === "number"
+      ) {
+        keys.add(toTrackedTmdbKey(item.mediaType, item.tmdbId));
+      }
+    }
+    return keys;
+  }, [trackedLibrary]);
+  const isTrackedLibraryLoading = trackedLibrary === undefined;
 
   // Get user's watch history from Convex
   const seedShows = useQuery(api.shows.getRecommendations, {
@@ -68,6 +86,13 @@ export function RecommendationsScreen() {
 
     const fetchRecommendations = async () => {
       const { signal } = controller;
+
+      if (isTrackedLibraryLoading) {
+        if (!signal.aborted) {
+          setIsLoading(true);
+        }
+        return;
+      }
 
       if (seedShows === undefined) {
         if (!signal.aborted) {
@@ -166,6 +191,14 @@ export function RecommendationsScreen() {
               continue;
             }
 
+            if (
+              (item.mediaType === "tv" || item.mediaType === "movie") &&
+              typeof item.tmdbId === "number" &&
+              trackedTmdbKeys.has(toTrackedTmdbKey(item.mediaType, item.tmdbId))
+            ) {
+              continue;
+            }
+
             seenIds.add(key);
             allRecommendations.push(item);
           }
@@ -191,7 +224,7 @@ export function RecommendationsScreen() {
     return () => {
       controller.abort();
     };
-  }, [seedShows, activeTab]);
+  }, [activeTab, isTrackedLibraryLoading, seedShows, trackedTmdbKeys]);
 
   const headerTitle = useMemo(() => {
     switch (activeTab) {
