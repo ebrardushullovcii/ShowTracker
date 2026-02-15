@@ -1,6 +1,7 @@
-import { action, mutation, query } from "./_generated/server";
-import type { Doc } from "./_generated/dataModel";
-import type { ActionCtx } from "./_generated/server";
+import { getAuthUserId } from "@convex-dev/auth/server";
+import { action, mutation, query } from "@/convex/_generated/server";
+import type { Doc } from "@/convex/_generated/dataModel";
+import type { ActionCtx } from "@/convex/_generated/server";
 import { v } from "convex/values";
 import { getAniListAiringSchedule } from "../lib/api/anilist";
 import {
@@ -9,8 +10,7 @@ import {
 } from "../lib/api/normalize";
 import type { NormalizedScheduleEntry } from "../lib/api/types";
 import { getTvMazeScheduleByDate } from "../lib/api/tvmaze";
-import { api } from "./_generated/api";
-import { auth } from "./auth";
+import { api } from "@/convex/_generated/api";
 
 const HYDRATE_BATCH_SIZE = 3;
 const SCHEDULE_CACHE_FRESH_MS = 1000 * 60 * 60 * 6;
@@ -407,7 +407,7 @@ export const getUpcomingSchedule = query({
     mediaFilter: v.optional(v.union(v.literal("tv"), v.literal("anime"))),
   },
   handler: async (ctx, args) => {
-    const userId = await auth.getUserId(ctx);
+    const userId = await getAuthUserId(ctx);
     
     // Return empty array if user is not authenticated
     if (!userId) {

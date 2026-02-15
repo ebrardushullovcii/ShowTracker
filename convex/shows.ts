@@ -5,12 +5,13 @@ import {
   internalQuery,
   mutation,
   query,
-} from "./_generated/server";
-import type { ActionCtx, MutationCtx, QueryCtx } from "./_generated/server.js";
-import type { Doc, Id } from "./_generated/dataModel";
+} from "@/convex/_generated/server";
+import type { ActionCtx, MutationCtx, QueryCtx } from "@/convex/_generated/server";
+import type { Doc, Id } from "@/convex/_generated/dataModel";
+import { getAuthUserId } from "@convex-dev/auth/server";
 import { v } from "convex/values";
 import { paginationOptsValidator } from "convex/server";
-import { api, internal } from "./_generated/api";
+import { api, internal } from "@/convex/_generated/api";
 import {
   getAniListAnimeRelations,
   getAniListMediaByMalId,
@@ -233,12 +234,7 @@ type ShowPayload = {
 };
 
 async function getCurrentUserId(ctx: QueryCtx | MutationCtx | ActionCtx) {
-  const identity = await ctx.auth.getUserIdentity();
-  if (!identity) {
-    throw new Error("Unauthorized");
-  }
-
-  const [userId] = identity.subject.split("|");
+  const userId = await getAuthUserId(ctx);
   if (!userId) {
     throw new Error("Unauthorized");
   }
@@ -2385,14 +2381,9 @@ export const clearShowWatched = mutation({
 export const getWatchlist = query({
   args: {},
   handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
+    const userId = await getAuthUserId(ctx);
     
     // Return empty array if user is not authenticated
-    if (!identity) {
-      return [];
-    }
-
-    const [userId] = identity.subject.split("|");
     if (!userId) {
       return [];
     }
@@ -3687,14 +3678,9 @@ export const getRecommendations = query({
     limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
+    const userId = await getAuthUserId(ctx);
     
     // Return empty if not authenticated
-    if (!identity) {
-      return [];
-    }
-
-    const [userId] = identity.subject.split("|");
     if (!userId) {
       return [];
     }
