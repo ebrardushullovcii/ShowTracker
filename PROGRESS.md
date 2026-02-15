@@ -191,17 +191,18 @@ Phase 10: Reliability & Quality Hardening
   - [x] On Mobile view we need to remove some of the spacing on some pages like the show details and the custom list view as its to much and makes the view seem to narrow on the sides, on the show/anime/movie details page the header is good but things under it have more margins so it looks to narrow under the header. (Fixed: reduced px-3 to px-1 in show detail, reduced containerPadding from 16 to 12 in list detail)
   - [x] When trying to open shows from the custom lists i get errors saying invalid show ID (Fixed: updated externalId format in convex/lists.ts to include mediaType)
 
+- [x] Phase 11: Import + recommendation + navigation follow-ups
+  - [x] Recommendations now use watch-history seeds with normalized API responses
+  - [x] Discover + For You exclude already tracked TV shows and movies
+  - [x] Import merge logic dedupes across identifier aliases (tmdb/tvdb/imdb/anilist/mal/tvmaze) + title/year fallback
+  - [x] Convex show lookup adds imdb/title/year fallback matching to prevent duplicate show rows during import
+  - [x] Delete-list flow now respects browser/app back history first (fallback to Home only when no prior route)
+
 ## Pending
 
-### Phase 11: Platform Upgrade & Expansion
+### Phase 12: Notifications
 
-- [ ] Add filters from api data like category of show/movie etc whatever we can.
 - [ ] Notifications for new episodes (push notifications)
-- [ ] Import from TVTime/Trakt/other sites if they all have a standard for shows anime or movies.
-- [ ] Recommendations based on watch history
-- [ ] Make sure the imports don't duplicate anything
-- [ ] Add more detail to the stats like tv time
-- [ ] When things are removed or deleted send back to the last page not home always
 
 ## Known Issues
 
