@@ -10,6 +10,7 @@ import type { ActionCtx, MutationCtx, QueryCtx } from "./_generated/server.js";
 import type { Doc, Id } from "./_generated/dataModel";
 import { v } from "convex/values";
 import { paginationOptsValidator } from "convex/server";
+import { auth } from "./auth";
 import { api, internal } from "./_generated/api";
 import {
   getAniListAnimeRelations,
@@ -233,11 +234,11 @@ type ShowPayload = {
 };
 
 async function getCurrentUserId(ctx: QueryCtx | MutationCtx | ActionCtx) {
-  const identity = await ctx.auth.getUserIdentity();
-  if (!identity) {
+  const userId = await auth.getUserId(ctx);
+  if (!userId) {
     throw new Error("Unauthorized");
   }
-  return identity.subject as Id<"users">;
+  return userId;
 }
 
 type UserShowTrackingAggregates = {
@@ -2376,13 +2377,12 @@ export const clearShowWatched = mutation({
 export const getWatchlist = query({
   args: {},
   handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
+    const userId = await auth.getUserId(ctx);
     
     // Return empty array if user is not authenticated
-    if (!identity) {
+    if (!userId) {
       return [];
     }
-    const userId = identity.subject as Id<"users">;
 
     const userShows = await ctx.db
       .query("userShows")
@@ -3674,13 +3674,12 @@ export const getRecommendations = query({
     limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
+    const userId = await auth.getUserId(ctx);
     
     // Return empty if not authenticated
-    if (!identity) {
+    if (!userId) {
       return [];
     }
-    const userId = identity.subject as Id<"users">;
 
     const limit = Math.max(1, Math.min(args.limit ?? 8, 20));
 
