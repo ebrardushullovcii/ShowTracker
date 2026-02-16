@@ -15,6 +15,9 @@ import { api } from "@/convex/_generated/api";
 const HYDRATE_BATCH_SIZE = 3;
 const SCHEDULE_CACHE_FRESH_MS = 1000 * 60 * 60 * 6;
 const MAX_ANILIST_SCHEDULE_PAGES = 8;
+const ANILIST_SCHEDULE_RATE_LIMIT_COOLDOWN_MS = 90_000;
+
+let anilistScheduleRateLimitedUntil = 0;
 
 type DateCacheStatus = {
   tvCount: number;
@@ -36,8 +39,42 @@ type CompactScheduleEntry = {
   episode: CompactScheduleEpisode;
 };
 
+function getErrorStatusCode(error: unknown) {
+  if (typeof error !== "object" || error === null) {
+    return null;
+  }
+
+  if ("status" in error && typeof (error as { status?: unknown }).status === "number") {
+    return (error as { status: number }).status;
+  }
+
+  if (
+    "body" in error &&
+    typeof (error as { body?: unknown }).body === "object" &&
+    (error as { body?: unknown }).body !== null
+  ) {
+    const body = (error as { body: Record<string, unknown> }).body;
+    if (Array.isArray(body.errors) && body.errors.length > 0) {
+      const first = body.errors[0];
+      if (
+        typeof first === "object" &&
+        first !== null &&
+        "status" in first &&
+        typeof (first as { status?: unknown }).status === "number"
+      ) {
+        return (first as { status: number }).status;
+      }
+    }
+  }
+
+  return null;
+}
+
 function formatDate(date: Date) {
-  return date.toISOString().split("T")[0];
+  const year = date.getFullYear();
+  const month = `${date.getMonth() + 1}`.padStart(2, "0");
+  const day = `${date.getDate()}`.padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function startOfDay(date: Date) {
@@ -301,6 +338,7 @@ async function hydrateOneDate(
 
   let tvEntries: NormalizedScheduleEntry[] = [];
   let animeEntries: NormalizedScheduleEntry[] = [];
+  let animeFetchRateLimited = false;
 
   try {
     const tvSchedule = await getTvMazeScheduleByDate(date, "US");
@@ -309,25 +347,39 @@ async function hydrateOneDate(
     console.error(`Failed TV schedule fetch for ${date}`, error);
   }
 
-  try {
+  if (now < anilistScheduleRateLimitedUntil) {
+    animeFetchRateLimited = true;
+  } else {
     for (
       let page = 1;
       page <= MAX_ANILIST_SCHEDULE_PAGES;
       page += 1
     ) {
-      const animeSchedule = await getAniListAiringSchedule(page, 50, start, end);
-      animeEntries.push(
-        ...animeSchedule.data.Page.airingSchedules.map((entry) =>
-          normalizeAniListScheduleEntry(entry)
-        )
-      );
+      try {
+        const animeSchedule = await getAniListAiringSchedule(page, 50, start, end);
+        animeEntries.push(
+          ...animeSchedule.data.Page.airingSchedules.map((entry) =>
+            normalizeAniListScheduleEntry(entry)
+          )
+        );
 
-      if (!animeSchedule.data.Page.pageInfo?.hasNextPage) {
+        if (!animeSchedule.data.Page.pageInfo?.hasNextPage) {
+          break;
+        }
+      } catch (error) {
+        const statusCode = getErrorStatusCode(error);
+        if (statusCode === 429) {
+          animeFetchRateLimited = true;
+          anilistScheduleRateLimitedUntil =
+            Date.now() + ANILIST_SCHEDULE_RATE_LIMIT_COOLDOWN_MS;
+          console.warn(`AniList schedule rate limited for ${date}; using cached anime schedule.`);
+          break;
+        }
+
+        console.error(`Failed anime schedule fetch for ${date}`, error);
         break;
       }
     }
-  } catch (error) {
-    console.error(`Failed anime schedule fetch for ${date}`, error);
   }
 
   const compactTvEntries = compactScheduleEntries(tvEntries);
@@ -340,17 +392,22 @@ async function hydrateOneDate(
     lastUpdated: now,
   });
 
-  await ctx.runMutation(api.schedule.upsertScheduleBucket, {
-    date,
-    mediaType: "anime",
-    episodes: JSON.stringify(compactAnimeEntries),
-    lastUpdated: now,
-  });
+  if (!animeFetchRateLimited || compactAnimeEntries.length > 0) {
+    await ctx.runMutation(api.schedule.upsertScheduleBucket, {
+      date,
+      mediaType: "anime",
+      episodes: JSON.stringify(compactAnimeEntries),
+      lastUpdated: now,
+    });
+  }
 
   return {
     date,
     tvCount: compactTvEntries.length,
-    animeCount: compactAnimeEntries.length,
+    animeCount:
+      animeFetchRateLimited && compactAnimeEntries.length === 0
+        ? cacheStatus.animeCount
+        : compactAnimeEntries.length,
     cached: false,
   };
 }

@@ -68,6 +68,7 @@ export default function TabsLayout() {
             name="search"
             options={{
               title: "Search",
+              href: isDesktop ? undefined : null,
               tabBarIcon: ({ color }) => <Feather name="search" size={20} color={color} />,
             }}
           />
