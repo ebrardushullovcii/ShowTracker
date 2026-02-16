@@ -1040,6 +1040,11 @@ export const findShowByTitle = internalQuery({
     title: v.string(),
   },
   handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      return null;
+    }
+
     const normalizedSearch = args.title.toLowerCase().trim();
     if (!normalizedSearch) {
       return null;
@@ -1060,6 +1065,11 @@ export const deleteShowAndUserData = internalMutation({
     userId: v.id("users"),
   },
   handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      return { success: false, reason: "unauthenticated" };
+    }
+
     const userShow = await ctx.db
       .query("userShows")
       .withIndex("by_user_show", (q) =>
@@ -1096,6 +1106,11 @@ export const findUserShowByShowId = internalQuery({
     showId: v.id("shows"),
   },
   handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      return [];
+    }
+
     return await ctx.db
       .query("userShows")
       .withIndex("by_showId", (q) => q.eq("showId", args.showId))
@@ -1138,14 +1153,21 @@ export const getUserShowTracking = query({
       .withIndex("by_user_show", (q) => q.eq("userId", userId).eq("showId", show._id))
       .unique();
 
-    const watchedEpisodes = await ctx.db
-      .query("watchedEpisodes")
-      .withIndex("by_user_show", (q) => q.eq("userId", userId).eq("showId", show._id))
-      .take(5000);
+    // Use precomputed aggregate if available
+    let watchedEpisodesCount = userShow?.watchedEpisodesCount ?? 0;
 
-    const uniqueWatchedEpisodeKeys = new Set<string>();
-    for (const entry of watchedEpisodes) {
-      uniqueWatchedEpisodeKeys.add(`${entry.season}:${entry.episode}`);
+    // Fallback to querying if aggregate is missing (shouldn't happen normally)
+    if (watchedEpisodesCount === 0 && userShow) {
+      const watchedEpisodes = await ctx.db
+        .query("watchedEpisodes")
+        .withIndex("by_user_show", (q) => q.eq("userId", userId).eq("showId", show._id))
+        .take(5000);
+
+      const uniqueWatchedEpisodeKeys = new Set<string>();
+      for (const entry of watchedEpisodes) {
+        uniqueWatchedEpisodeKeys.add(`${entry.season}:${entry.episode}`);
+      }
+      watchedEpisodesCount = uniqueWatchedEpisodeKeys.size;
     }
 
     // Return just the count, not all episode keys (to avoid 1MB limit)
@@ -1154,7 +1176,7 @@ export const getUserShowTracking = query({
       showId: getExternalShowId(show),
       inWatchlist: userShow !== null,
       status: userShow?.status ?? null,
-      watchedEpisodes: uniqueWatchedEpisodeKeys.size,
+      watchedEpisodes: watchedEpisodesCount,
       isFavorite: favoriteEntry !== null,
     };
   },
@@ -4119,6 +4141,15 @@ export const debugShowCounts = internalQuery({
     userId: v.id("users"),
   },
   handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      return {
+        totalRecords: 0,
+        uniqueEpisodes: 0,
+        uniqueList: [],
+      };
+    }
+
     const watchedEpisodes = await ctx.db
       .query("watchedEpisodes")
       .withIndex("by_user_show", (q) => q.eq("userId", args.userId).eq("showId", args.showId))

@@ -138,6 +138,7 @@ export function RecommendationsScreen() {
   const [hasMoreMovie, setHasMoreMovie] = useState(true);
   const [isAnimeRateLimited, setIsAnimeRateLimited] = useState(false);
   const effectiveHasMoreAnime = hasMoreAnime && !isAnimeRateLimited;
+  const isAnimeRateLimitedRef = useRef(isAnimeRateLimited);
   const tvRecommendationsRef = useRef<NormalizedShow[]>([]);
   const animeRecommendationsRef = useRef<NormalizedShow[]>([]);
   const movieRecommendationsRef = useRef<NormalizedShow[]>([]);
@@ -145,6 +146,10 @@ export function RecommendationsScreen() {
   const fetchRecommendationsRef = useRef<
     ((page?: number, isLoadMore?: boolean) => Promise<void>) | null
   >(null);
+
+  useEffect(() => {
+    isAnimeRateLimitedRef.current = isAnimeRateLimited;
+  }, [isAnimeRateLimited]);
 
   // Reset page and hasMore when switching tabs
   useEffect(() => {
@@ -325,7 +330,7 @@ export function RecommendationsScreen() {
         const availableTvSeeds = seedShows.filter((seed) => seed.mediaType === "tv");
         const availableAnimeSeeds = seedShows.filter((seed) => seed.mediaType === "anime");
         const availableMovieSeeds = seedShows.filter((seed) => seed.mediaType === "movie");
-        const animeCooldownActive = isAnimeRateLimited;
+        const animeCooldownActive = isAnimeRateLimitedRef.current;
 
         // Get seeds based on active tab - balance across media types
         let relevantSeeds: typeof seedShows = [];
@@ -613,7 +618,6 @@ export function RecommendationsScreen() {
     };
   }, [
     activeTab,
-    isAnimeRateLimited,
     isTrackedLibraryLoading,
     seedShows,
     trackedTmdbKeys,

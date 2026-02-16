@@ -49,6 +49,11 @@ export const getRateLimitState = internalQuery({
     key: v.string(),
   },
   handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Unauthorized");
+    }
+
     const existing = await ctx.db
       .query("rateLimits")
       .withIndex("by_key", (q) => q.eq("key", args.key))
@@ -68,6 +73,11 @@ export const setRateLimitState = internalMutation({
     nextRetryTime: v.number(),
   },
   handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Unauthorized");
+    }
+
     const existing = await ctx.db
       .query("rateLimits")
       .withIndex("by_key", (q) => q.eq("key", args.key))

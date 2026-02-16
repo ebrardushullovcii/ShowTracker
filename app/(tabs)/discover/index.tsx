@@ -486,10 +486,6 @@ export function DiscoverScreen() {
         setActiveState((prev) => ({
           ...prev,
           isLoadingMore: false,
-          hasMore:
-            tvResult.page < tvResult.totalPages ||
-            animeResult.pageInfo.currentPage < animeResult.pageInfo.lastPage ||
-            movieResult.page < movieResult.totalPages,
         }));
       } else if (activeTab === "anime") {
         let result;
@@ -889,7 +885,9 @@ export function DiscoverScreen() {
                 ? "Anime"
                 : activeTab === "movie"
                   ? "Movies"
-                  : "TV Shows"
+                  : activeTab === "tv"
+                    ? "TV Shows"
+                    : "Content"
             }`}
             count={activeState.items.length}
           />

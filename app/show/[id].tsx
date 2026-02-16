@@ -1742,7 +1742,9 @@ export function ShowDetailScreen() {
 
       // Count how many of the collected keys are actually watched
       const watchedCountInPayloads = allEpisodeKeys.filter(key => watchedEpisodeKeys.has(key)).length;
-      const isFullyWatched = watchedCountInPayloads >= allEpisodeKeys.length;
+      // Use total episodes from show data when available, otherwise fall back to released episodes count
+      const totalEpisodes = show?.totalEpisodes ?? allEpisodeKeys.length;
+      const isFullyWatched = watchedCountInPayloads >= totalEpisodes;
 
       setSeasonActionLoading((prev) => {
         const next = { ...prev };
