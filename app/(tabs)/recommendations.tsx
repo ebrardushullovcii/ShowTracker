@@ -139,6 +139,10 @@ export function RecommendationsScreen() {
   const [isAnimeRateLimited, setIsAnimeRateLimited] = useState(false);
   const effectiveHasMoreAnime = hasMoreAnime && !isAnimeRateLimited;
   const isAnimeRateLimitedRef = useRef(isAnimeRateLimited);
+  const EMPTY_STREAK_THRESHOLD = 3;
+  const [tvEmptyStreak, setTvEmptyStreak] = useState(0);
+  const [animeEmptyStreak, setAnimeEmptyStreak] = useState(0);
+  const [movieEmptyStreak, setMovieEmptyStreak] = useState(0);
   const tvRecommendationsRef = useRef<NormalizedShow[]>([]);
   const animeRecommendationsRef = useRef<NormalizedShow[]>([]);
   const movieRecommendationsRef = useRef<NormalizedShow[]>([]);
@@ -157,6 +161,9 @@ export function RecommendationsScreen() {
     setHasMoreTv(true);
     setHasMoreAnime(true);
     setHasMoreMovie(true);
+    setTvEmptyStreak(0);
+    setAnimeEmptyStreak(0);
+    setMovieEmptyStreak(0);
   }, [activeTab]);
 
   useEffect(() => {
@@ -586,10 +593,18 @@ export function RecommendationsScreen() {
           currentPageRef.current = page;
           setCurrentPage(page);
 
-          // Check if we have more per category
-          const hasMoreTvRecs = tvRecs.length > 0;
-          const hasMoreAnimeRecs = animeRecs.length > 0;
-          const hasMoreMovieRecs = movieRecs.length > 0;
+          // Update empty streak counters and check if we have more per category
+          const nextTvEmptyStreak = tvRecs.length === 0 ? tvEmptyStreak + 1 : 0;
+          const nextAnimeEmptyStreak = animeRecs.length === 0 ? animeEmptyStreak + 1 : 0;
+          const nextMovieEmptyStreak = movieRecs.length === 0 ? movieEmptyStreak + 1 : 0;
+          
+          setTvEmptyStreak(nextTvEmptyStreak);
+          setAnimeEmptyStreak(nextAnimeEmptyStreak);
+          setMovieEmptyStreak(nextMovieEmptyStreak);
+          
+          const hasMoreTvRecs = nextTvEmptyStreak < EMPTY_STREAK_THRESHOLD;
+          const hasMoreAnimeRecs = nextAnimeEmptyStreak < EMPTY_STREAK_THRESHOLD;
+          const hasMoreMovieRecs = nextMovieEmptyStreak < EMPTY_STREAK_THRESHOLD;
           setHasMoreTv(hasMoreTvRecs);
           setHasMoreAnime(hasMoreAnimeRecs);
           setHasMoreMovie(hasMoreMovieRecs);
@@ -622,6 +637,9 @@ export function RecommendationsScreen() {
     seedShows,
     trackedTmdbKeys,
     trackedAnimeIds,
+    tvEmptyStreak,
+    animeEmptyStreak,
+    movieEmptyStreak,
   ]);
 
   // Update displayed recommendations when TV, anime, or movie lists change

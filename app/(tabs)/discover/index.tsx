@@ -425,63 +425,86 @@ export function DiscoverScreen() {
 
     try {
       if (activeTab === "all") {
-        const [tvResult, animeResult, movieResult] = await Promise.all([
-          hasActiveFilters
-            ? (async () => {
-                const filters: TmdbFilterParams = {
+        // Fetch each category independently with error handling for partial success
+        let tvResult: { items: any[]; page: number; totalPages: number } | null = null;
+        let animeResult: { items: any[]; pageInfo: { currentPage: number; lastPage: number } } | null = null;
+        let movieResult: { items: any[]; page: number; totalPages: number } | null = null;
+
+        // Only fetch TV if hasMore is true
+        if (tvState.hasMore) {
+          try {
+            tvResult = hasActiveFilters
+              ? await discoverTmdb("tv", nextPage, {
                   with_genres: selectedGenres.join(","),
                   first_air_date_year: selectedYear ? Number(selectedYear) : undefined,
                   vote_average_gte: selectedRating ? Number(selectedRating) : undefined,
-                };
-                return discoverTmdb("tv", nextPage, filters);
-              })()
-            : getTrendingTmdb("tv", "week", nextPage),
-          hasActiveFilters
-            ? (async () => {
-                const filters = {
+                })
+              : await getTrendingTmdb("tv", "week", nextPage);
+          } catch (err) {
+            console.warn("Failed to fetch TV shows:", err);
+          }
+        }
+
+        // Only fetch Anime if hasMore is true
+        if (animeState.hasMore) {
+          try {
+            animeResult = hasActiveFilters
+              ? await searchAniList("", nextPage, INITIAL_ITEMS_PER_PAGE, {
                   genres: selectedGenres.length > 0 ? selectedGenres : undefined,
                   seasonYear: selectedYear ? Number(selectedYear) : undefined,
                   minScore: selectedRating ? Number(selectedRating) * 10 : undefined,
-                };
-                return searchAniList("", nextPage, INITIAL_ITEMS_PER_PAGE, filters);
-              })()
-            : getTrendingAniList(nextPage, INITIAL_ITEMS_PER_PAGE),
-          hasActiveFilters
-            ? (async () => {
-                const filters: TmdbFilterParams = {
+                })
+              : await getTrendingAniList(nextPage, INITIAL_ITEMS_PER_PAGE);
+          } catch (err) {
+            console.warn("Failed to fetch anime:", err);
+          }
+        }
+
+        // Only fetch Movies if hasMore is true
+        if (movieState.hasMore) {
+          try {
+            movieResult = hasActiveFilters
+              ? await discoverTmdb("movie", nextPage, {
                   with_genres: selectedGenres.join(","),
                   primary_release_year: selectedYear ? Number(selectedYear) : undefined,
                   vote_average_gte: selectedRating ? Number(selectedRating) : undefined,
-                };
-                return discoverTmdb("movie", nextPage, filters);
-              })()
-            : getTrendingTmdb("movie", "week", nextPage),
-        ]);
+                })
+              : await getTrendingTmdb("movie", "week", nextPage);
+          } catch (err) {
+            console.warn("Failed to fetch movies:", err);
+          }
+        }
 
-        const newTvItems = filterTrackedTmdbItems(tvResult.items, trackedTmdbKeys);
-        const newAnimeItems = animeResult.items;
-        const newMovieItems = filterTrackedTmdbItems(movieResult.items, trackedTmdbKeys);
+        // Update state for each category that returned results
+        if (tvResult) {
+          const newTvItems = filterTrackedTmdbItems(tvResult.items, trackedTmdbKeys);
+          setTvState((prev) => ({
+            ...prev,
+            items: [...prev.items, ...newTvItems],
+            currentPage: nextPage,
+            hasMore: tvResult!.page < tvResult!.totalPages,
+          }));
+        }
 
-        setTvState((prev) => ({
-          ...prev,
-          items: [...prev.items, ...newTvItems],
-          currentPage: nextPage,
-          hasMore: tvResult.page < tvResult.totalPages,
-        }));
+        if (animeResult) {
+          const newAnimeItems = animeResult.items;
+          setAnimeState((prev) => ({
+            ...prev,
+            items: [...prev.items, ...newAnimeItems],
+            currentPage: nextPage,
+            hasMore: animeResult!.pageInfo.currentPage < animeResult!.pageInfo.lastPage,
+          }));
+        }
 
-        setAnimeState((prev) => ({
-          ...prev,
-          items: [...prev.items, ...newAnimeItems],
-          currentPage: nextPage,
-          hasMore: animeResult.pageInfo.currentPage < animeResult.pageInfo.lastPage,
-        }));
-
-        setMovieState((prev) => ({
-          ...prev,
-          items: [...prev.items, ...newMovieItems],
-          currentPage: nextPage,
-          hasMore: movieResult.page < movieResult.totalPages,
-        }));
+        if (movieResult) {
+          const newMovieItems = filterTrackedTmdbItems(movieResult.items, trackedTmdbKeys);
+          setMovieState((prev) => ({
+            ...prev,
+            items: [...prev.items, ...newMovieItems],
+            currentPage: nextPage,
+            hasMore: movieResult!.page < movieResult!.totalPages,
+          }));
+        }
 
         setActiveState((prev) => ({
           ...prev,
@@ -569,7 +592,9 @@ export function DiscoverScreen() {
   }, [
     activeState,
     activeTab,
+    animeState.hasMore,
     hasActiveFilters,
+    movieState.hasMore,
     selectedGenres,
     selectedRating,
     selectedYear,
@@ -578,6 +603,7 @@ export function DiscoverScreen() {
     setAnimeState,
     setMovieState,
     trackedTmdbKeys,
+    tvState.hasMore,
   ]);
 
   const heroShow = activeState.items[0] ?? null;

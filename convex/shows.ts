@@ -2253,12 +2253,11 @@ export const toggleEpisodeWatched = mutation({
         // If status was "completed", always change to "watching" when unwatching
         // This handles cases where episode counts might be inaccurate due to data issues
         if (userShow && userShow.status === "completed") {
-          await ctx.db.patch(userShow._id, { 
+          await ctx.db.patch(userShow._id, {
             status: "watching",
             statusChangedAt: Date.now(),
             completedAt: undefined,
           });
-          console.log("DEBUG: Changed status from completed to watching");
         }
 
         const refreshed = await refreshUserShowTrackingAggregates(ctx, userId, showId);
@@ -4180,5 +4179,47 @@ export const getWatchedEpisodesForSeasonAction = action({
   },
   handler: async (ctx, args): Promise<string[]> => {
     return ctx.runQuery(api.shows.getWatchedEpisodesForSeason, args);
+  },
+});
+
+// Migration: Backfill titleLower for existing shows that don't have it
+export const backfillTitleLower = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      return { success: false, reason: "unauthenticated" };
+    }
+
+    // Fetch shows in batches using pagination
+    const BATCH_SIZE = 100;
+    let cursor: string | null = null;
+    let processedCount = 0;
+    let updatedCount = 0;
+
+    do {
+      const shows = await ctx.db
+        .query("shows")
+        .paginate({ numItems: BATCH_SIZE, cursor });
+
+      for (const show of shows.page) {
+        processedCount++;
+        // Only update if titleLower is missing
+        if (!show.titleLower && show.title) {
+          await ctx.db.patch(show._id, {
+            titleLower: show.title.toLowerCase().trim(),
+          });
+          updatedCount++;
+        }
+      }
+
+      cursor = shows.continueCursor;
+    } while (cursor);
+
+    return {
+      success: true,
+      processedCount,
+      updatedCount,
+    };
   },
 });
