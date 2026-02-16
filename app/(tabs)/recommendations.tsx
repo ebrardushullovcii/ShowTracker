@@ -140,9 +140,9 @@ export function RecommendationsScreen() {
   const effectiveHasMoreAnime = hasMoreAnime && !isAnimeRateLimited;
   const isAnimeRateLimitedRef = useRef(isAnimeRateLimited);
   const EMPTY_STREAK_THRESHOLD = 3;
-  const [tvEmptyStreak, setTvEmptyStreak] = useState(0);
-  const [animeEmptyStreak, setAnimeEmptyStreak] = useState(0);
-  const [movieEmptyStreak, setMovieEmptyStreak] = useState(0);
+  const tvEmptyStreakRef = useRef(0);
+  const animeEmptyStreakRef = useRef(0);
+  const movieEmptyStreakRef = useRef(0);
   const tvRecommendationsRef = useRef<NormalizedShow[]>([]);
   const animeRecommendationsRef = useRef<NormalizedShow[]>([]);
   const movieRecommendationsRef = useRef<NormalizedShow[]>([]);
@@ -161,9 +161,9 @@ export function RecommendationsScreen() {
     setHasMoreTv(true);
     setHasMoreAnime(true);
     setHasMoreMovie(true);
-    setTvEmptyStreak(0);
-    setAnimeEmptyStreak(0);
-    setMovieEmptyStreak(0);
+    tvEmptyStreakRef.current = 0;
+    animeEmptyStreakRef.current = 0;
+    movieEmptyStreakRef.current = 0;
   }, [activeTab]);
 
   useEffect(() => {
@@ -411,7 +411,7 @@ export function RecommendationsScreen() {
                     `AniList recommendations for ${seed.title}`
                   );
                   if (signal.aborted) return [];
-                  return recs.items.map((item) => ({ item, seedMediaType: seed.mediaType as "anime", seedTitle: seed.title }));
+                  return recs.items.map((item) => ({ item, seedMediaType: "anime" as const }));
                 } catch (e) {
                   if (isRateLimitError(e) && !signal.aborted) {
                     setIsAnimeRateLimited(true);
@@ -440,7 +440,7 @@ export function RecommendationsScreen() {
                   return [
                     ...recs,
                     ...similar.filter((s) => !recs.some((r) => r.id === s.id && r.mediaType === s.mediaType)),
-                  ].map((item) => ({ item, seedMediaType: seed.mediaType as "movie", seedTitle: seed.title }));
+                  ].map((item) => ({ item, seedMediaType: "movie" as const }));
                 } catch (e) {
                   console.warn("Movie API failed for", seed.title, e);
                   return [];
@@ -458,7 +458,7 @@ export function RecommendationsScreen() {
                   return [
                     ...recs,
                     ...similar.filter((s) => !recs.some((r) => r.id === s.id && r.mediaType === s.mediaType)),
-                  ].map((item) => ({ item, seedMediaType: seed.mediaType as "tv", seedTitle: seed.title }));
+                  ].map((item) => ({ item, seedMediaType: "tv" as const }));
                 } catch (e) {
                   console.warn("TV API failed for", seed.title, e);
                   return [];
@@ -594,17 +594,13 @@ export function RecommendationsScreen() {
           setCurrentPage(page);
 
           // Update empty streak counters and check if we have more per category
-          const nextTvEmptyStreak = tvRecs.length === 0 ? tvEmptyStreak + 1 : 0;
-          const nextAnimeEmptyStreak = animeRecs.length === 0 ? animeEmptyStreak + 1 : 0;
-          const nextMovieEmptyStreak = movieRecs.length === 0 ? movieEmptyStreak + 1 : 0;
+          tvEmptyStreakRef.current = tvRecs.length === 0 ? tvEmptyStreakRef.current + 1 : 0;
+          animeEmptyStreakRef.current = animeRecs.length === 0 ? animeEmptyStreakRef.current + 1 : 0;
+          movieEmptyStreakRef.current = movieRecs.length === 0 ? movieEmptyStreakRef.current + 1 : 0;
           
-          setTvEmptyStreak(nextTvEmptyStreak);
-          setAnimeEmptyStreak(nextAnimeEmptyStreak);
-          setMovieEmptyStreak(nextMovieEmptyStreak);
-          
-          const hasMoreTvRecs = nextTvEmptyStreak < EMPTY_STREAK_THRESHOLD;
-          const hasMoreAnimeRecs = nextAnimeEmptyStreak < EMPTY_STREAK_THRESHOLD;
-          const hasMoreMovieRecs = nextMovieEmptyStreak < EMPTY_STREAK_THRESHOLD;
+          const hasMoreTvRecs = tvEmptyStreakRef.current < EMPTY_STREAK_THRESHOLD;
+          const hasMoreAnimeRecs = animeEmptyStreakRef.current < EMPTY_STREAK_THRESHOLD;
+          const hasMoreMovieRecs = movieEmptyStreakRef.current < EMPTY_STREAK_THRESHOLD;
           setHasMoreTv(hasMoreTvRecs);
           setHasMoreAnime(hasMoreAnimeRecs);
           setHasMoreMovie(hasMoreMovieRecs);
@@ -637,9 +633,6 @@ export function RecommendationsScreen() {
     seedShows,
     trackedTmdbKeys,
     trackedAnimeIds,
-    tvEmptyStreak,
-    animeEmptyStreak,
-    movieEmptyStreak,
   ]);
 
   // Update displayed recommendations when TV, anime, or movie lists change
