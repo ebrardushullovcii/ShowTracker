@@ -698,6 +698,7 @@ export function ShowDetailScreen() {
     if (tracking?.status && optimisticTrackingStatus !== null) {
       setOptimisticTrackingStatus(null);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tracking?.status]);
 
   const trackingStatusOptions = useMemo(
@@ -1260,27 +1261,6 @@ export function ShowDetailScreen() {
           }
           if (isCancelled) return;
           if (!normalized) {
-            // Try Jikan as fallback for MAL data
-            const malId = parsedId.externalId;
-            if (typeof malId === "number") {
-              try {
-                const jikanData = await getJikanAnime(malId);
-                if (jikanData && !isCancelled) {
-                  const jikanEpisodes = await getJikanAnimeEpisodes(malId);
-                  setShow(jikanData);
-                  setSeasons(
-                    createAnimeSeason(
-                      jikanData.totalEpisodes,
-                      jikanEpisodes,
-                      jikanData.backdropUrl ?? jikanData.posterUrl
-                    )
-                  );
-                  return;
-                }
-              } catch (jikanError) {
-                console.warn("Fallback to Jikan also failed:", jikanError);
-              }
-            }
             throw new Error("Anime not found. AniList may be unavailable.");
           }
 

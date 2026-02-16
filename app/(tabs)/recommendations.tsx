@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Platform,
@@ -90,6 +90,14 @@ function toTrackedTmdbKey(mediaType: "tv" | "movie", tmdbId: number) {
   return `${mediaType}:${tmdbId}`;
 }
 
+function toRecommendationKey(item: NormalizedShow) {
+  return `${item.id}:${item.mediaType}`;
+}
+
+function toAnimeRecommendationKey(item: NormalizedShow) {
+  return `${item.anilistId ?? ""}:${item.id}`;
+}
+
 function interleaveItems(
   tvItems: NormalizedShow[],
   animeItems: NormalizedShow[],
@@ -130,6 +138,13 @@ export function RecommendationsScreen() {
   const [hasMoreMovie, setHasMoreMovie] = useState(true);
   const [isAnimeRateLimited, setIsAnimeRateLimited] = useState(false);
   const effectiveHasMoreAnime = hasMoreAnime && !isAnimeRateLimited;
+  const tvRecommendationsRef = useRef<NormalizedShow[]>([]);
+  const animeRecommendationsRef = useRef<NormalizedShow[]>([]);
+  const movieRecommendationsRef = useRef<NormalizedShow[]>([]);
+  const currentPageRef = useRef(1);
+  const fetchRecommendationsRef = useRef<
+    ((page?: number, isLoadMore?: boolean) => Promise<void>) | null
+  >(null);
 
   // Reset page and hasMore when switching tabs
   useEffect(() => {
@@ -153,6 +168,22 @@ export function RecommendationsScreen() {
       clearTimeout(timer);
     };
   }, [isAnimeRateLimited]);
+
+  useEffect(() => {
+    tvRecommendationsRef.current = tvRecommendations;
+  }, [tvRecommendations]);
+
+  useEffect(() => {
+    animeRecommendationsRef.current = animeRecommendations;
+  }, [animeRecommendations]);
+
+  useEffect(() => {
+    movieRecommendationsRef.current = movieRecommendations;
+  }, [movieRecommendations]);
+
+  useEffect(() => {
+    currentPageRef.current = currentPage;
+  }, [currentPage]);
 
   const hasMoreForActiveTab = useMemo(() => {
     if (activeTab === "all") {
@@ -275,9 +306,21 @@ export function RecommendationsScreen() {
         const tvRecs: NormalizedShow[] = [];
         const animeRecs: NormalizedShow[] = [];
         const movieRecs: NormalizedShow[] = [];
-        const seenTvIds = new Set<string>();
-        const seenAnimeIds = new Set<number>();
-        const seenMovieIds = new Set<string>();
+        const seenTvIds = new Set<string>(
+          (isLoadMore ? tvRecommendationsRef.current : []).map((item) =>
+            toRecommendationKey(item)
+          )
+        );
+        const seenAnimeIds = new Set<string>(
+          (isLoadMore ? animeRecommendationsRef.current : []).map((item) =>
+            toAnimeRecommendationKey(item)
+          )
+        );
+        const seenMovieIds = new Set<string>(
+          (isLoadMore ? movieRecommendationsRef.current : []).map((item) =>
+            toRecommendationKey(item)
+          )
+        );
 
         const availableTvSeeds = seedShows.filter((seed) => seed.mediaType === "tv");
         const availableAnimeSeeds = seedShows.filter((seed) => seed.mediaType === "anime");
@@ -460,8 +503,9 @@ export function RecommendationsScreen() {
                 tvRecs.push(item);
               }
             } else if (category === "anime") {
-              if (!seenAnimeIds.has(item.anilistId ?? 0)) {
-                seenAnimeIds.add(item.anilistId ?? 0);
+              const animeKey = toAnimeRecommendationKey(item);
+              if (!seenAnimeIds.has(animeKey)) {
+                seenAnimeIds.add(animeKey);
                 animeRecs.push(item);
               }
             } else if (category === "movie") {
@@ -472,8 +516,9 @@ export function RecommendationsScreen() {
             } else {
               // Fallback: check if it has anilistId -> anime, otherwise treat as tv
               if (item.anilistId) {
-                if (!seenAnimeIds.has(item.anilistId)) {
-                  seenAnimeIds.add(item.anilistId);
+                const animeKey = toAnimeRecommendationKey(item);
+                if (!seenAnimeIds.has(animeKey)) {
+                  seenAnimeIds.add(animeKey);
                   animeRecs.push(item);
                 }
               } else {
@@ -507,17 +552,33 @@ export function RecommendationsScreen() {
 
           if (isLoadMore) {
             // Append new items
-            setTvRecommendations((prev) => [...prev, ...tvRecs]);
-            setAnimeRecommendations((prev) => [...prev, ...animeRecs]);
-            setMovieRecommendations((prev) => [...prev, ...movieRecs]);
+            setTvRecommendations((prev) => {
+              const next = [...prev, ...tvRecs];
+              tvRecommendationsRef.current = next;
+              return next;
+            });
+            setAnimeRecommendations((prev) => {
+              const next = [...prev, ...animeRecs];
+              animeRecommendationsRef.current = next;
+              return next;
+            });
+            setMovieRecommendations((prev) => {
+              const next = [...prev, ...movieRecs];
+              movieRecommendationsRef.current = next;
+              return next;
+            });
           } else {
             // Replace with new items
+            tvRecommendationsRef.current = tvRecs;
+            animeRecommendationsRef.current = animeRecs;
+            movieRecommendationsRef.current = movieRecs;
             setTvRecommendations(tvRecs);
             setAnimeRecommendations(animeRecs);
             setMovieRecommendations(movieRecs);
           }
           
           // Update current page
+          currentPageRef.current = page;
           setCurrentPage(page);
 
           // Check if we have more per category
@@ -541,11 +602,14 @@ export function RecommendationsScreen() {
       }
     };
 
+    fetchRecommendationsRef.current = fetchRecommendations;
+
     // Initial load
     void fetchRecommendations(1, false);
 
     return () => {
       controller.abort();
+      fetchRecommendationsRef.current = null;
     };
   }, [
     activeTab,
@@ -578,7 +642,7 @@ export function RecommendationsScreen() {
       logRecommendationsDebug("load-more-skipped", {
         activeTab,
         reason: "no-more-results",
-        currentPage,
+        currentPage: currentPageRef.current,
         hasMoreTv,
         hasMoreAnime,
         hasMoreMovie,
@@ -590,277 +654,26 @@ export function RecommendationsScreen() {
       logRecommendationsDebug("load-more-skipped", {
         activeTab,
         reason: "no-seeds",
-        currentPage,
+        currentPage: currentPageRef.current,
       });
       return;
     }
 
-    const nextPage = currentPage + 1;
+    const nextPage = currentPageRef.current + 1;
+    if (!fetchRecommendationsRef.current) {
+      return;
+    }
 
-    const fetchMore = async () => {
-      setIsLoadingMore(true);
-
-      try {
-        const availableTvSeeds = seedShows.filter((seed) => seed.mediaType === "tv");
-        const availableAnimeSeeds = seedShows.filter((seed) => seed.mediaType === "anime");
-        const availableMovieSeeds = seedShows.filter((seed) => seed.mediaType === "movie");
-        const animeCooldownActive = isAnimeRateLimited;
-
-        // Get balanced seeds for load more
-        let relevantSeeds: typeof seedShows = [];
-        let selectedMovieSeeds: typeof seedShows = [];
-
-        if (activeTab === "all") {
-          const tvSeeds = hasMoreTv
-            ? availableTvSeeds.slice(0, MAX_TMDB_SEEDS_PER_CATEGORY)
-            : [];
-          const animeSeeds = hasMoreAnime && !animeCooldownActive
-            ? availableAnimeSeeds.slice(0, MAX_ANIME_SEEDS_PER_CATEGORY)
-            : [];
-          const movieSeeds = hasMoreMovie
-            ? availableMovieSeeds.slice(0, MAX_TMDB_SEEDS_PER_CATEGORY)
-            : [];
-
-          selectedMovieSeeds = movieSeeds;
-          relevantSeeds = [...tvSeeds, ...animeSeeds, ...movieSeeds];
-
-          logRecommendationsDebug("load-more-seed-selection", {
-            activeTab,
-            nextPage,
-            animeCooldownActive,
-            availableSeedCounts: {
-              tv: availableTvSeeds.length,
-              anime: availableAnimeSeeds.length,
-              movie: availableMovieSeeds.length,
-            },
-            selectedSeedCounts: {
-              tv: tvSeeds.length,
-              anime: animeSeeds.length,
-              movie: movieSeeds.length,
-            },
-            hasMoreByCategory: {
-              tv: hasMoreTv,
-              anime: hasMoreAnime,
-              movie: hasMoreMovie,
-            },
-          });
-        } else {
-          const allTabSeeds = seedShows.filter((seed) => seed.mediaType === activeTab);
-          const maxSeeds = activeTab === "anime"
-            ? MAX_ANIME_SEEDS_PER_CATEGORY
-            : MAX_TMDB_SEEDS_PER_CATEGORY;
-
-          relevantSeeds =
-            activeTab === "anime" && animeCooldownActive
-              ? []
-              : allTabSeeds.slice(0, maxSeeds);
-
-          logRecommendationsDebug("load-more-seed-selection", {
-            activeTab,
-            nextPage,
-            animeCooldownActive,
-            selectedSeedCount: relevantSeeds.length,
-          });
-        }
-
-        if (relevantSeeds.length === 0) {
-          logRecommendationsDebug("load-more-no-relevant-seeds", {
-            activeTab,
-            nextPage,
-          });
-
-          if (activeTab === "all") {
-            setHasMoreTv(false);
-            setHasMoreAnime(false);
-            setHasMoreMovie(false);
-          } else if (activeTab === "tv") {
-            setHasMoreTv(false);
-          } else if (activeTab === "anime") {
-            setHasMoreAnime(false);
-          } else {
-            setHasMoreMovie(false);
-          }
-          return;
-        }
-
-        const tvRecs: NormalizedShow[] = [];
-        const animeRecs: NormalizedShow[] = [];
-        const movieRecs: NormalizedShow[] = [];
-        const seenTvIds = new Set(tvRecommendations.map((i) => `${i.id}:${i.mediaType}`));
-        const seenAnimeIds = new Set(animeRecommendations.map((i) => i.anilistId ?? 0));
-        const seenMovieIds = new Set(movieRecommendations.map((i) => `${i.id}:${i.mediaType}`));
-
-        type SeedResult = { item: NormalizedShow; seedMediaType: "tv" | "anime" | "movie" }[];
-        const seedResults: SeedResult[] = await Promise.all(
-          relevantSeeds.map(async (seed) => {
-            try {
-              // Handle anime seeds
-              if (seed.mediaType === "anime" && seed.anilistId) {
-                const recs = await withTimeout(
-                  getAniListRecommendations(seed.anilistId, nextPage, 10),
-                  ANIME_REQUEST_TIMEOUT_MS,
-                  `AniList recommendations for ${seed.title}`
-                );
-                return recs.items.map((item) => ({ item, seedMediaType: seed.mediaType, seedTitle: seed.title }));
-              }
-
-              // Handle movie seeds
-              if (seed.mediaType === "movie" && seed.tmdbId) {
-                const [recs, similar] = await Promise.all([
-                  getMovieRecommendations(seed.tmdbId, nextPage),
-                  getSimilarMovies(seed.tmdbId, nextPage),
-                ]);
-
-                return [
-                  ...recs,
-                  ...similar.filter(
-                    (s) => !recs.some((r) => r.id === s.id && r.mediaType === s.mediaType)
-                  ),
-                ].map((item) => ({ item, seedMediaType: seed.mediaType, seedTitle: seed.title }));
-              }
-
-              // Handle TV seeds
-              if (seed.mediaType === "tv" && seed.tmdbId) {
-                const [recs, similar] = await Promise.all([
-                  getTvRecommendations(seed.tmdbId, nextPage),
-                  getSimilarTv(seed.tmdbId, nextPage),
-                ]);
-
-                return [
-                  ...recs,
-                  ...similar.filter(
-                    (s) => !recs.some((r) => r.id === s.id && r.mediaType === s.mediaType)
-                  ),
-                ].map((item) => ({ item, seedMediaType: seed.mediaType, seedTitle: seed.title }));
-              }
-
-              return [];
-            } catch (err) {
-              if (isRateLimitError(err)) {
-                setIsAnimeRateLimited(true);
-                setHasMoreAnime(false);
-                logRecommendationsDebug("anime-rate-limited", {
-                  source: "load-more",
-                  activeTab,
-                  page: nextPage,
-                  seedTitle: seed.title,
-                  cooldownMs: ANIME_RATE_LIMIT_COOLDOWN_MS,
-                });
-              }
-              console.error(`Failed to get recommendations for ${seed.title}:`, err);
-              return [];
-            }
-          })
-        );
-
-        for (const resultSet of seedResults) {
-          for (const { item, seedMediaType } of resultSet) {
-            const key = `${item.id}:${item.mediaType}`;
-            
-            // Filter out already tracked TV/Movie
-            if (
-              (item.mediaType === "tv" || item.mediaType === "movie") &&
-              typeof item.tmdbId === "number" &&
-              trackedTmdbKeys.has(toTrackedTmdbKey(item.mediaType, item.tmdbId))
-            ) {
-              continue;
-            }
-
-            // Filter out already tracked anime
-            if (
-              item.mediaType === "anime" &&
-              typeof item.anilistId === "number" &&
-              trackedAnimeIds.has(item.anilistId)
-            ) {
-              continue;
-            }
-
-            // Use seedMediaType for categorization - it's more reliable
-            const category = seedMediaType || item.mediaType;
-            
-            if (category === "tv") {
-              if (!seenTvIds.has(key)) {
-                seenTvIds.add(key);
-                tvRecs.push(item);
-              }
-            } else if (category === "anime") {
-              if (!seenAnimeIds.has(item.anilistId ?? 0)) {
-                seenAnimeIds.add(item.anilistId ?? 0);
-                animeRecs.push(item);
-              }
-            } else if (category === "movie") {
-              if (!seenMovieIds.has(key)) {
-                seenMovieIds.add(key);
-                movieRecs.push(item);
-              }
-            } else {
-              // Fallback
-              if (item.anilistId) {
-                if (!seenAnimeIds.has(item.anilistId)) {
-                  seenAnimeIds.add(item.anilistId);
-                  animeRecs.push(item);
-                }
-              } else {
-                if (!seenTvIds.has(key)) {
-                  seenTvIds.add(key);
-                  tvRecs.push(item);
-                }
-              }
-            }
-          }
-        }
-
-        // Append new items
-        setTvRecommendations((prev) => [...prev, ...tvRecs]);
-        setAnimeRecommendations((prev) => [...prev, ...animeRecs]);
-        setMovieRecommendations((prev) => [...prev, ...movieRecs]);
-        setCurrentPage(nextPage);
-
-        logRecommendationsDebug("load-more-results", {
-          activeTab,
-          nextPage,
-          recommendationCounts: {
-            tv: tvRecs.length,
-            anime: animeRecs.length,
-            movie: movieRecs.length,
-          },
-        });
-
-        if (activeTab === "all" && selectedMovieSeeds.length > 0 && movieRecs.length === 0) {
-          logRecommendationsDebug("load-more-movie-seeds-without-results", {
-            nextPage,
-            selectedMovieSeedTitles: selectedMovieSeeds.map((seed) => seed.title),
-          });
-        }
-
-        // Check if we should continue loading per category
-        setHasMoreTv(tvRecs.length > 0);
-        setHasMoreAnime(animeRecs.length > 0);
-        setHasMoreMovie(movieRecs.length > 0);
-      } catch (err) {
-        console.error("Failed to load more recommendations:", err);
-      } finally {
-        setIsLoadingMore(false);
-      }
-    };
-
-    void fetchMore();
+    void fetchRecommendationsRef.current(nextPage, true);
   }, [
     activeTab,
-    currentPage,
     hasMoreAnime,
     hasMoreForActiveTab,
     hasMoreMovie,
     hasMoreTv,
-    isAnimeRateLimited,
     isLoading,
     isLoadingMore,
     seedShows,
-    trackedTmdbKeys,
-    trackedAnimeIds,
-    tvRecommendations,
-    animeRecommendations,
-    movieRecommendations,
   ]);
 
   const headerTitle = useMemo(() => {
@@ -885,7 +698,7 @@ export function RecommendationsScreen() {
 
   return (
     <ScreenWrapper>
-      <View className="flex-1 px-4">
+      <View className="flex-1">
         <FlashList
           data={recommendations}
           key={`rec-grid-${columns}`}
@@ -992,6 +805,7 @@ export function RecommendationsScreen() {
             </View>
           }
           ListEmptyComponent={null}
+          contentContainerStyle={{ paddingBottom: 24 }}
         />
       </View>
     </ScreenWrapper>

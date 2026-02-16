@@ -117,7 +117,7 @@ export class AppErrorBoundary extends Component<
 
           {convexLimitHit ? (
             <Text className="mt-2 text-xs text-text-muted">
-              Need help: support@convex.dev
+              Please contact ShowTracker support to restore backend availability.
             </Text>
           ) : null}
 
@@ -142,7 +142,7 @@ export class AppErrorBoundary extends Component<
           </View>
 
           <Text className="mt-4 text-xs text-text-muted" numberOfLines={3}>
-            {rawMessage}
+            {__DEV__ ? rawMessage : "An unexpected error occurred."}
           </Text>
         </View>
       </View>

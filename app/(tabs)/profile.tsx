@@ -39,17 +39,6 @@ type RailItem = {
   badge?: string;
 };
 
-type FavoriteEntry = {
-  id: string;
-  title: string;
-  posterUrl: string | null;
-  backdropUrl: string | null;
-  mediaType: "tv" | "anime" | "movie";
-  tmdbId: number | null;
-  anilistId: number | null;
-  malId: number | null;
-};
-
 type ProfileLibraryEntry = {
   id: string;
   title: string;
@@ -57,10 +46,19 @@ type ProfileLibraryEntry = {
   status: "watching" | "paused" | "dropped" | "completed" | "plan_to_watch";
   posterUrl: string | null;
   backdropUrl: string | null;
+  overview?: string | null;
   firstAired: string | null;
   tmdbId: number | null;
   anilistId: number | null;
   malId: number | null;
+  tvmazeId?: number | null;
+  imdbId?: string | null;
+  isAutoTracked?: boolean;
+  watchedEpisodes?: number;
+  totalEpisodes?: number | null;
+  progressPercent?: number | null;
+  genres?: string[];
+  rating?: number | null;
   remainingEpisodes: number | null;
   lastActivityAt: number;
   relationRootAnilistId?: number | null;
@@ -152,11 +150,6 @@ function getAnimeChronologyValue(entry: Pick<ProfileLibraryEntry, "firstAired" |
       if (Number.isFinite(asDate)) {
         return asDate;
       }
-    }
-
-    const parsed = new Date(firstAired).getTime();
-    if (Number.isFinite(parsed)) {
-      return parsed;
     }
   }
 
@@ -288,6 +281,7 @@ function StatsPanelUnified({
   stats: ProfileStats;
   isDesktop: boolean;
 }) {
+  const isMobile = !isDesktop;
   const completed = stats.completedShows ?? 0;
   const total = stats.totalTrackedShows ?? 0;
   const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
@@ -350,15 +344,27 @@ function StatsPanelUnified({
           <View
             key={m.label}
             className="items-center py-2"
-            style={{ flexBasis: isDesktop ? "11.5%" : "22%", flexGrow: 1 }}
+            style={{
+              flexBasis: isDesktop ? "11.5%" : "48%",
+              flexGrow: isDesktop ? 1 : 0,
+              minHeight: isMobile ? 94 : undefined,
+            }}
           >
             <View className="mb-2 h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
               <Ionicons name={m.icon} size={16} color="#ef4444" />
             </View>
-            <Text className="text-lg font-black text-text-primary">
+            <Text
+              className={`${isMobile ? "text-base" : "text-lg"} font-black text-text-primary leading-tight text-center`}
+              numberOfLines={2}
+              minimumFontScale={0.85}
+              adjustsFontSizeToFit
+            >
               {m.value}
             </Text>
-            <Text className="mt-0.5 text-[10px] font-semibold uppercase tracking-widest text-text-muted">
+            <Text
+              className="mt-0.5 text-[10px] font-semibold uppercase tracking-widest text-text-muted text-center"
+              numberOfLines={2}
+            >
               {m.label}
             </Text>
           </View>
@@ -628,11 +634,11 @@ export default function ProfileScreen() {
     stats === undefined || favorites === undefined || lists === undefined || library === undefined;
 
   const favoriteEntries = useMemo(
-    () => (favorites ?? []) as FavoriteEntry[],
+    () => favorites ?? [],
     [favorites]
   );
   const libraryEntries = useMemo(
-    () => (library ?? []) as ProfileLibraryEntry[],
+    () => library ?? [],
     [library]
   );
   const primaryAnimeLibraryEntries = useMemo(

@@ -927,7 +927,7 @@ export function DiscoverScreen() {
           ListHeaderComponent={ListHeader}
           ListFooterComponent={renderFooter}
           ListEmptyComponent={renderEmpty}
-          contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 32 }}
+          contentContainerStyle={{ paddingBottom: 32 }}
         />
       </View>
     </ScreenWrapper>

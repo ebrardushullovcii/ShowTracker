@@ -35,6 +35,7 @@ const showInput = {
   imdbId: v.optional(v.string()),
   mediaType: v.union(v.literal("tv"), v.literal("anime"), v.literal("movie")),
   title: v.string(),
+  titleLower: v.optional(v.string()),
   overview: v.optional(v.string()),
   posterUrl: v.optional(v.string()),
   backdropUrl: v.optional(v.string()),
@@ -194,6 +195,7 @@ function buildShowPatch(
 
   return {
     ...incoming,
+    titleLower: incoming.title.toLowerCase().trim(),
     tvdbId: incoming.tvdbId ?? existing?.tvdbId,
     malId: incoming.malId ?? existing?.malId,
     anilistFormat: incoming.anilistFormat ?? existing?.anilistFormat,
@@ -214,6 +216,7 @@ type ShowPayload = {
   imdbId?: string;
   mediaType: "tv" | "anime" | "movie";
   title: string;
+  titleLower?: string;
   overview?: string;
   posterUrl?: string;
   backdropUrl?: string;
@@ -1037,11 +1040,17 @@ export const findShowByTitle = internalQuery({
     title: v.string(),
   },
   handler: async (ctx, args) => {
-    const allShows = await ctx.db.query("shows").collect();
     const normalizedSearch = args.title.toLowerCase().trim();
-    return allShows.find(
-      (show) => show.title.toLowerCase().trim() === normalizedSearch
-    );
+    if (!normalizedSearch) {
+      return null;
+    }
+
+    const matches = await ctx.db
+      .query("shows")
+      .withIndex("by_title", (q) => q.eq("titleLower", normalizedSearch))
+      .collect();
+
+    return pickBestLookupCandidate(matches);
   },
 });
 
@@ -1087,8 +1096,10 @@ export const findUserShowByShowId = internalQuery({
     showId: v.id("shows"),
   },
   handler: async (ctx, args) => {
-    const userShows = await ctx.db.query("userShows").collect();
-    return userShows.filter((us) => us.showId === args.showId);
+    return await ctx.db
+      .query("userShows")
+      .withIndex("by_showId", (q) => q.eq("showId", args.showId))
+      .collect();
   },
 });
 
@@ -1167,8 +1178,9 @@ export const getWatchedEpisodesForSeason = query({
 
     const watchedEpisodes = await ctx.db
       .query("watchedEpisodes")
-      .withIndex("by_user_show", (q) => q.eq("userId", userId).eq("showId", show._id))
-      .filter((q) => q.eq(q.field("season"), args.season))
+      .withIndex("by_user_show_season_episode", (q) =>
+        q.eq("userId", userId).eq("showId", show._id).eq("season", args.season)
+      )
       .collect();
 
     return watchedEpisodes.map((entry) => `${entry.season}:${entry.episode}`);
@@ -2222,6 +2234,7 @@ export const toggleEpisodeWatched = mutation({
           await ctx.db.patch(userShow._id, { 
             status: "watching",
             statusChangedAt: Date.now(),
+            completedAt: undefined,
           });
           console.log("DEBUG: Changed status from completed to watching");
         }
@@ -2587,6 +2600,7 @@ export const unmarkSeasonWatched = mutation({
       await ctx.db.patch(userShow._id, {
         status: "watching",
         statusChangedAt: Date.now(),
+        completedAt: undefined,
       });
     }
 

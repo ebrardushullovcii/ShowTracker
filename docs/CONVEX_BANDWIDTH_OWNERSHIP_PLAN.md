@@ -105,7 +105,7 @@ Use scheduled jobs to keep external freshness in sync:
 
 ## Implementation Phases
 
-## Phase 0 - Baseline and guardrails
+### Phase 0 - Baseline and guardrails
 
 Deliverables:
 - Establish baseline read costs per critical page flow.
@@ -116,7 +116,7 @@ Exit criteria:
 - Baseline captured for Home, Upcoming, Library, Profile, Discover, Recommendations.
 - Target metrics recorded.
 
-## Phase 1 - Library query split and pagination foundation
+### Phase 1 - Library query split and pagination foundation
 
 Deliverables:
 - Replace monolithic library read with paginated query surface.
@@ -127,7 +127,7 @@ Exit criteria:
 - Library UX keeps correct counters and filters.
 - Discover/Recommendations no longer pull full library payload.
 
-## Phase 2 - Projection model for feed inputs
+### Phase 2 - Projection model for feed inputs
 
 Deliverables:
 - Introduce per-user feed projection storage (Home/Upcoming inputs and metadata).
@@ -137,7 +137,7 @@ Deliverables:
 Exit criteria:
 - Projection lifecycle works under create/update/delete tracking actions.
 
-## Phase 3 - Home migration with parity
+### Phase 3 - Home migration with parity
 
 Deliverables:
 - Move Home watchlist data path to projection-backed flow.
@@ -147,7 +147,7 @@ Deliverables:
 Exit criteria:
 - Home output parity validated against previous behavior on representative test accounts.
 
-## Phase 4 - Upcoming migration with parity
+### Phase 4 - Upcoming migration with parity
 
 Deliverables:
 - Keep date-range hydration UX while using optimized matching path.
@@ -157,7 +157,7 @@ Deliverables:
 Exit criteria:
 - Upcoming parity validated for near-term and extended date windows.
 
-## Phase 5 - Scheduled freshness and external updates
+### Phase 5 - Scheduled freshness and external updates
 
 Deliverables:
 - Add/adjust cron workflows for 12-hour and daily reconciliation cycles.
@@ -167,7 +167,7 @@ Deliverables:
 Exit criteria:
 - External content freshness is visible within expected windows.
 
-## Phase 6 - Cleanup and hardening
+### Phase 6 - Cleanup and hardening
 
 Deliverables:
 - Remove deprecated heavy paths after parity confidence.
@@ -180,13 +180,13 @@ Exit criteria:
 
 ## Verification and Testing Plan
 
-## Automated checks
+### Automated checks
 
 - Run lint/type checks and targeted query validation.
 - Add/update tests for projection logic and filter/count correctness.
 - Add regression coverage for relation progression and release-date gating rules.
 
-## Browser/behavior validation
+### Browser/behavior validation
 
 Use browser-based validation on key user flows:
 - Home watchlist correctness under mixed statuses.
@@ -194,7 +194,7 @@ Use browser-based validation on key user flows:
 - Library counters and filters under pagination.
 - Discover/Recommendations tracked-state behavior.
 
-## High-scale simulation
+### High-scale simulation
 
 Validate with large-account assumptions (hundreds to ~1000 tracked items):
 - Page responsiveness.
