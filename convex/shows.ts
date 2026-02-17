@@ -190,35 +190,51 @@ async function deleteFeedProjectionForUserShow(
 export const rebuildFeedProjectionsForUser = internalMutation({
   args: {
     userId: v.id("users"),
+    phase: v.union(v.literal("delete"), v.literal("create")),
+    cursor: v.optional(v.string()),
+    pageSize: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    const existing = await ctx.db
-      .query("feedProjections")
-      .withIndex("by_user", (q) => q.eq("userId", args.userId))
-      .collect();
+    const safePageSize = Math.max(1, Math.min(args.pageSize ?? 256, 512));
 
-    for (const row of existing) {
-      await ctx.db.delete(row._id);
-    }
+    if (args.phase === "delete") {
+      const existing = await ctx.db
+        .query("feedProjections")
+        .withIndex("by_user", (q) => q.eq("userId", args.userId))
+        .take(safePageSize);
 
-    const userShows = await ctx.db
-      .query("userShows")
-      .withIndex("by_user", (q) => q.eq("userId", args.userId))
-      .collect();
-
-    let created = 0;
-    for (const userShow of userShows) {
-      const show = await ctx.db.get(userShow.showId);
-      if (!show) {
-        continue;
+      for (const row of existing) {
+        await ctx.db.delete(row._id);
       }
 
-      const fields = buildFeedProjectionFields(userShow, show);
-      await ctx.db.insert("feedProjections", fields);
+      return {
+        deleted: existing.length,
+        created: 0,
+        nextCursor: null,
+        isDone: existing.length < safePageSize,
+      };
+    }
+
+    const page = await ctx.db
+      .query("userShows")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .paginate({
+        numItems: safePageSize,
+        cursor: args.cursor ?? null,
+      });
+
+    let created = 0;
+    for (const userShow of page.page) {
+      await upsertFeedProjectionForUserShow(ctx, userShow._id);
       created += 1;
     }
 
-    return { deleted: existing.length, created };
+    return {
+      deleted: 0,
+      created,
+      nextCursor: page.continueCursor,
+      isDone: page.isDone,
+    };
   },
 });
 
@@ -678,9 +694,43 @@ export const dailyReconcileProjections = internalAction({
 
     let rebuilt = 0;
     for (const userIdStr of userIdStrings) {
-      await ctx.runMutation(internal.shows.rebuildFeedProjectionsForUser, {
-        userId: userIdStr as Id<"users">,
-      });
+      const typedUserId = userIdStr as Id<"users">;
+
+      let deleteDone = false;
+      while (!deleteDone) {
+        const deleteBatch: {
+          deleted: number;
+          created: number;
+          nextCursor: string | null;
+          isDone: boolean;
+        } = await ctx.runMutation(internal.shows.rebuildFeedProjectionsForUser, {
+          userId: typedUserId,
+          phase: "delete",
+          pageSize: 256,
+        });
+
+        deleteDone = deleteBatch.isDone;
+      }
+
+      let createCursor: string | undefined;
+      let createDone = false;
+      while (!createDone) {
+        const createBatch: {
+          deleted: number;
+          created: number;
+          nextCursor: string | null;
+          isDone: boolean;
+        } = await ctx.runMutation(internal.shows.rebuildFeedProjectionsForUser, {
+          userId: typedUserId,
+          phase: "create",
+          cursor: createCursor,
+          pageSize: 256,
+        });
+
+        createCursor = createBatch.nextCursor ?? undefined;
+        createDone = createBatch.isDone;
+      }
+
       rebuilt += 1;
     }
 
@@ -1665,7 +1715,12 @@ export const addAnimeToWatchlistWithRelations = action({
         ...syncResult,
         rootAnilistId,
       };
-    } catch {
+    } catch (error) {
+      console.error("Failed anime relation sync after watchlist add", {
+        userId,
+        rootAnilistId,
+        error,
+      });
       // Sync failed but watchlist add succeeded; return partial success state
       return {
         ...addResult,
@@ -2638,9 +2693,8 @@ export const getLibrary = query({
       args.status && args.mediaType
         ? userShows
         : args.mediaType
-          ? userShows.filter(
-              (userShow) => !userShow.mediaType || userShow.mediaType === args.mediaType
-            )
+          // TODO: Remove this in-memory filter once all query paths are fully index-backed.
+          ? userShows.filter((userShow) => userShow.mediaType === args.mediaType)
           : userShows;
 
     const hydrated = await Promise.all(
@@ -2650,7 +2704,7 @@ export const getLibrary = query({
           return null;
         }
 
-        // Legacy rows can be missing userShow.mediaType, so keep this fallback check.
+        // Defensive mediaType guard in case denormalized userShows rows are stale.
         if (args.mediaType && show.mediaType !== args.mediaType) {
           return null;
         }
@@ -3885,22 +3939,32 @@ export const clearRelatedAnimeWatched = mutation({
       .withIndex("by_user_relation_root", (q) =>
         q.eq("userId", userId).eq("relationRootAnilistId", relationRootAnilistId)
       )
-      .collect();
+      .take(RELATION_SYNC_MAX_GRAPH_NODES);
 
     let removedCount = 0;
     let showsCleared = 0;
     const now = Date.now();
+    const WATCHED_EPISODE_DELETE_BATCH_SIZE = 256;
 
     for (const userShow of relatedUserShows) {
-      const watchedEpisodes = await ctx.db
-        .query("watchedEpisodes")
-        .withIndex("by_user_show", (q) =>
-          q.eq("userId", userId).eq("showId", userShow.showId)
-        )
-        .collect();
+      let removedForShow = 0;
+      while (true) {
+        const watchedEpisodes = await ctx.db
+          .query("watchedEpisodes")
+          .withIndex("by_user_show", (q) =>
+            q.eq("userId", userId).eq("showId", userShow.showId)
+          )
+          .take(WATCHED_EPISODE_DELETE_BATCH_SIZE);
 
-      for (const entry of watchedEpisodes) {
-        await ctx.db.delete(entry._id);
+        if (watchedEpisodes.length === 0) {
+          break;
+        }
+
+        for (const entry of watchedEpisodes) {
+          await ctx.db.delete(entry._id);
+        }
+
+        removedForShow += watchedEpisodes.length;
       }
 
       if (userShow.status === "watching" || userShow.status === "completed") {
@@ -3913,7 +3977,7 @@ export const clearRelatedAnimeWatched = mutation({
       }
 
       await refreshUserShowTrackingAggregates(ctx, userId, userShow.showId);
-      removedCount += watchedEpisodes.length;
+      removedCount += removedForShow;
       showsCleared += 1;
     }
 
@@ -5116,7 +5180,7 @@ export const toggleMovieWatched = mutation({
       });
 
       if (!userShow) {
-        await ctx.db.insert("userShows", {
+        const newUserShowId = await ctx.db.insert("userShows", {
           userId,
           showId,
           status: "completed",
@@ -5127,6 +5191,7 @@ export const toggleMovieWatched = mutation({
           addedAt: now,
           lastWatchedAt: now,
         });
+        await upsertFeedProjectionForUserShow(ctx, newUserShowId);
       } else {
         await ctx.db.patch(userShow._id, {
           status: "completed",
@@ -5596,39 +5661,67 @@ export const getWatchedEpisodesForSeasonAction = action({
 
 // Migration: Backfill titleLower for existing shows that don't have it
 export const backfillTitleLower = internalMutation({
-  args: {},
-  handler: async (ctx) => {
-    // Fetch shows in batches using pagination
+  args: {
+    cursor: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
     const BATCH_SIZE = 100;
-    let cursor: string | null = null;
-    let isDone = false;
+    const shows = await ctx.db
+      .query("shows")
+      .paginate({ numItems: BATCH_SIZE, cursor: args.cursor ?? null });
+
     let processedCount = 0;
     let updatedCount = 0;
 
-    while (!isDone) {
-      const shows = await ctx.db
-        .query("shows")
-        .paginate({ numItems: BATCH_SIZE, cursor });
-
-      for (const show of shows.page) {
-        processedCount++;
-        // Only update if titleLower is missing
-        if (!show.titleLower && show.title) {
-          await ctx.db.patch(show._id, {
-            titleLower: show.title.toLowerCase().trim(),
-          });
-          updatedCount++;
-        }
+    for (const show of shows.page) {
+      processedCount++;
+      if (!show.titleLower && show.title) {
+        await ctx.db.patch(show._id, {
+          titleLower: show.title.toLowerCase().trim(),
+        });
+        updatedCount++;
       }
-
-      cursor = shows.continueCursor;
-      isDone = shows.isDone;
     }
 
     return {
-      success: true,
+      nextCursor: shows.continueCursor,
+      isDone: shows.isDone,
       processedCount,
       updatedCount,
+    };
+  },
+});
+
+export const runBackfillTitleLower = internalAction({
+  args: {},
+  handler: async (ctx) => {
+    let cursor: string | undefined;
+    let isDone = false;
+    let processedCount = 0;
+    let updatedCount = 0;
+    let rounds = 0;
+
+    while (!isDone) {
+      const batch: {
+        nextCursor: string | null;
+        isDone: boolean;
+        processedCount: number;
+        updatedCount: number;
+      } = await ctx.runMutation(internal.shows.backfillTitleLower, {
+        cursor,
+      });
+
+      processedCount += batch.processedCount;
+      updatedCount += batch.updatedCount;
+      cursor = batch.nextCursor ?? undefined;
+      isDone = batch.isDone;
+      rounds += 1;
+    }
+
+    return {
+      processedCount,
+      updatedCount,
+      rounds,
     };
   },
 });

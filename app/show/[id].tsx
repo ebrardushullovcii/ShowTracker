@@ -2393,6 +2393,8 @@ export function ShowDetailScreen() {
     if (!watchActionTarget || isWatchActionRunning) return;
     if (choice === "not_watched_related" && watchActionTarget.kind !== "show") {
       setTrackingError("Could not update watch status. Please try again.");
+      setWatchActionTarget(null);
+      setIsWatchActionRunning(false);
       return;
     }
 
