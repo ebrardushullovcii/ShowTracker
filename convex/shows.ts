@@ -467,7 +467,7 @@ export const getHomeFeed = query({
         ctx.db
           .query("userAnimeFranchiseSettings")
           .withIndex("by_user", (q) => q.eq("userId", typedUserId))
-          .collect(),
+          .take(200),
       ]);
 
     const globalRelationMode =
@@ -2878,16 +2878,19 @@ export const backfillUserShowsMediaType = internalMutation({
  * only (no userShows -> shows joins) and projects a minimal shape.
  */
 export const getTrackedIds = query({
-  args: {},
-  handler: async (ctx) => {
+  args: {
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) return [];
     const typedUserId = userId as Id<"users">;
 
+    const safeLimit = Math.max(1, Math.min(args.limit ?? 1000, 2000));
     const projections = await ctx.db
       .query("feedProjections")
       .withIndex("by_user", (q) => q.eq("userId", typedUserId))
-      .collect();
+      .take(safeLimit);
 
     const deduped = new Map<
       string,
@@ -4004,18 +4007,28 @@ export const clearRelatedAnimeWatched = mutation({
         }
       }
 
-      if (userShow.status === "watching" || userShow.status === "completed") {
-        await ctx.db.patch(userShow._id, {
-          status: "plan_to_watch",
-          statusChangedAt: now,
-          completedAt: undefined,
-          autoPausedAt: undefined,
-        });
+      const remainingEpisodes = await ctx.db
+        .query("watchedEpisodes")
+        .withIndex("by_user_show", (q) =>
+          q.eq("userId", userId).eq("showId", userShow.showId)
+        )
+        .first();
+
+      if (!remainingEpisodes) {
+        if (userShow.status === "watching" || userShow.status === "completed") {
+          await ctx.db.patch(userShow._id, {
+            status: "plan_to_watch",
+            statusChangedAt: now,
+            completedAt: undefined,
+            autoPausedAt: undefined,
+          });
+        }
+
+        await refreshUserShowTrackingAggregates(ctx, userId, userShow.showId);
+        showsCleared += 1;
       }
 
-      await refreshUserShowTrackingAggregates(ctx, userId, userShow.showId);
       removedCount += removedForShow;
-      showsCleared += 1;
     }
 
     return { removedCount, showsCleared, hitCap: removedCount >= MAX_TOTAL_DELETES };
