@@ -496,7 +496,7 @@ export function HomeScreen() {
   >({});
 
   // Projection-backed feed eliminates N show-doc reads.
-  const watchlist = useQuery(api.feedProjections.getHomeFeed, {});
+  const watchlist = useQuery(api.shows.getHomeFeed, {});
   const upcoming = useQuery(
     api.schedule.getUpcomingSchedule,
     activeTab === "upcoming"

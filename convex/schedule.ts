@@ -49,11 +49,6 @@ export const getRateLimitState = internalQuery({
     key: v.string(),
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      throw new Error("Unauthorized");
-    }
-
     const existing = await ctx.db
       .query("rateLimits")
       .withIndex("by_key", (q) => q.eq("key", args.key))
@@ -73,11 +68,6 @@ export const setRateLimitState = internalMutation({
     nextRetryTime: v.number(),
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      throw new Error("Unauthorized");
-    }
-
     const existing = await ctx.db
       .query("rateLimits")
       .withIndex("by_key", (q) => q.eq("key", args.key))
@@ -249,20 +239,34 @@ function parseCachedScheduleEntries(episodesRaw: string): CompactScheduleEntry[]
   return compacted;
 }
 
-function getRouteIdForShow(show: Doc<"shows">): string | null {
+function getRouteId(args: {
+  mediaType: string;
+  tmdbId?: number | null;
+  anilistId?: number | null;
+  malId?: number | null;
+}): string | null {
   if (
-    typeof show.tmdbId === "number" &&
-    (show.mediaType === "tv" || show.mediaType === "movie")
+    typeof args.tmdbId === "number" &&
+    (args.mediaType === "tv" || args.mediaType === "movie")
   ) {
-    return `tmdb:${show.mediaType}:${show.tmdbId}`;
+    return `tmdb:${args.mediaType}:${args.tmdbId}`;
   }
-  if (typeof show.anilistId === "number" && show.mediaType === "anime") {
-    return `anilist:anime:${show.anilistId}`;
+  if (typeof args.anilistId === "number" && args.mediaType === "anime") {
+    return `anilist:anime:${args.anilistId}`;
   }
-  if (typeof show.malId === "number" && show.mediaType === "anime") {
-    return `jikan:anime:${show.malId}`;
+  if (typeof args.malId === "number" && args.mediaType === "anime") {
+    return `jikan:anime:${args.malId}`;
   }
   return null;
+}
+
+function getRouteIdForShow(show: Doc<"shows">): string | null {
+  return getRouteId({
+    mediaType: show.mediaType,
+    tmdbId: show.tmdbId,
+    anilistId: show.anilistId,
+    malId: show.malId,
+  });
 }
 
 function getRouteIdForProjection(p: {
@@ -271,19 +275,12 @@ function getRouteIdForProjection(p: {
   anilistId?: number;
   malId?: number;
 }): string | null {
-  if (
-    typeof p.tmdbId === "number" &&
-    (p.mediaType === "tv" || p.mediaType === "movie")
-  ) {
-    return `tmdb:${p.mediaType}:${p.tmdbId}`;
-  }
-  if (typeof p.anilistId === "number" && p.mediaType === "anime") {
-    return `anilist:anime:${p.anilistId}`;
-  }
-  if (typeof p.malId === "number" && p.mediaType === "anime") {
-    return `jikan:anime:${p.malId}`;
-  }
-  return null;
+  return getRouteId({
+    mediaType: p.mediaType,
+    tmdbId: p.tmdbId,
+    anilistId: p.anilistId,
+    malId: p.malId,
+  });
 }
 
 function getUnixRangeForDate(dateString: string) {
@@ -485,7 +482,7 @@ async function hydrateOneDate(
     lastUpdated: now,
   });
 
-  if (!animeFetchRateLimited || compactAnimeEntries.length > 0) {
+  if (!animeFetchRateLimited) {
     await ctx.runMutation(api.schedule.upsertScheduleBucket, {
       date,
       mediaType: "anime",
@@ -497,10 +494,7 @@ async function hydrateOneDate(
   return {
     date,
     tvCount: compactTvEntries.length,
-    animeCount:
-      animeFetchRateLimited && compactAnimeEntries.length === 0
-        ? cacheStatus.animeCount
-        : compactAnimeEntries.length,
+    animeCount: animeFetchRateLimited ? cacheStatus.animeCount : compactAnimeEntries.length,
     cached: false,
   };
 }

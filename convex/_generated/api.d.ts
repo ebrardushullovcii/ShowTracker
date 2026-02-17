@@ -10,7 +10,6 @@
 
 import type * as auth from "../auth.js";
 import type * as crons from "../crons.js";
-import type * as feedProjections from "../feedProjections.js";
 import type * as http from "../http.js";
 import type * as lists from "../lists.js";
 import type * as schedule from "../schedule.js";
@@ -26,7 +25,6 @@ import type {
 declare const fullApi: ApiFromModules<{
   auth: typeof auth;
   crons: typeof crons;
-  feedProjections: typeof feedProjections;
   http: typeof http;
   lists: typeof lists;
   schedule: typeof schedule;

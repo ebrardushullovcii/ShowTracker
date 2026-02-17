@@ -24,7 +24,7 @@ crons.cron(
 crons.cron(
   "dailyReconcileProjections",
   "0 3 * * *",
-  internal.feedProjections.dailyReconcileProjections
+  internal.shows.dailyReconcileProjections
 );
 
 // TODO: Implement new season detection when notifications are added

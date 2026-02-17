@@ -636,6 +636,7 @@ export default function ProfileScreen() {
   const canLoadMoreFromEdgeRef = useRef(true);
   const loadMoreTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const animeSettingsTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isSavingAnimeSettingsRef = useRef(false);
   const deferredLoadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const profileSummary = useQuery(api.stats.getUserProfileSummary);
@@ -961,9 +962,10 @@ export default function ProfileScreen() {
       relationMode?: AnimeHomeFranchiseMode;
       completionBehavior?: AnimeCompletionBehavior;
     }) => {
-      if (isSavingAnimeSettings) {
+      if (isSavingAnimeSettingsRef.current) {
         return false;
       }
+      isSavingAnimeSettingsRef.current = true;
 
       setAnimeSettingsError(null);
       setIsSavingAnimeSettings(true);
@@ -997,10 +999,11 @@ export default function ProfileScreen() {
           clearTimeout(animeSettingsTimeoutRef.current);
           animeSettingsTimeoutRef.current = null;
         }
+        isSavingAnimeSettingsRef.current = false;
         setIsSavingAnimeSettings(false);
       }
     },
-    [isSavingAnimeSettings, setUserAnimeHomeSettings]
+    [setUserAnimeHomeSettings]
   );
 
   const handleSetHomeFranchiseMode = useCallback(
@@ -1017,18 +1020,35 @@ export default function ProfileScreen() {
         return;
       }
 
-      void (async () => {
-        for (const relationRootAnilistId of trackedAnimeFranchiseRoots) {
-          try {
-            await pruneAnimeFranchiseToCoreRelations({ relationRootAnilistId });
-          } catch (error) {
-            console.warn("Failed to prune anime franchise entries", error);
-          }
-        }
-      })();
+      if (trackedAnimeFranchiseRoots.length === 0) {
+        return;
+      }
+
+      const pruneResults = await Promise.allSettled(
+        trackedAnimeFranchiseRoots.map((relationRootAnilistId) =>
+          pruneAnimeFranchiseToCoreRelations({ relationRootAnilistId })
+        )
+      );
+
+      const rejectedCount = pruneResults.filter(
+        (result) => result.status === "rejected"
+      ).length;
+      if (rejectedCount === 0) {
+        return;
+      }
+
+      console.warn(
+        `Failed to prune ${rejectedCount}/${pruneResults.length} anime franchise entries`
+      );
+      if (rejectedCount === pruneResults.length) {
+        setAnimeSettingsError(
+          "Saved settings, but pruning franchise entries failed. Please try again."
+        );
+      }
     },
     [
       pruneAnimeFranchiseToCoreRelations,
+      setAnimeSettingsError,
       syncTrackedAnimeRelations,
       trackedAnimeFranchiseRoots,
       updateAnimeSettings,

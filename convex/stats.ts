@@ -415,11 +415,20 @@ export const getUserStats = query({
 export const getUserProfileSummary = query({
   args: {},
   handler: async (ctx) => {
-    const userId = await getCurrentUserId(ctx);
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Unauthorized");
+    }
+
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new Error("Unauthorized");
+    }
+    const typedUserId = userId as Id<"users">;
 
     const userShows = await ctx.db
       .query("userShows")
-      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .withIndex("by_user", (q) => q.eq("userId", typedUserId))
       .collect();
 
     let totalEpisodesWatched = 0;
@@ -443,7 +452,7 @@ export const getUserProfileSummary = query({
 
     const userProfile = await ctx.db
       .query("userProfiles")
-      .withIndex("by_userId", (q) => q.eq("userId", userId))
+      .withIndex("by_userId", (q) => q.eq("userId", typedUserId))
       .first();
 
     const displayName = resolveDisplayName({

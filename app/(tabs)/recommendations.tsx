@@ -36,6 +36,7 @@ const MAX_TMDB_SEEDS_PER_CATEGORY = 5;
 const MAX_ANIME_SEEDS_PER_CATEGORY = 2;
 const ANIME_RATE_LIMIT_COOLDOWN_MS = 90_000;
 const ANIME_REQUEST_TIMEOUT_MS = 6_000;
+const EMPTY_STREAK_THRESHOLD = 3;
 
 function logRecommendationsDebug(event: string, payload: Record<string, unknown>) {
   if (!__DEV__) return;
@@ -51,20 +52,44 @@ function isRateLimitError(error: unknown) {
   );
 }
 
-function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+function withTimeout<T>(
+  promiseFactory: (signal: AbortSignal) => Promise<T>,
+  timeoutMs: number,
+  label: string,
+  controller?: AbortController
+): Promise<T> {
   return new Promise((resolve, reject) => {
+    const activeController = controller ?? new AbortController();
+    let isSettled = false;
+
+    const settle = (callback: () => void) => {
+      if (isSettled) {
+        return;
+      }
+      isSettled = true;
+      clearTimeout(timeoutId);
+      callback();
+    };
+
     const timeoutId = setTimeout(() => {
-      reject(new Error(`${label} timed out after ${timeoutMs}ms`));
+      if (!activeController.signal.aborted) {
+        activeController.abort();
+      }
+      settle(() => {
+        reject(new Error(`${label} timed out after ${timeoutMs}ms`));
+      });
     }, timeoutMs);
 
-    promise
+    promiseFactory(activeController.signal)
       .then((value) => {
-        clearTimeout(timeoutId);
-        resolve(value);
+        settle(() => {
+          resolve(value);
+        });
       })
       .catch((error) => {
-        clearTimeout(timeoutId);
-        reject(error);
+        settle(() => {
+          reject(error);
+        });
       });
   });
 }
@@ -119,6 +144,154 @@ function interleaveItems(
   return result;
 }
 
+type RecommendationSeed = {
+  id: string;
+  tmdbId?: number | null;
+  anilistId?: number | null;
+  malId?: number | null;
+  mediaType: "tv" | "anime" | "movie";
+  title: string;
+};
+
+type SeedResultItem = {
+  item: NormalizedShow;
+  seedMediaType: "tv" | "anime" | "movie";
+};
+
+function selectSeeds(
+  activeTab: RecTab,
+  seedPool: RecommendationSeed[],
+  animeCooldownActive: boolean
+) {
+  const availableTvSeeds = seedPool.filter((seed) => seed.mediaType === "tv");
+  const availableAnimeSeeds = seedPool.filter((seed) => seed.mediaType === "anime");
+  const availableMovieSeeds = seedPool.filter((seed) => seed.mediaType === "movie");
+
+  if (activeTab === "all") {
+    const tvSeeds = availableTvSeeds.slice(0, MAX_TMDB_SEEDS_PER_CATEGORY);
+    const animeSeeds = animeCooldownActive
+      ? []
+      : availableAnimeSeeds.slice(0, MAX_ANIME_SEEDS_PER_CATEGORY);
+    const movieSeeds = availableMovieSeeds.slice(0, MAX_TMDB_SEEDS_PER_CATEGORY);
+
+    return {
+      relevantSeeds: [...tvSeeds, ...animeSeeds, ...movieSeeds],
+      selectedMovieSeeds: movieSeeds,
+      availableCounts: {
+        tv: availableTvSeeds.length,
+        anime: availableAnimeSeeds.length,
+        movie: availableMovieSeeds.length,
+      },
+      selectedCounts: {
+        tv: tvSeeds.length,
+        anime: animeSeeds.length,
+        movie: movieSeeds.length,
+      },
+    };
+  }
+
+  const availableForActiveTab = seedPool.filter(
+    (seed) => seed.mediaType === activeTab
+  );
+  const maxSeeds =
+    activeTab === "anime"
+      ? MAX_ANIME_SEEDS_PER_CATEGORY
+      : MAX_TMDB_SEEDS_PER_CATEGORY;
+  const relevantSeeds =
+    activeTab === "anime" && animeCooldownActive
+      ? []
+      : availableForActiveTab.slice(0, maxSeeds);
+
+  return {
+    relevantSeeds,
+    selectedMovieSeeds: [] as RecommendationSeed[],
+    availableCounts: {
+      tv: availableTvSeeds.length,
+      anime: availableAnimeSeeds.length,
+      movie: availableMovieSeeds.length,
+    },
+    selectedCounts: {
+      tv: activeTab === "tv" ? relevantSeeds.length : 0,
+      anime: activeTab === "anime" ? relevantSeeds.length : 0,
+      movie: activeTab === "movie" ? relevantSeeds.length : 0,
+    },
+  };
+}
+
+function categorizeAndDedupe(
+  seedResults: SeedResultItem[][],
+  options: {
+    trackedTmdbKeys: Set<string>;
+    trackedAnimeIds: Set<number>;
+    initialSeenTv: Set<string>;
+    initialSeenAnime: Set<string>;
+    initialSeenMovie: Set<string>;
+  }
+) {
+  const seenTvIds = new Set(options.initialSeenTv);
+  const seenAnimeIds = new Set(options.initialSeenAnime);
+  const seenMovieIds = new Set(options.initialSeenMovie);
+
+  const tvRecs: NormalizedShow[] = [];
+  const animeRecs: NormalizedShow[] = [];
+  const movieRecs: NormalizedShow[] = [];
+
+  for (const resultSet of seedResults) {
+    for (const { item, seedMediaType } of resultSet) {
+      if (
+        (item.mediaType === "tv" || item.mediaType === "movie") &&
+        typeof item.tmdbId === "number" &&
+        options.trackedTmdbKeys.has(toTrackedTmdbKey(item.mediaType, item.tmdbId))
+      ) {
+        continue;
+      }
+
+      if (
+        item.mediaType === "anime" &&
+        typeof item.anilistId === "number" &&
+        options.trackedAnimeIds.has(item.anilistId)
+      ) {
+        continue;
+      }
+
+      if (seedMediaType === "tv") {
+        const tvKey = toRecommendationKey(item);
+        if (!seenTvIds.has(tvKey)) {
+          seenTvIds.add(tvKey);
+          tvRecs.push(item);
+        }
+        continue;
+      }
+
+      if (seedMediaType === "anime") {
+        const animeKey = toAnimeRecommendationKey(item);
+        if (!seenAnimeIds.has(animeKey)) {
+          seenAnimeIds.add(animeKey);
+          animeRecs.push(item);
+        }
+        continue;
+      }
+
+      const movieKey = toRecommendationKey(item);
+      if (!seenMovieIds.has(movieKey)) {
+        seenMovieIds.add(movieKey);
+        movieRecs.push(item);
+      }
+    }
+  }
+
+  return {
+    tvRecs,
+    animeRecs,
+    movieRecs,
+    seenSets: {
+      tv: seenTvIds,
+      anime: seenAnimeIds,
+      movie: seenMovieIds,
+    },
+  };
+}
+
 export function RecommendationsScreen() {
   const [activeTab, setActiveTab] = useState<RecTab>("all");
   const { width } = useWindowDimensions();
@@ -139,7 +312,6 @@ export function RecommendationsScreen() {
   const [isAnimeRateLimited, setIsAnimeRateLimited] = useState(false);
   const effectiveHasMoreAnime = hasMoreAnime && !isAnimeRateLimited;
   const isAnimeRateLimitedRef = useRef(isAnimeRateLimited);
-  const EMPTY_STREAK_THRESHOLD = 3;
   const tvEmptyStreakRef = useRef(0);
   const animeEmptyStreakRef = useRef(0);
   const movieEmptyStreakRef = useRef(0);
@@ -308,100 +480,69 @@ export function RecommendationsScreen() {
       setError(null);
 
       try {
-        const tvRecs: NormalizedShow[] = [];
-        const animeRecs: NormalizedShow[] = [];
-        const movieRecs: NormalizedShow[] = [];
-        const seenTvIds = new Set<string>(
+        const initialSeenTv = new Set<string>(
           (isLoadMore ? tvRecommendationsRef.current : []).map((item) =>
             toRecommendationKey(item)
           )
         );
-        const seenAnimeIds = new Set<string>(
+        const initialSeenAnime = new Set<string>(
           (isLoadMore ? animeRecommendationsRef.current : []).map((item) =>
             toAnimeRecommendationKey(item)
           )
         );
-        const seenMovieIds = new Set<string>(
+        const initialSeenMovie = new Set<string>(
           (isLoadMore ? movieRecommendationsRef.current : []).map((item) =>
             toRecommendationKey(item)
           )
         );
 
-        const availableTvSeeds = seedShows.filter((seed) => seed.mediaType === "tv");
-        const availableAnimeSeeds = seedShows.filter((seed) => seed.mediaType === "anime");
-        const availableMovieSeeds = seedShows.filter((seed) => seed.mediaType === "movie");
         const animeCooldownActive = isAnimeRateLimitedRef.current;
+        const seedSelection = selectSeeds(
+          activeTab,
+          seedShows as RecommendationSeed[],
+          animeCooldownActive
+        );
 
-        // Get seeds based on active tab - balance across media types
-        let relevantSeeds: typeof seedShows = [];
-        let selectedMovieSeeds: typeof seedShows = [];
+        logRecommendationsDebug("seed-selection", {
+          activeTab,
+          page,
+          isLoadMore,
+          animeCooldownActive,
+          availableSeedCounts: seedSelection.availableCounts,
+          selectedSeedCounts: seedSelection.selectedCounts,
+          ...(activeTab === "all"
+            ? {
+                selectedMovieSeedTitles: seedSelection.selectedMovieSeeds.map(
+                  (seed) => seed.title
+                ),
+              }
+            : {}),
+        });
 
-        if (activeTab === "all") {
-          // For "all" tab, get balanced seeds from each media type
-          const tvSeeds = availableTvSeeds.slice(0, MAX_TMDB_SEEDS_PER_CATEGORY);
-          const animeSeeds = animeCooldownActive
-            ? []
-            : availableAnimeSeeds.slice(0, MAX_ANIME_SEEDS_PER_CATEGORY);
-          const movieSeeds = availableMovieSeeds.slice(0, MAX_TMDB_SEEDS_PER_CATEGORY);
-          selectedMovieSeeds = movieSeeds;
-          relevantSeeds = [...tvSeeds, ...animeSeeds, ...movieSeeds];
-
-          logRecommendationsDebug("seed-selection", {
-            activeTab,
-            page,
-            isLoadMore,
-            animeCooldownActive,
-            availableSeedCounts: {
-              tv: availableTvSeeds.length,
-              anime: availableAnimeSeeds.length,
-              movie: availableMovieSeeds.length,
-            },
-            selectedSeedCounts: {
-              tv: tvSeeds.length,
-              anime: animeSeeds.length,
-              movie: movieSeeds.length,
-            },
-            selectedMovieSeedTitles: movieSeeds.map((seed) => seed.title),
-          });
-        } else {
-          const allTabSeeds = seedShows.filter((seed) => seed.mediaType === activeTab);
-          const maxSeeds = activeTab === "anime"
-            ? MAX_ANIME_SEEDS_PER_CATEGORY
-            : MAX_TMDB_SEEDS_PER_CATEGORY;
-          relevantSeeds =
-            activeTab === "anime" && animeCooldownActive
-              ? []
-              : allTabSeeds.slice(0, maxSeeds);
-
-          logRecommendationsDebug("seed-selection", {
-            activeTab,
-            page,
-            isLoadMore,
-            animeCooldownActive,
-            availableSeedCounts: {
-              tv: availableTvSeeds.length,
-              anime: availableAnimeSeeds.length,
-              movie: availableMovieSeeds.length,
-            },
-            selectedSeedCount: relevantSeeds.length,
-          });
-        }
-
-        type SeedResult = { item: NormalizedShow; seedMediaType: "tv" | "anime" | "movie" }[];
-        const seedResults: SeedResult[] = await Promise.all(
-          relevantSeeds.map(async (seed) => {
+        const seedResults: SeedResultItem[][] = await Promise.all(
+          seedSelection.relevantSeeds.map(async (seed): Promise<SeedResultItem[]> => {
             if (signal.aborted) {
               return [];
             }
 
             try {
-              // Handle anime seeds (from AniList) - wrap in try-catch so other APIs can continue
-              if (seed.mediaType === "anime" && seed.anilistId) {
+              if (seed.mediaType === "anime" && typeof seed.anilistId === "number") {
+                const anilistId = seed.anilistId;
+                const requestController = new AbortController();
+                const abortFromParent = () => {
+                  requestController.abort();
+                };
+                signal.addEventListener("abort", abortFromParent, { once: true });
+
                 try {
                   const recs = await withTimeout(
-                    getAniListRecommendations(seed.anilistId, page, 10),
+                    (timeoutSignal) =>
+                      getAniListRecommendations(anilistId, page, 10, {
+                        signal: timeoutSignal,
+                      }),
                     ANIME_REQUEST_TIMEOUT_MS,
-                    `AniList recommendations for ${seed.title}`
+                    `AniList recommendations for ${seed.title}`,
+                    requestController
                   );
                   if (signal.aborted) return [];
                   return recs.items.map((item) => ({ item, seedMediaType: "anime" as const }));
@@ -419,11 +560,12 @@ export function RecommendationsScreen() {
                   }
                   console.warn("Anime API failed for", seed.title, e);
                   return [];
+                } finally {
+                  signal.removeEventListener("abort", abortFromParent);
                 }
               }
 
-              // Handle movie seeds (from TMDB) - wrap in try-catch
-              if (seed.mediaType === "movie" && seed.tmdbId) {
+              if (seed.mediaType === "movie" && typeof seed.tmdbId === "number") {
                 try {
                   const [recs, similar] = await Promise.all([
                     getMovieRecommendations(seed.tmdbId, page, { signal }),
@@ -440,8 +582,7 @@ export function RecommendationsScreen() {
                 }
               }
 
-              // Handle TV seeds (from TMDB) - wrap in try-catch
-              if (seed.mediaType === "tv" && seed.tmdbId) {
+              if (seed.mediaType === "tv" && typeof seed.tmdbId === "number") {
                 try {
                   const [recs, similar] = await Promise.all([
                     getTvRecommendations(seed.tmdbId, page, { signal }),
@@ -473,68 +614,13 @@ export function RecommendationsScreen() {
           return;
         }
 
-        for (const resultSet of seedResults) {
-          for (const { item, seedMediaType } of resultSet) {
-            if (signal.aborted) {
-              return;
-            }
-
-            const key = `${item.id}:${item.mediaType}`;
-            
-            // Filter out already tracked TV/Movie
-            if (
-              (item.mediaType === "tv" || item.mediaType === "movie") &&
-              typeof item.tmdbId === "number" &&
-              trackedTmdbKeys.has(toTrackedTmdbKey(item.mediaType, item.tmdbId))
-            ) {
-              continue;
-            }
-
-            // Filter out already tracked anime
-            if (
-              item.mediaType === "anime" &&
-              typeof item.anilistId === "number" &&
-              trackedAnimeIds.has(item.anilistId)
-            ) {
-              continue;
-            }
-
-            // Use seedMediaType for categorization - it's more reliable
-            const category = seedMediaType || item.mediaType;
-            
-            if (category === "tv") {
-              if (!seenTvIds.has(key)) {
-                seenTvIds.add(key);
-                tvRecs.push(item);
-              }
-            } else if (category === "anime") {
-              const animeKey = toAnimeRecommendationKey(item);
-              if (!seenAnimeIds.has(animeKey)) {
-                seenAnimeIds.add(animeKey);
-                animeRecs.push(item);
-              }
-            } else if (category === "movie") {
-              if (!seenMovieIds.has(key)) {
-                seenMovieIds.add(key);
-                movieRecs.push(item);
-              }
-            } else {
-              // Fallback: check if it has anilistId -> anime, otherwise treat as tv
-              if (item.anilistId) {
-                const animeKey = toAnimeRecommendationKey(item);
-                if (!seenAnimeIds.has(animeKey)) {
-                  seenAnimeIds.add(animeKey);
-                  animeRecs.push(item);
-                }
-              } else {
-                if (!seenTvIds.has(key)) {
-                  seenTvIds.add(key);
-                  tvRecs.push(item);
-                }
-              }
-            }
-          }
-        }
+        const { tvRecs, animeRecs, movieRecs } = categorizeAndDedupe(seedResults, {
+          trackedTmdbKeys,
+          trackedAnimeIds,
+          initialSeenTv,
+          initialSeenAnime,
+          initialSeenMovie,
+        });
 
         if (!signal.aborted) {
           logRecommendationsDebug("recommendation-results", {
@@ -548,10 +634,16 @@ export function RecommendationsScreen() {
             },
           });
 
-          if (activeTab === "all" && selectedMovieSeeds.length > 0 && movieRecs.length === 0) {
+          if (
+            activeTab === "all" &&
+            seedSelection.selectedMovieSeeds.length > 0 &&
+            movieRecs.length === 0
+          ) {
             logRecommendationsDebug("movie-seeds-without-results", {
               page,
-              selectedMovieSeedTitles: selectedMovieSeeds.map((seed) => seed.title),
+              selectedMovieSeedTitles: seedSelection.selectedMovieSeeds.map(
+                (seed) => seed.title
+              ),
             });
           }
 

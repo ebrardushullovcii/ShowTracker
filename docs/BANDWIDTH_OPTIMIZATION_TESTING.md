@@ -10,7 +10,7 @@
    npx convex run --no-push shows:backfillUserShowsMediaType
 
    # Build feed projections for all users
-   npx convex run --no-push feedProjections:dailyReconcileProjections
+   npx convex run --no-push shows:dailyReconcileProjections
    ```
    You only need to do this once. After that, all new writes maintain projections automatically.
 
@@ -117,7 +117,7 @@
 | Add a new show | Show detail → Add to Watchlist | Appears on Home within seconds, Library counts update |
 | Remove a show | Show detail → Remove from Watchlist | Disappears from Home, Library counts update |
 | Change status to "Completed" | Show detail → Status dropdown | Disappears from Home watchlist (completed shows hidden) |
-| Change status to "Paused" | Show detail → Status dropdown | Still shows on Home (paused is displayed) |
+| Change status to "Paused" | Show detail → Status dropdown | Hidden from Home watchlist (paused entries are filtered in `app/(tabs)/home/index.tsx` `filteredWatchlist`) |
 | Mark all episodes watched on anime | Show detail → Mark all watched | Next relation in franchise should surface on Home |
 | Mark episode watched | Show detail → Episode checkbox | "X LEFT" badge updates on Home |
 
@@ -133,7 +133,7 @@ This catches any drift from missed mutation hooks or show metadata updates (new 
 
 You can trigger it manually anytime:
 ```bash
-npx convex run --no-push feedProjections:dailyReconcileProjections
+npx convex run --no-push shows:dailyReconcileProjections
 ```
 
 ---
@@ -143,7 +143,7 @@ npx convex run --no-push feedProjections:dailyReconcileProjections
 If the Home feed is missing shows or showing stale data:
 ```bash
 # Rebuild projections for all users
-npx convex run --no-push feedProjections:dailyReconcileProjections
+npx convex run --no-push shows:dailyReconcileProjections
 ```
 
 This is a full rebuild and takes a few seconds. After it completes, refresh the Home page.

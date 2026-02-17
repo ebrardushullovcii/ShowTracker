@@ -698,6 +698,8 @@ export function ShowDetailScreen() {
   const [isFranchiseSettingsModalVisible, setIsFranchiseSettingsModalVisible] =
     useState(false);
   const animeSettingsUpdateTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const expandedSeasonsRef = useRef(expandedSeasons);
+  const seasonWatchedKeysRef = useRef(seasonWatchedKeys);
   const [apiRelatedAnime, setApiRelatedAnime] = useState<AniListRelatedShow[]>([]);
   const [isLoadingRelatedAnime, setIsLoadingRelatedAnime] = useState(false);
 
@@ -980,32 +982,57 @@ export function ShowDetailScreen() {
     }
   }, [episodeWatchCountsData]);
 
+  useEffect(() => {
+    expandedSeasonsRef.current = expandedSeasons;
+  }, [expandedSeasons]);
+
+  useEffect(() => {
+    seasonWatchedKeysRef.current = seasonWatchedKeys;
+  }, [seasonWatchedKeys]);
+
   // Load watched episodes for expanded seasons
   useEffect(() => {
     if (trackingArgs === "skip" || !getWatchedEpisodesForSeasonAction) return;
-    
+
+    let isCancelled = false;
     const expandedSeasonNumbers = Object.entries(expandedSeasons)
       .filter(([, isExpanded]) => isExpanded)
       .map(([seasonNum]) => Number(seasonNum));
-    
-    // Load watched episodes for each expanded season that hasn't been loaded yet
+
+    // Load watched episodes for each expanded season that hasn't been loaded yet.
     for (const seasonNumber of expandedSeasonNumbers) {
       if (seasonWatchedKeys[seasonNumber]) continue;
-      
-      // Use an async IIFE to load the watched episodes
+
       void (async () => {
         try {
           const args = { ...trackingArgs, season: seasonNumber };
           const keys = await getWatchedEpisodesForSeasonAction(args);
+
+          if (isCancelled) {
+            return;
+          }
+          if (expandedSeasonsRef.current[seasonNumber] !== true) {
+            return;
+          }
+          if (seasonWatchedKeysRef.current[seasonNumber]) {
+            return;
+          }
+
           setSeasonWatchedKeys((prev) => ({
             ...prev,
             [seasonNumber]: new Set(keys),
           }));
         } catch (error) {
-          console.error("Failed to load watched episodes for season", seasonNumber, error);
+          if (!isCancelled) {
+            console.error("Failed to load watched episodes for season", seasonNumber, error);
+          }
         }
       })();
     }
+
+    return () => {
+      isCancelled = true;
+    };
   }, [expandedSeasons, trackingArgs, seasonWatchedKeys, getWatchedEpisodesForSeasonAction]);
 
   useEffect(() => {
