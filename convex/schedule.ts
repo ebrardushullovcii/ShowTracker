@@ -241,9 +241,9 @@ function parseCachedScheduleEntries(episodesRaw: string): CompactScheduleEntry[]
 
 function getRouteId(args: {
   mediaType: string;
-  tmdbId?: number | null;
-  anilistId?: number | null;
-  malId?: number | null;
+  tmdbId?: number;
+  anilistId?: number;
+  malId?: number;
 }): string | null {
   if (
     typeof args.tmdbId === "number" &&
@@ -383,7 +383,7 @@ export const getScheduleCacheStatusForDate = query({
       typeof animeLastUpdated === "number" &&
       now - animeLastUpdated < SCHEDULE_CACHE_FRESH_MS;
     const shouldForceRefreshPastAnimeZero =
-      animeCount === 0 && args.date <= todayKey;
+      animeCount === 0 && args.date === todayKey;
     const hasFreshAnime =
       ((args.date < todayKey && animeLastUpdated !== null) || hasFreshAnimeByTime) &&
       !shouldForceRefreshPastAnimeZero;
@@ -562,7 +562,8 @@ export const getUpcomingSchedule = query({
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
     
-    // Return empty array if user is not authenticated
+    // Intentionally return an empty list for unauthenticated requests.
+    // This keeps pre-auth/SSR rendering paths safe without throwing.
     if (!userId) {
       return [];
     }

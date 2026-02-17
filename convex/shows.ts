@@ -607,11 +607,24 @@ export const getHomeFeed = query({
 export const getDistinctTrackedUserIds = internalQuery({
   args: {},
   handler: async (ctx) => {
-    const rows = await ctx.db.query("userShows").collect();
+    const PAGE_SIZE = 512;
+    let cursor: string | null = null;
+    let isDone = false;
     const userIds = new Set<string>();
-    for (const row of rows) {
-      userIds.add(row.userId.toString());
+
+    while (!isDone) {
+      const page = await ctx.db
+        .query("userShows")
+        .paginate({ numItems: PAGE_SIZE, cursor });
+
+      for (const row of page.page) {
+        userIds.add(row.userId.toString());
+      }
+
+      cursor = page.continueCursor;
+      isDone = page.isDone;
     }
+
     return Array.from(userIds);
   },
 });
@@ -619,11 +632,23 @@ export const getDistinctTrackedUserIds = internalQuery({
 export const dailyReconcileProjections = internalAction({
   args: {},
   handler: async (ctx) => {
-    let backfillResult = { patched: 1, total: 0 };
-    while (backfillResult.patched > 0) {
-      backfillResult = await ctx.runMutation(
-        internal.shows.backfillUserShowsMediaType
+    let backfillCursor: string | undefined;
+    let backfillIsDone = false;
+    let backfillRounds = 0;
+
+    while (!backfillIsDone) {
+      const backfillResult: {
+        patched: number;
+        total: number;
+        nextCursor: string | null;
+        isDone: boolean;
+      } = await ctx.runMutation(
+        internal.shows.backfillUserShowsMediaType,
+        { cursor: backfillCursor }
       );
+      backfillRounds += 1;
+      backfillCursor = backfillResult.nextCursor ?? undefined;
+      backfillIsDone = backfillResult.isDone;
     }
 
     const userIdStrings: string[] = await ctx.runQuery(
@@ -640,7 +665,7 @@ export const dailyReconcileProjections = internalAction({
 
     return {
       usersRebuilt: rebuilt,
-      backfillRounds: backfillResult.total,
+      backfillRounds,
     };
   },
 });
@@ -2578,14 +2603,20 @@ export const getLibrary = query({
           .withIndex("by_user", (q) => q.eq("userId", userId))
           .collect();
 
+    const filteredUserShows = args.mediaType
+      ? userShows.filter(
+          (userShow) => !userShow.mediaType || userShow.mediaType === args.mediaType
+        )
+      : userShows;
+
     const hydrated = await Promise.all(
-      userShows.map(async (userShow) => {
+      filteredUserShows.map(async (userShow) => {
         const show = await ctx.db.get(userShow.showId);
         if (!show) {
           return null;
         }
 
-        // Server-side mediaType filter — skip hydration for non-matching types.
+        // Legacy rows can be missing userShow.mediaType, so keep this fallback check.
         if (args.mediaType && show.mediaType !== args.mediaType) {
           return null;
         }
@@ -2649,11 +2680,6 @@ export const getLibrary = query({
 export const getLibraryCounts = query({
   args: {},
   handler: async (ctx) => {
-    const user = await ctx.auth.getUserIdentity();
-    if (!user) {
-      return {} as Record<string, Record<string, number>>;
-    }
-
     const userId = await getAuthUserId(ctx);
     if (!userId) {
       return {} as Record<string, Record<string, number>>;
@@ -2704,21 +2730,32 @@ export const getLibraryCounts = query({
  * denormalization. Run once after deploying the schema change.
  */
 export const backfillUserShowsMediaType = internalMutation({
-  args: {},
-  handler: async (ctx) => {
-    const rows = await ctx.db
-      .query("userShows")
-      .take(500);
+  args: {
+    cursor: v.optional(v.string()),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const pageSize = Math.max(1, Math.min(args.limit ?? 500, 500));
+    const rows = await ctx.db.query("userShows").paginate({
+      numItems: pageSize,
+      cursor: args.cursor ?? null,
+    });
 
     let patched = 0;
-    for (const row of rows) {
+    for (const row of rows.page) {
       if (row.mediaType) continue;
       const show = await ctx.db.get(row.showId);
       if (!show) continue;
       await ctx.db.patch(row._id, { mediaType: show.mediaType });
       patched++;
     }
-    return { patched, total: rows.length };
+
+    return {
+      patched,
+      total: rows.page.length,
+      nextCursor: rows.continueCursor,
+      isDone: rows.isDone,
+    };
   },
 });
 
@@ -2730,9 +2767,6 @@ export const backfillUserShowsMediaType = internalMutation({
 export const getTrackedIds = query({
   args: {},
   handler: async (ctx) => {
-    const user = await ctx.auth.getUserIdentity();
-    if (!user) return [];
-
     const userId = await getAuthUserId(ctx);
     if (!userId) return [];
     const typedUserId = userId as Id<"users">;
@@ -5493,18 +5527,14 @@ export const getWatchedEpisodesForSeasonAction = action({
 export const backfillTitleLower = internalMutation({
   args: {},
   handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      return { success: false, reason: "unauthenticated" };
-    }
-
     // Fetch shows in batches using pagination
     const BATCH_SIZE = 100;
     let cursor: string | null = null;
+    let isDone = false;
     let processedCount = 0;
     let updatedCount = 0;
 
-    do {
+    while (!isDone) {
       const shows = await ctx.db
         .query("shows")
         .paginate({ numItems: BATCH_SIZE, cursor });
@@ -5521,7 +5551,8 @@ export const backfillTitleLower = internalMutation({
       }
 
       cursor = shows.continueCursor;
-    } while (cursor);
+      isDone = shows.isDone;
+    }
 
     return {
       success: true,

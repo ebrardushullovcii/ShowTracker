@@ -346,6 +346,7 @@ export function RecommendationsScreen() {
     const timer = setTimeout(() => {
       setIsAnimeRateLimited(false);
       setHasMoreAnime(true);
+      animeEmptyStreakRef.current = 0;
     }, ANIME_RATE_LIMIT_COOLDOWN_MS);
 
     return () => {
@@ -678,10 +679,19 @@ export function RecommendationsScreen() {
           currentPageRef.current = page;
           setCurrentPage(page);
 
-          // Update empty streak counters and check if we have more per category
-          tvEmptyStreakRef.current = tvRecs.length === 0 ? tvEmptyStreakRef.current + 1 : 0;
-          animeEmptyStreakRef.current = animeRecs.length === 0 ? animeEmptyStreakRef.current + 1 : 0;
-          movieEmptyStreakRef.current = movieRecs.length === 0 ? movieEmptyStreakRef.current + 1 : 0;
+          // Update empty streak counters only for categories we actually queried.
+          if (seedSelection.selectedCounts.tv > 0) {
+            tvEmptyStreakRef.current =
+              tvRecs.length === 0 ? tvEmptyStreakRef.current + 1 : 0;
+          }
+          if (seedSelection.selectedCounts.anime > 0) {
+            animeEmptyStreakRef.current =
+              animeRecs.length === 0 ? animeEmptyStreakRef.current + 1 : 0;
+          }
+          if (seedSelection.selectedCounts.movie > 0) {
+            movieEmptyStreakRef.current =
+              movieRecs.length === 0 ? movieEmptyStreakRef.current + 1 : 0;
+          }
           
           const hasMoreTvRecs = tvEmptyStreakRef.current < EMPTY_STREAK_THRESHOLD;
           const hasMoreAnimeRecs = animeEmptyStreakRef.current < EMPTY_STREAK_THRESHOLD;

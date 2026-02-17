@@ -793,15 +793,6 @@ export function HomeScreen() {
 
   const filteredWatchlist = useMemo(() => {
     return watchlistItems.filter((item) => {
-      const shouldShowAutoTrackedAnimeProgression =
-        item.mediaType === "anime" &&
-        item.status === "plan_to_watch" &&
-        item.isAutoTracked &&
-        item.trackingState === "not_started";
-
-      if (item.watchedEpisodes <= 0 && !shouldShowAutoTrackedAnimeProgression) {
-        return false;
-      }
       if (item.status === "paused") return false;
       if (item.status === "dropped") return false;
       if (item.status === "completed") return false;

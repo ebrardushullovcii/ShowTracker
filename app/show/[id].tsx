@@ -242,7 +242,9 @@ function buildShowPayload(show: NormalizedShow) {
   };
 }
 
-function buildShowLookupArgs(show: NormalizedShow) {
+function buildShowLookupArgs(show: NormalizedShow | null) {
+  if (!show) return "skip" as const;
+
   const lookupArgs: {
     tmdbId?: number;
     anilistId?: number;
@@ -264,6 +266,15 @@ function buildShowLookupArgs(show: NormalizedShow) {
   }
   if (typeof show.tvmazeId === "number") {
     lookupArgs.tvmazeId = show.tvmazeId;
+  }
+
+  if (
+    typeof lookupArgs.tmdbId !== "number" &&
+    typeof lookupArgs.anilistId !== "number" &&
+    typeof lookupArgs.malId !== "number" &&
+    typeof lookupArgs.tvmazeId !== "number"
+  ) {
+    return "skip" as const;
   }
 
   return lookupArgs;
@@ -698,6 +709,7 @@ export function ShowDetailScreen() {
   const [isFranchiseSettingsModalVisible, setIsFranchiseSettingsModalVisible] =
     useState(false);
   const animeSettingsUpdateTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const animeSettingsOpIdRef = useRef(0);
   const expandedSeasonsRef = useRef(expandedSeasons);
   const seasonWatchedKeysRef = useRef(seasonWatchedKeys);
   const [apiRelatedAnime, setApiRelatedAnime] = useState<AniListRelatedShow[]>([]);
@@ -732,10 +744,7 @@ export function ShowDetailScreen() {
   const toggleMovieWatched = useMutation(api.shows.toggleMovieWatched);
 
   const trackingArgs = useMemo(() => buildTrackingArgs(show), [show]);
-  const showLookupArgs = useMemo(
-    () => (show ? buildShowLookupArgs(show) : null),
-    [show]
-  );
+  const showLookupArgs = useMemo(() => buildShowLookupArgs(show), [show]);
   const tracking = useQuery(api.shows.getUserShowTracking, trackingArgs);
   const watchedSeasonProgress = useQuery(
     api.shows.getWatchedSeasonProgress,
@@ -1261,7 +1270,7 @@ export function ShowDetailScreen() {
 
       if (
         animeCompletionBehavior === "auto_pause_others_keep_next" &&
-        showLookupArgs
+        showLookupArgs !== "skip"
       ) {
         const keepNext = {
           anilistId: nextMainlineRelatedEntry.anilistId ?? undefined,
@@ -2395,7 +2404,7 @@ export function ShowDetailScreen() {
             if (
               choice === "not_watched_related" &&
               show.mediaType === "anime" &&
-              showLookupArgs
+              showLookupArgs !== "skip"
             ) {
               await clearRelatedAnimeWatched({
                 show: showLookupArgs,
@@ -2463,7 +2472,7 @@ export function ShowDetailScreen() {
     if (
       !show ||
       show.mediaType !== "anime" ||
-      !showLookupArgs ||
+      showLookupArgs === "skip" ||
       !nextMainlineRelatedEntry ||
       isPausingRelatedEntries
     ) {
@@ -2506,27 +2515,39 @@ export function ShowDetailScreen() {
     }
 
     setIsUpdatingAnimeSettings(true);
+    const localOpId = animeSettingsOpIdRef.current + 1;
+    animeSettingsOpIdRef.current = localOpId;
     setTrackingError(null);
+
     try {
       await setAnimeFranchiseRelationMode({
         relationRootAnilistId,
         relationMode,
       });
 
-      void syncAnimeRelationsForRoot({ relationRootAnilistId })
-        .then(async () => {
+      void (async () => {
+        try {
+          await syncAnimeRelationsForRoot({ relationRootAnilistId });
+          if (localOpId !== animeSettingsOpIdRef.current) {
+            return;
+          }
           if (relationMode !== "all_relations") {
             await pruneAnimeFranchiseToCoreRelations({ relationRootAnilistId });
           }
-        })
-        .catch((error) => {
+        } catch (error) {
           console.error("Failed background relation sync after franchise update", error);
-        });
+        } finally {
+          if (localOpId === animeSettingsOpIdRef.current) {
+            setIsUpdatingAnimeSettings(false);
+          }
+        }
+      })();
     } catch (error) {
       console.error("Failed to update franchise relation mode", error);
       setTrackingError("Could not update this franchise preference.");
-    } finally {
-      setIsUpdatingAnimeSettings(false);
+      if (localOpId === animeSettingsOpIdRef.current) {
+        setIsUpdatingAnimeSettings(false);
+      }
     }
   };
 
