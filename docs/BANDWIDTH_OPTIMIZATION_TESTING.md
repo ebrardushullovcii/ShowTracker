@@ -102,11 +102,11 @@
 
 ### 6. Profile — `/profile`
 
-**What changed:** No direct changes to Profile queries. Profile still uses `getLibrary` and `getUserStats` as before.
+**What changed:** Profile now uses a lightweight summary query for first paint, then lazy-loads heavy sections (`getUserStats`, favorites, lists, full library) shortly after render.
 
-**What to expect:** Everything identical — stats, watch time, poster rails, lists.
+**What to expect:** Hero/profile header appears quickly; detailed stats and rails load moments later without changing behavior.
 
-**How to test:** Open Profile. Verify stats and poster rails load correctly.
+**How to test:** Open Profile. Verify header appears first, then detailed stats and poster rails load correctly.
 
 ---
 
