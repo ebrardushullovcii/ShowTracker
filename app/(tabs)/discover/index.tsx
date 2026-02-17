@@ -156,20 +156,20 @@ export function DiscoverScreen() {
     hasMore: true,
   });
 
-  const trackedLibrary = useQuery(api.shows.getLibrary, {});
+  const trackedIds = useQuery(api.shows.getTrackedIds, {});
   const trackedTmdbKeys = useMemo(() => {
     const keys = new Set<string>();
-    for (const item of trackedLibrary ?? []) {
+    for (const item of trackedIds ?? []) {
       if (
         (item.mediaType === "tv" || item.mediaType === "movie") &&
-        typeof item.tmdbId === "number"
+        item.tmdbId !== null
       ) {
-        keys.add(toTrackedTmdbKey(item.mediaType, item.tmdbId));
+        keys.add(toTrackedTmdbKey(item.mediaType, item.tmdbId as number));
       }
     }
     return keys;
-  }, [trackedLibrary]);
-  const isTrackedLibraryLoading = trackedLibrary === undefined;
+  }, [trackedIds]);
+  const isTrackedLibraryLoading = trackedIds === undefined;
 
   const allTabItems = useMemo(
     () => interleaveDiscoverItems(tvState.items, animeState.items, movieState.items),

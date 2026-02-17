@@ -19,6 +19,10 @@ import {
   type AniListRelatedShow,
 } from "../lib/api/anilist";
 import type { NormalizedShow } from "../lib/api/types";
+import {
+  upsertFeedProjection as upsertFeedProjectionForUserShow,
+  deleteFeedProjection as deleteFeedProjectionForUserShow,
+} from "./feedProjections";
 
 const RELATION_SYNC_THROTTLE_MS = 1000 * 60 * 60 * 6;
 const RELATION_SYNC_BATCH_LIMIT = 6;
@@ -78,6 +82,74 @@ type UserShowStatus =
   | "dropped"
   | "completed"
   | "plan_to_watch";
+
+const animeHomeRelationModeValidator = v.union(
+  v.literal("core_only"),
+  v.literal("all_relations")
+);
+
+const animeCompletionBehaviorValidator = v.union(
+  v.literal("ask_every_time"),
+  v.literal("auto_open_next"),
+  v.literal("auto_pause_others_keep_next")
+);
+
+type AnimeHomeRelationMode = "core_only" | "all_relations";
+type AnimeCompletionBehavior =
+  | "ask_every_time"
+  | "auto_open_next"
+  | "auto_pause_others_keep_next";
+
+const DEFAULT_ANIME_HOME_RELATION_MODE: AnimeHomeRelationMode = "core_only";
+const DEFAULT_ANIME_COMPLETION_BEHAVIOR: AnimeCompletionBehavior = "ask_every_time";
+
+async function getUserAnimeHomeSettingsFromDb(
+  ctx: QueryCtx | MutationCtx,
+  userId: Id<"users">
+) {
+  const existing = await ctx.db
+    .query("userAnimeHomeSettings")
+    .withIndex("by_user", (q) => q.eq("userId", userId))
+    .unique();
+
+  return {
+    relationMode:
+      existing?.relationMode ?? DEFAULT_ANIME_HOME_RELATION_MODE,
+    completionBehavior:
+      existing?.completionBehavior ?? DEFAULT_ANIME_COMPLETION_BEHAVIOR,
+  } as {
+    relationMode: AnimeHomeRelationMode;
+    completionBehavior: AnimeCompletionBehavior;
+  };
+}
+
+async function getFranchiseRelationModeFromDb(
+  ctx: QueryCtx | MutationCtx,
+  userId: Id<"users">,
+  relationRootAnilistId: number
+) {
+  const existing = await ctx.db
+    .query("userAnimeFranchiseSettings")
+    .withIndex("by_user_root", (q) =>
+      q.eq("userId", userId).eq("relationRootAnilistId", relationRootAnilistId)
+    )
+    .unique();
+
+  return (existing?.relationMode ?? null) as AnimeHomeRelationMode | null;
+}
+
+async function getEffectiveAnimeRelationModeFromDb(
+  ctx: QueryCtx | MutationCtx,
+  userId: Id<"users">,
+  relationRootAnilistId: number
+) {
+  const [homeSettings, franchiseMode] = await Promise.all([
+    getUserAnimeHomeSettingsFromDb(ctx, userId),
+    getFranchiseRelationModeFromDb(ctx, userId, relationRootAnilistId),
+  ]);
+
+  return (franchiseMode ?? homeSettings.relationMode) as AnimeHomeRelationMode;
+}
 
 const TERMINAL_SHOW_LIFECYCLE_STATUSES = new Set([
   "ended",
@@ -322,6 +394,9 @@ async function refreshUserShowTrackingAggregates(
     watchedRuntimeMinutes: aggregates.watchedRuntimeMinutes,
     lastWatchedAt: aggregates.lastWatchedAt,
   });
+
+  // Keep feed projection in sync with the updated tracking aggregates.
+  await upsertFeedProjectionForUserShow(ctx, userShow._id);
 
   return aggregates;
 }
@@ -574,7 +649,13 @@ function buildShowPayloadFromNormalized(
   };
 }
 
-function shouldIncludeRelationType(relationType: string) {
+function shouldIncludeRelationType(
+  relationType: string,
+  includeAllRelations: boolean
+) {
+  if (includeAllRelations) {
+    return true;
+  }
   return RELATION_INCLUDE_TYPES.has(relationType);
 }
 
@@ -632,7 +713,10 @@ function buildRelationShowPayload(
   });
 }
 
-async function buildAnimeRelationPayloads(rootAnilistId: number) {
+async function buildAnimeRelationPayloads(
+  rootAnilistId: number,
+  includeAllRelations: boolean
+) {
   const now = Date.now();
   const queue: number[] = [rootAnilistId];
   const visited = new Set<number>();
@@ -665,7 +749,7 @@ async function buildAnimeRelationPayloads(rootAnilistId: number) {
     }
 
     const included = graph.relations.filter((entry) =>
-      shouldIncludeRelationType(entry.relationType)
+      shouldIncludeRelationType(entry.relationType, includeAllRelations)
     );
 
     const currentRelatedIds =
@@ -751,9 +835,13 @@ type AddAnimeToWatchlistResult = WatchlistMutationResult & {
 async function syncAnimeRelationRoot(
   ctx: ActionCtx,
   userId: Id<"users">,
-  rootAnilistId: number
+  rootAnilistId: number,
+  includeAllRelations = false
 ): Promise<AnimeRelationSyncResult> {
-  const { shows, syncedAt } = await buildAnimeRelationPayloads(rootAnilistId);
+  const { shows, syncedAt } = await buildAnimeRelationPayloads(
+    rootAnilistId,
+    includeAllRelations
+  );
   if (shows.length === 0) {
     return {
       rootAnilistId,
@@ -821,10 +909,11 @@ export const applyAnimeRelationSync = internalMutation({
         continue;
       }
 
-      await ctx.db.insert("userShows", {
+      const newUserShowId = await ctx.db.insert("userShows", {
         userId: args.userId,
         showId,
         status: "plan_to_watch",
+        mediaType: "anime" as const,
         watchedEpisodesCount: 0,
         watchedTotalCount: 0,
         watchedRuntimeMinutes: 0,
@@ -834,6 +923,7 @@ export const applyAnimeRelationSync = internalMutation({
         addedAt: now,
       });
 
+      await upsertFeedProjectionForUserShow(ctx, newUserShowId);
       insertedUserShows += 1;
       if (!isRoot) {
         autoTrackedInserted += 1;
@@ -967,7 +1057,20 @@ export const addAnimeToWatchlistWithRelations = action({
 
     // Best-effort relation sync: don't abort watchlist add on sync failure
     try {
-      const syncResult = await syncAnimeRelationRoot(ctx, userId, rootAnilistId);
+      const effectiveRelationMode: AnimeHomeRelationMode = await ctx.runQuery(
+        internal.shows.getEffectiveAnimeRelationModeForRootForUser,
+        {
+          userId,
+          relationRootAnilistId: rootAnilistId,
+        }
+      );
+
+      const syncResult = await syncAnimeRelationRoot(
+        ctx,
+        userId,
+        rootAnilistId,
+        effectiveRelationMode === "all_relations"
+      );
       return {
         ...addResult,
         ...syncResult,
@@ -994,6 +1097,20 @@ export const syncTrackedAnimeRelations = action({
   handler: async (ctx, args) => {
     const userId = await getCurrentUserId(ctx);
     const now = Date.now();
+    const syncSettings: {
+      globalRelationMode: AnimeHomeRelationMode;
+      franchiseModes: {
+        relationRootAnilistId: number;
+        relationMode: AnimeHomeRelationMode;
+      }[];
+    } = await ctx.runQuery(internal.shows.getAnimeRelationSyncSettingsForUser, {
+      userId,
+    });
+
+    const relationModeByRoot = new Map<number, AnimeHomeRelationMode>();
+    for (const row of syncSettings.franchiseModes) {
+      relationModeByRoot.set(row.relationRootAnilistId, row.relationMode);
+    }
 
     const candidates: { rootAnilistId: number; lastSyncedAt: number }[] =
       await ctx.runQuery(internal.shows.getAnimeRelationSyncCandidates, {
@@ -1011,10 +1128,14 @@ export const syncTrackedAnimeRelations = action({
     const results: AnimeRelationSyncResult[] = [];
 
     for (const candidate of staleCandidates) {
+      const relationMode =
+        relationModeByRoot.get(candidate.rootAnilistId) ??
+        syncSettings.globalRelationMode;
       const result = await syncAnimeRelationRoot(
         ctx,
         userId,
-        candidate.rootAnilistId
+        candidate.rootAnilistId,
+        relationMode === "all_relations"
       );
       results.push(result);
     }
@@ -1024,6 +1145,273 @@ export const syncTrackedAnimeRelations = action({
       syncedRoots: results.filter((entry) => entry.synced).length,
       results,
     };
+  },
+});
+
+export const getAnimeRelationSyncSettingsForUser = internalQuery({
+  args: {
+    userId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    const homeSettings = await getUserAnimeHomeSettingsFromDb(ctx, args.userId);
+    const franchiseRows = await ctx.db
+      .query("userAnimeFranchiseSettings")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .collect();
+
+    return {
+      globalRelationMode: homeSettings.relationMode,
+      franchiseModes: franchiseRows.map((row) => ({
+        relationRootAnilistId: row.relationRootAnilistId,
+        relationMode: row.relationMode as AnimeHomeRelationMode,
+      })),
+    };
+  },
+});
+
+export const getEffectiveAnimeRelationModeForRootForUser = internalQuery({
+  args: {
+    userId: v.id("users"),
+    relationRootAnilistId: v.number(),
+  },
+  handler: async (ctx, args) => {
+    return getEffectiveAnimeRelationModeFromDb(
+      ctx,
+      args.userId,
+      args.relationRootAnilistId
+    );
+  },
+});
+
+export const getUserAnimeHomeSettings = query({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await getCurrentUserId(ctx);
+    return getUserAnimeHomeSettingsFromDb(ctx, userId);
+  },
+});
+
+export const setUserAnimeHomeSettings = mutation({
+  args: {
+    relationMode: v.optional(animeHomeRelationModeValidator),
+    completionBehavior: v.optional(animeCompletionBehaviorValidator),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getCurrentUserId(ctx);
+
+    const existing = await ctx.db
+      .query("userAnimeHomeSettings")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .unique();
+
+    const current = existing
+      ? {
+          relationMode: existing.relationMode as AnimeHomeRelationMode,
+          completionBehavior: existing.completionBehavior as AnimeCompletionBehavior,
+        }
+      : {
+          relationMode: DEFAULT_ANIME_HOME_RELATION_MODE,
+          completionBehavior: DEFAULT_ANIME_COMPLETION_BEHAVIOR,
+        };
+
+    const next = {
+      relationMode: args.relationMode ?? current.relationMode,
+      completionBehavior: args.completionBehavior ?? current.completionBehavior,
+      updatedAt: Date.now(),
+    };
+
+    if (existing) {
+      await ctx.db.patch(existing._id, next);
+    } else {
+      await ctx.db.insert("userAnimeHomeSettings", {
+        userId,
+        ...next,
+      });
+    }
+
+    return {
+      relationMode: next.relationMode,
+      completionBehavior: next.completionBehavior,
+    };
+  },
+});
+
+export const getAnimeFranchiseHomeSettings = query({
+  args: {
+    relationRootAnilistId: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getCurrentUserId(ctx);
+    const homeSettings = await getUserAnimeHomeSettingsFromDb(ctx, userId);
+    const franchiseRelationMode = await getFranchiseRelationModeFromDb(
+      ctx,
+      userId,
+      args.relationRootAnilistId
+    );
+
+    return {
+      globalRelationMode: homeSettings.relationMode,
+      franchiseRelationMode,
+      effectiveRelationMode:
+        franchiseRelationMode ?? homeSettings.relationMode,
+      completionBehavior: homeSettings.completionBehavior,
+    };
+  },
+});
+
+export const setAnimeFranchiseRelationMode = mutation({
+  args: {
+    relationRootAnilistId: v.number(),
+    relationMode: v.union(v.literal("inherit"), animeHomeRelationModeValidator),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getCurrentUserId(ctx);
+
+    const existing = await ctx.db
+      .query("userAnimeFranchiseSettings")
+      .withIndex("by_user_root", (q) =>
+        q.eq("userId", userId).eq("relationRootAnilistId", args.relationRootAnilistId)
+      )
+      .unique();
+
+    if (args.relationMode === "inherit") {
+      if (existing) {
+        await ctx.db.delete(existing._id);
+      }
+      return { relationMode: null };
+    }
+
+    const payload = {
+      relationMode: args.relationMode,
+      updatedAt: Date.now(),
+    };
+
+    if (existing) {
+      await ctx.db.patch(existing._id, payload);
+    } else {
+      await ctx.db.insert("userAnimeFranchiseSettings", {
+        userId,
+        relationRootAnilistId: args.relationRootAnilistId,
+        ...payload,
+      });
+    }
+
+    return { relationMode: args.relationMode };
+  },
+});
+
+export const syncAnimeRelationsForRoot = action({
+  args: {
+    relationRootAnilistId: v.number(),
+  },
+  handler: async (
+    ctx,
+    args
+  ): Promise<
+    AnimeRelationSyncResult & { relationMode: AnimeHomeRelationMode }
+  > => {
+    const userId = await getCurrentUserId(ctx);
+    const effectiveRelationMode: AnimeHomeRelationMode = await ctx.runQuery(
+      internal.shows.getEffectiveAnimeRelationModeForRootForUser,
+      {
+        userId,
+        relationRootAnilistId: args.relationRootAnilistId,
+      }
+    );
+
+    const result = await syncAnimeRelationRoot(
+      ctx,
+      userId,
+      args.relationRootAnilistId,
+      effectiveRelationMode === "all_relations"
+    );
+
+    return {
+      ...result,
+      relationMode: effectiveRelationMode,
+    };
+  },
+});
+
+export const pruneUserAnimeFranchiseEntries = internalMutation({
+  args: {
+    userId: v.id("users"),
+    relationRootAnilistId: v.number(),
+    allowedAnilistIds: v.array(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const allowedAnilistIds = new Set(args.allowedAnilistIds);
+    const relatedUserShows = await ctx.db
+      .query("userShows")
+      .withIndex("by_user_relation_root", (q) =>
+        q.eq("userId", args.userId).eq("relationRootAnilistId", args.relationRootAnilistId)
+      )
+      .collect();
+
+    let removedCount = 0;
+
+    for (const userShow of relatedUserShows) {
+      if (!userShow.isAutoTracked) {
+        continue;
+      }
+
+      const watchedEpisodesCount = userShow.watchedEpisodesCount ?? 0;
+      if (watchedEpisodesCount > 0) {
+        continue;
+      }
+
+      if (userShow.status !== "plan_to_watch") {
+        continue;
+      }
+
+      const show = await ctx.db.get(userShow.showId);
+      const showAnilistId = show?.anilistId;
+      if (typeof showAnilistId === "number" && allowedAnilistIds.has(showAnilistId)) {
+        continue;
+      }
+
+      const watchedEpisodes = await ctx.db
+        .query("watchedEpisodes")
+        .withIndex("by_user_show", (q) =>
+          q.eq("userId", args.userId).eq("showId", userShow.showId)
+        )
+        .collect();
+
+      for (const entry of watchedEpisodes) {
+        await ctx.db.delete(entry._id);
+      }
+
+      await deleteFeedProjectionForUserShow(ctx, userShow._id);
+      await ctx.db.delete(userShow._id);
+      removedCount += 1;
+    }
+
+    return {
+      removedCount,
+      scanned: relatedUserShows.length,
+    };
+  },
+});
+
+export const pruneAnimeFranchiseToCoreRelations = action({
+  args: {
+    relationRootAnilistId: v.number(),
+  },
+  handler: async (
+    ctx,
+    args
+  ): Promise<{ removedCount: number; scanned: number }> => {
+    const userId = await getCurrentUserId(ctx);
+    const { shows } = await buildAnimeRelationPayloads(args.relationRootAnilistId, false);
+    const allowedAnilistIds = shows
+      .map((show) => show.anilistId)
+      .filter((value): value is number => typeof value === "number");
+
+    return ctx.runMutation(internal.shows.pruneUserAnimeFranchiseEntries, {
+      userId,
+      relationRootAnilistId: args.relationRootAnilistId,
+      allowedAnilistIds,
+    });
   },
 });
 
@@ -1129,6 +1517,7 @@ export const getUserShowTracking = query({
         status: null,
         watchedEpisodes: 0,
         isFavorite: false,
+        relationRootAnilistId: null,
       };
     }
 
@@ -1140,6 +1529,7 @@ export const getUserShowTracking = query({
         status: null,
         watchedEpisodes: 0,
         isFavorite: false,
+        relationRootAnilistId: null,
       };
     }
 
@@ -1178,6 +1568,8 @@ export const getUserShowTracking = query({
       status: userShow?.status ?? null,
       watchedEpisodes: watchedEpisodesCount,
       isFavorite: favoriteEntry !== null,
+      relationRootAnilistId:
+        userShow?.relationRootAnilistId ?? show.rootAnilistId ?? show.anilistId ?? null,
     };
   },
 });
@@ -1604,19 +1996,38 @@ export const getHomeDashboard = query({
 });
 
 export const getLibrary = query({
-  args: {},
-  handler: async (ctx) => {
+  args: {
+    status: v.optional(userShowStatusValidator),
+    mediaType: v.optional(
+      v.union(v.literal("tv"), v.literal("anime"), v.literal("movie"))
+    ),
+  },
+  handler: async (ctx, args) => {
     const userId = await getCurrentUserId(ctx);
 
-    const userShows = await ctx.db
-      .query("userShows")
-      .withIndex("by_user", (q) => q.eq("userId", userId))
-      .collect();
+    // Use the by_user_status index when a specific status is requested,
+    // otherwise fall back to by_user for the full list.
+    const userShows = args.status
+      ? await ctx.db
+          .query("userShows")
+          .withIndex("by_user_status", (q) =>
+            q.eq("userId", userId).eq("status", args.status!)
+          )
+          .collect()
+      : await ctx.db
+          .query("userShows")
+          .withIndex("by_user", (q) => q.eq("userId", userId))
+          .collect();
 
     const hydrated = await Promise.all(
       userShows.map(async (userShow) => {
         const show = await ctx.db.get(userShow.showId);
         if (!show) {
+          return null;
+        }
+
+        // Server-side mediaType filter — skip hydration for non-matching types.
+        if (args.mediaType && show.mediaType !== args.mediaType) {
           return null;
         }
 
@@ -1667,6 +2078,129 @@ export const getLibrary = query({
   },
 });
 
+/**
+ * Returns counts of tracked shows grouped by status and media type.
+ * Used by the Library screen to render status filter chip badges
+ * without needing to hydrate full show documents.
+ *
+ * When userShows.mediaType is denormalized (after backfill), this avoids
+ * reading any show documents at all. For un-migrated rows it falls back to
+ * a batch show lookup.
+ */
+export const getLibraryCounts = query({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await getCurrentUserId(ctx);
+
+    const userShows = await ctx.db
+      .query("userShows")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .collect();
+
+    // Collect show IDs that still need a show-doc lookup (no denormalized mediaType).
+    const missingMediaTypeIds: Id<"shows">[] = [];
+    for (const us of userShows) {
+      if (!us.mediaType) {
+        missingMediaTypeIds.push(us.showId);
+      }
+    }
+
+    const mediaTypeByShowId = new Map<string, string>();
+    if (missingMediaTypeIds.length > 0) {
+      const uniqueIds = [...new Set(missingMediaTypeIds)];
+      const showDocs = await Promise.all(uniqueIds.map((id) => ctx.db.get(id)));
+      for (let i = 0; i < uniqueIds.length; i++) {
+        const doc = showDocs[i];
+        if (doc) {
+          mediaTypeByShowId.set(uniqueIds[i].toString(), doc.mediaType);
+        }
+      }
+    }
+
+    const counts: Record<string, Record<string, number>> = {};
+    // counts[mediaType][status] = number
+
+    for (const us of userShows) {
+      const mt = us.mediaType ?? mediaTypeByShowId.get(us.showId.toString());
+      if (!mt) continue;
+      if (!counts[mt]) counts[mt] = {};
+      counts[mt][us.status] = (counts[mt][us.status] ?? 0) + 1;
+    }
+
+    return counts;
+  },
+});
+
+/**
+ * Backfill mediaType on existing userShows rows that predate the
+ * denormalization. Run once after deploying the schema change.
+ */
+export const backfillUserShowsMediaType = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const rows = await ctx.db
+      .query("userShows")
+      .take(500);
+
+    let patched = 0;
+    for (const row of rows) {
+      if (row.mediaType) continue;
+      const show = await ctx.db.get(row.showId);
+      if (!show) continue;
+      await ctx.db.patch(row._id, { mediaType: show.mediaType });
+      patched++;
+    }
+    return { patched, total: rows.length };
+  },
+});
+
+/**
+ * Lightweight query returning only the external IDs needed by Discover and
+ * Recommendations screens to build exclusion sets. Reads feed projections
+ * only (no userShows -> shows joins) and projects a minimal shape.
+ */
+export const getTrackedIds = query({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return [];
+
+    const projections = await ctx.db
+      .query("feedProjections")
+      .withIndex("by_user", (q) => q.eq("userId", userId as Id<"users">))
+      .collect();
+
+    const deduped = new Map<
+      string,
+      {
+        mediaType: "tv" | "movie" | "anime";
+        tmdbId: number | null;
+        anilistId: number | null;
+      }
+    >();
+
+    for (const projection of projections) {
+      const mediaType = projection.mediaType;
+      const key =
+        mediaType === "anime"
+          ? `anime:${projection.anilistId ?? projection.malId ?? projection.showId}`
+          : `${mediaType}:${projection.tmdbId ?? projection.showId}`;
+
+      if (deduped.has(key)) {
+        continue;
+      }
+
+      deduped.set(key, {
+        mediaType,
+        tmdbId: projection.tmdbId ?? null,
+        anilistId: projection.anilistId ?? null,
+      });
+    }
+
+    return Array.from(deduped.values());
+  },
+});
+
 export const addToWatchlist = mutation({
   args: showInput,
   handler: async (ctx, args) => {
@@ -1696,10 +2230,11 @@ export const addToWatchlist = mutation({
       return { status: existing.status };
     }
 
-    await ctx.db.insert("userShows", {
+    const userShowId = await ctx.db.insert("userShows", {
       userId,
       showId,
       status: "plan_to_watch",
+      mediaType: args.mediaType,
       watchedEpisodesCount: 0,
       watchedTotalCount: 0,
       watchedRuntimeMinutes: 0,
@@ -1711,6 +2246,8 @@ export const addToWatchlist = mutation({
         : {}),
       addedAt: Date.now(),
     });
+
+    await upsertFeedProjectionForUserShow(ctx, userShowId);
 
     return { status: "plan_to_watch" as const };
   },
@@ -1752,6 +2289,8 @@ export const removeFromWatchlist = mutation({
       await ctx.db.delete(entry._id);
     }
 
+    // Delete feed projection before deleting the userShow.
+    await deleteFeedProjectionForUserShow(ctx, userShow._id);
     await ctx.db.delete(userShow._id);
 
     return {
@@ -1821,32 +2360,34 @@ export const setWatchlistStatus = mutation({
         userId,
         showId,
         status: args.status,
+        mediaType: args.show.mediaType,
         watchedEpisodesCount: 0,
         watchedTotalCount: 0,
         watchedRuntimeMinutes: 0,
         statusChangedAt: now,
         addedAt: now,
       };
-      
+
       if (typeof relationRootAnilistId === "number") {
         insertData.relationRootAnilistId = relationRootAnilistId;
         insertData.isAutoTracked = false;
       }
-      
+
       if (args.status === "completed") {
         insertData.lastWatchedAt = now;
         insertData.completedAt = now;
       }
-      
+
       if (args.status === "watching") {
         insertData.lastWatchedAt = now;
       }
-      
+
       if (args.status === "dropped") {
         insertData.droppedAt = now;
       }
-      
-      await ctx.db.insert("userShows", insertData);
+
+      const newUserShowId = await ctx.db.insert("userShows", insertData);
+      await upsertFeedProjectionForUserShow(ctx, newUserShowId);
 
       return {
         inWatchlist: true,
@@ -1902,6 +2443,9 @@ export const setWatchlistStatus = mutation({
     }
 
     await ctx.db.patch(existing._id, patch);
+
+    // Update feed projection with the new status.
+    await upsertFeedProjectionForUserShow(ctx, existing._id);
 
     return {
       inWatchlist: true,
@@ -1964,6 +2508,7 @@ export const importTrackedShows = mutation({
           userId,
           showId,
           status: item.status,
+          mediaType: item.show.mediaType,
           addedAt: now,
           watchedEpisodesCount: 0,
           watchedTotalCount: 0,
@@ -2203,6 +2748,7 @@ export const toggleEpisodeWatched = mutation({
         userId,
         showId,
         status: "watching",
+        mediaType: args.show.mediaType,
         watchedEpisodesCount: 0,
         watchedTotalCount: 0,
         watchedRuntimeMinutes: 0,
@@ -2377,6 +2923,7 @@ export const batchRewatchEpisodes = mutation({
         userId,
         showId,
         status: "watching",
+        mediaType: args.show.mediaType,
         watchedEpisodesCount: 0,
         watchedTotalCount: 0,
         watchedRuntimeMinutes: 0,
@@ -2502,6 +3049,7 @@ export const markSeasonWatched = mutation({
         userId,
         showId,
         status: "watching",
+        mediaType: args.show.mediaType,
         watchedEpisodesCount: 0,
         watchedTotalCount: 0,
         watchedRuntimeMinutes: 0,
@@ -2670,6 +3218,135 @@ export const clearShowWatched = mutation({
   },
 });
 
+export const clearRelatedAnimeWatched = mutation({
+  args: {
+    show: v.object(showLookupInput),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getCurrentUserId(ctx);
+    if (!hasLookupArgs(args.show)) {
+      return { removedCount: 0, showsCleared: 0 };
+    }
+
+    const sourceShow = await findShowByLookup(ctx, args.show);
+    if (!sourceShow || sourceShow.mediaType !== "anime") {
+      return { removedCount: 0, showsCleared: 0 };
+    }
+
+    const relationRootAnilistId = sourceShow.rootAnilistId ?? sourceShow.anilistId;
+    if (typeof relationRootAnilistId !== "number") {
+      return { removedCount: 0, showsCleared: 0 };
+    }
+
+    const relatedUserShows = await ctx.db
+      .query("userShows")
+      .withIndex("by_user_relation_root", (q) =>
+        q.eq("userId", userId).eq("relationRootAnilistId", relationRootAnilistId)
+      )
+      .collect();
+
+    let removedCount = 0;
+    let showsCleared = 0;
+    const now = Date.now();
+
+    for (const userShow of relatedUserShows) {
+      const watchedEpisodes = await ctx.db
+        .query("watchedEpisodes")
+        .withIndex("by_user_show", (q) =>
+          q.eq("userId", userId).eq("showId", userShow.showId)
+        )
+        .collect();
+
+      for (const entry of watchedEpisodes) {
+        await ctx.db.delete(entry._id);
+      }
+
+      if (userShow.status === "watching" || userShow.status === "completed") {
+        await ctx.db.patch(userShow._id, {
+          status: "plan_to_watch",
+          statusChangedAt: now,
+          completedAt: undefined,
+          autoPausedAt: undefined,
+        });
+      }
+
+      await refreshUserShowTrackingAggregates(ctx, userId, userShow.showId);
+      removedCount += watchedEpisodes.length;
+      showsCleared += 1;
+    }
+
+    return { removedCount, showsCleared };
+  },
+});
+
+export const pauseOtherRelatedAnimeEntries = mutation({
+  args: {
+    show: v.object(showLookupInput),
+    keepNext: v.optional(v.object(showLookupInput)),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getCurrentUserId(ctx);
+    if (!hasLookupArgs(args.show)) {
+      return { pausedCount: 0, relatedCount: 0 };
+    }
+
+    const sourceShow = await findShowByLookup(ctx, args.show);
+    if (!sourceShow || sourceShow.mediaType !== "anime") {
+      return { pausedCount: 0, relatedCount: 0 };
+    }
+
+    const relationRootAnilistId = sourceShow.rootAnilistId ?? sourceShow.anilistId;
+    if (typeof relationRootAnilistId !== "number") {
+      return { pausedCount: 0, relatedCount: 0 };
+    }
+
+    let keepShowId: Id<"shows"> | null = null;
+    if (args.keepNext && hasLookupArgs(args.keepNext)) {
+      const keepShow = await findShowByLookup(ctx, args.keepNext);
+      if (keepShow && keepShow.mediaType === "anime") {
+        keepShowId = keepShow._id;
+      }
+    }
+
+    const relatedUserShows = await ctx.db
+      .query("userShows")
+      .withIndex("by_user_relation_root", (q) =>
+        q.eq("userId", userId).eq("relationRootAnilistId", relationRootAnilistId)
+      )
+      .collect();
+
+    let pausedCount = 0;
+    const now = Date.now();
+
+    for (const userShow of relatedUserShows) {
+      if (userShow.showId === sourceShow._id) continue;
+      if (keepShowId && userShow.showId === keepShowId) continue;
+      if (
+        userShow.status === "paused" ||
+        userShow.status === "completed" ||
+        userShow.status === "dropped"
+      ) {
+        continue;
+      }
+
+      await ctx.db.patch(userShow._id, {
+        status: "paused",
+        statusChangedAt: now,
+        completedAt: undefined,
+        droppedAt: undefined,
+        autoPausedAt: undefined,
+      });
+      await upsertFeedProjectionForUserShow(ctx, userShow._id);
+      pausedCount += 1;
+    }
+
+    return {
+      pausedCount,
+      relatedCount: relatedUserShows.length,
+    };
+  },
+});
+
 export const getWatchlist = query({
   args: {},
   handler: async (ctx) => {
@@ -2680,10 +3357,14 @@ export const getWatchlist = query({
       return [];
     }
 
-    const userShows = await ctx.db
+    const allUserShows = await ctx.db
       .query("userShows")
       .withIndex("by_user", (q) => q.eq("userId", userId as Id<"users">))
       .collect();
+
+    // Pre-filter movies using denormalized mediaType when available.
+    // This avoids hydrating show docs for movies (which are always excluded).
+    const userShows = allUserShows.filter((us) => us.mediaType !== "movie");
 
     const seasonMonthOffsetByName: Record<string, number> = {
       WINTER: 0,
@@ -3516,6 +4197,7 @@ export const batchMarkWatched = mutation({
         userId,
         showId,
         status: "watching",
+        mediaType: args.show.mediaType,
         watchedEpisodesCount: 0,
         watchedTotalCount: 0,
         watchedRuntimeMinutes: 0,
@@ -3761,6 +4443,7 @@ export const toggleMovieWatched = mutation({
           userId,
           showId,
           status: "completed",
+          mediaType: args.show.mediaType ?? ("movie" as const),
           watchedEpisodesCount: 0,
           watchedTotalCount: 0,
           watchedRuntimeMinutes: 0,
@@ -3911,6 +4594,7 @@ export const autoPauseInactiveShows = internalMutation({
           statusChangedAt: now,
           autoPausedAt: now,
         });
+        await upsertFeedProjectionForUserShow(ctx, userShow._id);
         pausedCount++;
         
         // TODO: Send push notification when notifications are implemented
@@ -3961,9 +4645,10 @@ async function updateStatusBasedOnProgress(
       statusChangedAt: now,
       completedAt: now,
     });
+    await upsertFeedProjectionForUserShow(ctx, userShowId);
     return;
   }
-  
+
   // Rule 2: Resume from paused when episode is watched
   if (
     (userShow.status === "paused" || userShow.status === "plan_to_watch") &&
@@ -3973,9 +4658,10 @@ async function updateStatusBasedOnProgress(
       status: "watching",
       statusChangedAt: now,
     });
+    await upsertFeedProjectionForUserShow(ctx, userShowId);
     return;
   }
-  
+
   // Rule 3: Un-complete when episodes are removed
   if (
     userShow.status === "completed" &&
@@ -3987,6 +4673,7 @@ async function updateStatusBasedOnProgress(
       statusChangedAt: now,
       completedAt: undefined,
     });
+    await upsertFeedProjectionForUserShow(ctx, userShowId);
     return;
   }
 }
@@ -3995,6 +4682,150 @@ async function updateStatusBasedOnProgress(
  * Get recommended shows based on user's watch history
  * Returns shows that are similar to what the user has watched
  */
+type RecommendationSeed = {
+  id: string;
+  tmdbId?: number;
+  anilistId?: number;
+  malId?: number;
+  mediaType: "tv" | "movie" | "anime";
+  title: string;
+  activityAt: number;
+  watchedCount: number;
+};
+
+function buildRecommendationSeedFromProjection(
+  projection: Doc<"feedProjections">
+): RecommendationSeed | null {
+  const watchedCount = projection.watchedEpisodesCount ?? 0;
+  const activityAt = projection.lastWatchedAt;
+
+  if (projection.mediaType === "anime") {
+    if (
+      typeof projection.anilistId !== "number" &&
+      typeof projection.malId !== "number"
+    ) {
+      return null;
+    }
+
+    return {
+      id:
+        typeof projection.anilistId === "number"
+          ? `anilist:anime:${projection.anilistId}`
+          : `jikan:anime:${projection.malId}`,
+      anilistId: projection.anilistId,
+      malId: projection.malId,
+      mediaType: "anime",
+      title: projection.title,
+      activityAt,
+      watchedCount,
+    };
+  }
+
+  if (
+    (projection.mediaType === "tv" || projection.mediaType === "movie") &&
+    typeof projection.tmdbId === "number"
+  ) {
+    return {
+      id: `tmdb:${projection.mediaType}:${projection.tmdbId}`,
+      tmdbId: projection.tmdbId,
+      mediaType: projection.mediaType,
+      title: projection.title,
+      activityAt,
+      watchedCount,
+    };
+  }
+
+  return null;
+}
+
+function dedupeAndSortRecommendationSeeds(seeds: RecommendationSeed[]) {
+  const dedupedById = new Map<string, RecommendationSeed>();
+
+  for (const seed of seeds) {
+    const key =
+      seed.mediaType === "anime"
+        ? `anime:${seed.anilistId ?? seed.malId}`
+        : `${seed.mediaType}:${seed.tmdbId ?? seed.id}`;
+    const existing = dedupedById.get(key);
+    if (!existing || seed.activityAt > existing.activityAt) {
+      dedupedById.set(key, seed);
+    }
+  }
+
+  return Array.from(dedupedById.values()).sort((a, b) => {
+    if (b.activityAt !== a.activityAt) return b.activityAt - a.activityAt;
+    if (b.watchedCount !== a.watchedCount) return b.watchedCount - a.watchedCount;
+    return a.title.localeCompare(b.title);
+  });
+}
+
+function toPublicRecommendationSeed(seed: RecommendationSeed) {
+  return {
+    id: seed.id,
+    tmdbId: seed.tmdbId,
+    anilistId: seed.anilistId,
+    malId: seed.malId,
+    mediaType: seed.mediaType,
+    title: seed.title,
+  };
+}
+
+async function getRecommendationSeedsForUser(ctx: QueryCtx, userId: Id<"users">) {
+  const projections = await ctx.db
+    .query("feedProjections")
+    .withIndex("by_user", (q) => q.eq("userId", userId))
+    .collect();
+
+  const seeds = projections
+    .filter((projection) => {
+      const watchedCount = projection.watchedEpisodesCount ?? 0;
+      return (
+        watchedCount > 0 ||
+        projection.status === "watching" ||
+        projection.status === "completed"
+      );
+    })
+    .map(buildRecommendationSeedFromProjection)
+    .filter((seed): seed is RecommendationSeed => seed !== null);
+
+  return dedupeAndSortRecommendationSeeds(seeds);
+}
+
+export const getRecommendationSeedsByMedia = query({
+  args: {
+    limitPerType: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+
+    if (!userId) {
+      return {
+        tv: [] as ReturnType<typeof toPublicRecommendationSeed>[],
+        anime: [] as ReturnType<typeof toPublicRecommendationSeed>[],
+        movie: [] as ReturnType<typeof toPublicRecommendationSeed>[],
+      };
+    }
+
+    const limitPerType = Math.max(1, Math.min(args.limitPerType ?? 10, 30));
+    const grouped = {
+      tv: [] as ReturnType<typeof toPublicRecommendationSeed>[],
+      anime: [] as ReturnType<typeof toPublicRecommendationSeed>[],
+      movie: [] as ReturnType<typeof toPublicRecommendationSeed>[],
+    };
+
+    const seeds = await getRecommendationSeedsForUser(ctx, userId as Id<"users">);
+    for (const seed of seeds) {
+      const bucket = grouped[seed.mediaType];
+      if (bucket.length >= limitPerType) {
+        continue;
+      }
+      bucket.push(toPublicRecommendationSeed(seed));
+    }
+
+    return grouped;
+  },
+});
+
 export const getRecommendations = query({
   args: {
     mediaType: v.optional(v.union(v.literal("tv"), v.literal("movie"), v.literal("anime"))),
@@ -4010,108 +4841,12 @@ export const getRecommendations = query({
 
     const limit = Math.max(1, Math.min(args.limit ?? 8, 20));
 
-    // Get user's tracked shows with aggregate fields.
-    const userShows = await ctx.db
-      .query("userShows")
-      .withIndex("by_user", (q) => q.eq("userId", userId as Id<"users">))
-      .collect();
+    const seeds = await getRecommendationSeedsForUser(ctx, userId as Id<"users">);
+    const filteredSeeds = args.mediaType
+      ? seeds.filter((seed) => seed.mediaType === args.mediaType)
+      : seeds;
 
-    const candidateUserShows = userShows
-      .filter((userShow) => {
-        const watchedCount = userShow.watchedEpisodesCount ?? 0;
-        return watchedCount > 0 || userShow.status === "watching" || userShow.status === "completed";
-      })
-      .map((userShow) => {
-        const activityAt = Math.max(
-          userShow.lastWatchedAt ?? 0,
-          userShow.statusChangedAt ?? 0,
-          userShow.addedAt
-        );
-
-        return {
-          userShow,
-          activityAt,
-          watchedCount: userShow.watchedEpisodesCount ?? 0,
-        };
-      })
-      .sort((a, b) => b.activityAt - a.activityAt)
-      .slice(0, 25);
-
-    const hydratedSeeds = await Promise.all(
-      candidateUserShows.map(async ({ userShow, activityAt, watchedCount }) => {
-        const show = await ctx.db.get(userShow.showId as Id<"shows">);
-        if (!show) {
-          return null;
-        }
-
-        // Filter by media type if specified
-        if (args.mediaType && show.mediaType !== args.mediaType) {
-          return null;
-        }
-
-        // For TV and Movie, require tmdbId
-        if ((show.mediaType === "tv" || show.mediaType === "movie") && typeof show.tmdbId !== "number") {
-          return null;
-        }
-
-        // For Anime, require anilistId or malId
-        if (show.mediaType === "anime" && typeof show.anilistId !== "number" && typeof show.malId !== "number") {
-          return null;
-        }
-
-        return {
-          id: show.mediaType === "anime" 
-            ? (show.anilistId ? `anilist:anime:${show.anilistId}` : `jikan:anime:${show.malId}`)
-            : `tmdb:${show.mediaType}:${show.tmdbId}`,
-          tmdbId: show.tmdbId,
-          anilistId: show.anilistId,
-          malId: show.malId,
-          mediaType: show.mediaType,
-          title: show.title,
-          activityAt,
-          watchedCount,
-        };
-      })
-    );
-
-    const dedupedById = new Map<string, {
-      id: string;
-      tmdbId?: number;
-      anilistId?: number;
-      malId?: number;
-      mediaType: "tv" | "movie" | "anime";
-      title: string;
-      activityAt: number;
-      watchedCount: number;
-    }>();
-
-    for (const seed of hydratedSeeds) {
-      if (!seed) continue;
-      // Use different key for anime vs TV/movie
-      const key = seed.mediaType === "anime" 
-        ? `anime:${seed.anilistId ?? seed.malId}`
-        : `${seed.mediaType}:${seed.tmdbId ?? seed.id}`;
-      const existing = dedupedById.get(key);
-      if (!existing || seed.activityAt > existing.activityAt) {
-        dedupedById.set(key, seed);
-      }
-    }
-
-    return Array.from(dedupedById.values())
-      .sort((a, b) => {
-        if (b.activityAt !== a.activityAt) return b.activityAt - a.activityAt;
-        if (b.watchedCount !== a.watchedCount) return b.watchedCount - a.watchedCount;
-        return a.title.localeCompare(b.title);
-      })
-      .slice(0, limit)
-      .map(({ id, tmdbId, anilistId, malId, mediaType, title }) => ({
-        id,
-        tmdbId,
-        anilistId,
-        malId,
-        mediaType,
-        title,
-      }));
+    return filteredSeeds.slice(0, limit).map(toPublicRecommendationSeed);
   },
 });
 

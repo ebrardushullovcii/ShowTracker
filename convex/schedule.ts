@@ -6,7 +6,7 @@ import {
   mutation,
   query,
 } from "@/convex/_generated/server";
-import type { Doc } from "@/convex/_generated/dataModel";
+import type { Doc, Id } from "@/convex/_generated/dataModel";
 import type { ActionCtx } from "@/convex/_generated/server";
 import { v } from "convex/values";
 import { getAniListAiringSchedule } from "../lib/api/anilist";
@@ -265,6 +265,27 @@ function getRouteIdForShow(show: Doc<"shows">): string | null {
   return null;
 }
 
+function getRouteIdForProjection(p: {
+  mediaType: string;
+  tmdbId?: number;
+  anilistId?: number;
+  malId?: number;
+}): string | null {
+  if (
+    typeof p.tmdbId === "number" &&
+    (p.mediaType === "tv" || p.mediaType === "movie")
+  ) {
+    return `tmdb:${p.mediaType}:${p.tmdbId}`;
+  }
+  if (typeof p.anilistId === "number" && p.mediaType === "anime") {
+    return `anilist:anime:${p.anilistId}`;
+  }
+  if (typeof p.malId === "number" && p.mediaType === "anime") {
+    return `jikan:anime:${p.malId}`;
+  }
+  return null;
+}
+
 function getUnixRangeForDate(dateString: string) {
   const date = new Date(dateString);
   const start = Math.floor(startOfDay(date).getTime() / 1000);
@@ -358,13 +379,17 @@ export const getScheduleCacheStatusForDate = query({
     }
 
     const hasFreshTv =
-      typeof tvLastUpdated === "number" && now - tvLastUpdated < SCHEDULE_CACHE_FRESH_MS;
+      (args.date < todayKey && tvLastUpdated !== null) ||
+      (typeof tvLastUpdated === "number" &&
+        now - tvLastUpdated < SCHEDULE_CACHE_FRESH_MS);
     const hasFreshAnimeByTime =
       typeof animeLastUpdated === "number" &&
       now - animeLastUpdated < SCHEDULE_CACHE_FRESH_MS;
     const shouldForceRefreshPastAnimeZero =
       animeCount === 0 && args.date <= todayKey;
-    const hasFreshAnime = hasFreshAnimeByTime && !shouldForceRefreshPastAnimeZero;
+    const hasFreshAnime =
+      ((args.date < todayKey && animeLastUpdated !== null) || hasFreshAnimeByTime) &&
+      !shouldForceRefreshPastAnimeZero;
 
     return {
       tvCount,
@@ -547,19 +572,41 @@ export const getUpcomingSchedule = query({
     if (!userId) {
       return [];
     }
+
+    const typedUserId = userId as Id<"users">;
     
     const today = startOfDay(new Date());
 
-    const userShows = await ctx.db
-      .query("userShows")
-      .withIndex("by_user", (q) => q.eq("userId", userId))
-      .collect();
+    // Use feedProjections to avoid N+1 userShows→shows reads.
+    // Each projection already has the denormalized show metadata we need.
+    // Query only TV/Anime projections to avoid scanning movie rows.
+    const mediaFilter = args.mediaFilter;
 
-    // Include all tracked shows (watching, plan_to_watch, paused, completed, dropped)
-    // Filter out movies since they don't have episode schedules
-    const trackedUserShows = userShows;
+    const nonMovieProjections = mediaFilter
+      ? await ctx.db
+          .query("feedProjections")
+          .withIndex("by_user_media", (q) =>
+            q.eq("userId", typedUserId).eq("mediaType", mediaFilter)
+          )
+          .collect()
+      : (
+          await Promise.all([
+            ctx.db
+              .query("feedProjections")
+              .withIndex("by_user_media", (q) =>
+                q.eq("userId", typedUserId).eq("mediaType", "tv")
+              )
+              .collect(),
+            ctx.db
+              .query("feedProjections")
+              .withIndex("by_user_media", (q) =>
+                q.eq("userId", typedUserId).eq("mediaType", "anime")
+              )
+              .collect(),
+          ])
+        ).flat();
 
-    if (trackedUserShows.length === 0) {
+    if (nonMovieProjections.length === 0) {
       return [] as {
         date: string;
         episodes: {
@@ -578,30 +625,21 @@ export const getUpcomingSchedule = query({
       }[];
     }
 
-    const trackedShows = await Promise.all(
-      trackedUserShows.map(async (userShow) => {
-        const show = await ctx.db.get(userShow.showId);
-        if (!show || show.mediaType === "movie") {
-          return null;
-        }
-        const routeId = getRouteIdForShow(show);
-        return {
-          title: show.title,
-          normalizedTitle: normalizeTitle(show.title),
-          mediaType: show.mediaType,
-          posterUrl: show.posterUrl ?? undefined,
-          routeId,
-          anilistId: show.anilistId,
-          tvmazeId: show.tvmazeId,
-        };
-      })
-    );
+    // Build lookup maps from projection data (zero extra reads).
+    const trackedShows = nonMovieProjections.map((p) => ({
+      title: p.title,
+      normalizedTitle: normalizeTitle(p.title),
+      mediaType: p.mediaType as "tv" | "anime",
+      posterUrl: p.posterUrl ?? undefined,
+      routeId: getRouteIdForProjection(p),
+      anilistId: p.anilistId,
+      tvmazeId: p.tvmazeId,
+    }));
 
-    const byExternalKey = new Map<string, NonNullable<(typeof trackedShows)[number]>>();
-    const byTitle = new Map<string, NonNullable<(typeof trackedShows)[number]>>();
+    const byExternalKey = new Map<string, (typeof trackedShows)[number]>();
+    const byTitle = new Map<string, (typeof trackedShows)[number]>();
 
     for (const tracked of trackedShows) {
-      if (!tracked) continue;
       if (typeof tracked.anilistId === "number") {
         byExternalKey.set(`anilist:${tracked.anilistId}`, tracked);
       }
@@ -611,7 +649,6 @@ export const getUpcomingSchedule = query({
       byTitle.set(tracked.normalizedTitle, tracked);
     }
 
-    const mediaFilter = args.mediaFilter;
     const rows = mediaFilter
       ? await ctx.db
           .query("scheduleCache")

@@ -207,46 +207,39 @@ export function RecommendationsScreen() {
     return false;
   }, [activeTab, effectiveHasMoreAnime, hasMoreTv, hasMoreMovie]);
 
-  const trackedLibrary = useQuery(api.shows.getLibrary, {});
+  const trackedIds = useQuery(api.shows.getTrackedIds, {});
   const trackedTmdbKeys = useMemo(() => {
     const keys = new Set<string>();
-    for (const item of trackedLibrary ?? []) {
+    for (const item of trackedIds ?? []) {
       if (
         (item.mediaType === "tv" || item.mediaType === "movie") &&
-        typeof item.tmdbId === "number"
+        item.tmdbId !== null
       ) {
         keys.add(toTrackedTmdbKey(item.mediaType, item.tmdbId));
       }
     }
     return keys;
-  }, [trackedLibrary]);
-  const isTrackedLibraryLoading = trackedLibrary === undefined;
+  }, [trackedIds]);
+  const isTrackedLibraryLoading = trackedIds === undefined;
 
   // Track anime IDs separately
   const trackedAnimeIds = useMemo(() => {
     const ids = new Set<number>();
-    for (const item of trackedLibrary ?? []) {
-      if (item.mediaType === "anime" && typeof item.anilistId === "number") {
+    for (const item of trackedIds ?? []) {
+      if (item.mediaType === "anime" && item.anilistId !== null) {
         ids.add(item.anilistId);
       }
     }
     return ids;
-  }, [trackedLibrary]);
+  }, [trackedIds]);
 
-  // Get user's watch history seeds from Convex by media type.
-  // For the "All" tab we combine all 3 lists so each category gets a fair chance.
-  const tvSeedShows = useQuery(api.shows.getRecommendations, {
-    mediaType: "tv",
-    limit: 10,
+  // Get all recommendation seeds in one backend call and split by media type.
+  const recommendationSeeds = useQuery(api.shows.getRecommendationSeedsByMedia, {
+    limitPerType: 10,
   });
-  const animeSeedShows = useQuery(api.shows.getRecommendations, {
-    mediaType: "anime",
-    limit: 10,
-  });
-  const movieSeedShows = useQuery(api.shows.getRecommendations, {
-    mediaType: "movie",
-    limit: 10,
-  });
+  const tvSeedShows = recommendationSeeds?.tv;
+  const animeSeedShows = recommendationSeeds?.anime;
+  const movieSeedShows = recommendationSeeds?.movie;
 
   const seedShows = useMemo(() => {
     if (activeTab === "tv") return tvSeedShows;
