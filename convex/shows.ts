@@ -3970,10 +3970,15 @@ export const clearRelatedAnimeWatched = mutation({
     let showsCleared = 0;
     const now = Date.now();
     const WATCHED_EPISODE_DELETE_BATCH_SIZE = 256;
+    const MAX_TOTAL_DELETES = 2000;
 
     for (const userShow of relatedUserShows) {
+      if (removedCount >= MAX_TOTAL_DELETES) {
+        break;
+      }
+
       let removedForShow = 0;
-      while (true) {
+      while (removedCount + removedForShow < MAX_TOTAL_DELETES) {
         const watchedEpisodes = await ctx.db
           .query("watchedEpisodes")
           .withIndex("by_user_show", (q) =>
@@ -3985,11 +3990,18 @@ export const clearRelatedAnimeWatched = mutation({
           break;
         }
 
-        for (const entry of watchedEpisodes) {
+        const deleteBudget = MAX_TOTAL_DELETES - removedCount - removedForShow;
+        const toDelete = watchedEpisodes.slice(0, Math.min(deleteBudget, watchedEpisodes.length));
+
+        for (const entry of toDelete) {
           await ctx.db.delete(entry._id);
         }
 
-        removedForShow += watchedEpisodes.length;
+        removedForShow += toDelete.length;
+
+        if (toDelete.length < watchedEpisodes.length) {
+          break;
+        }
       }
 
       if (userShow.status === "watching" || userShow.status === "completed") {
@@ -4006,7 +4018,7 @@ export const clearRelatedAnimeWatched = mutation({
       showsCleared += 1;
     }
 
-    return { removedCount, showsCleared };
+    return { removedCount, showsCleared, hitCap: removedCount >= MAX_TOTAL_DELETES };
   },
 });
 
@@ -4263,7 +4275,7 @@ export const getWatchlist = query({
         const trackingState =
           totalEpisodes === null
             ? watchedCount > 0
-              ? "upcoming"
+              ? "in_progress"
               : "tba"
             : watchedCount === 0
               ? "not_started"
