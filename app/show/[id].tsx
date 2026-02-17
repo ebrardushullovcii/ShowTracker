@@ -2524,6 +2524,8 @@ export function ShowDetailScreen() {
         relationRootAnilistId,
         relationMode,
       });
+      const effectiveMode =
+        relationMode === "inherit" ? globalAnimeRelationMode : relationMode;
 
       void (async () => {
         try {
@@ -2531,7 +2533,7 @@ export function ShowDetailScreen() {
           if (localOpId !== animeSettingsOpIdRef.current) {
             return;
           }
-          if (relationMode !== "all_relations") {
+          if (effectiveMode !== "all_relations") {
             await pruneAnimeFranchiseToCoreRelations({ relationRootAnilistId });
           }
         } catch (error) {

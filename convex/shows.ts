@@ -24,6 +24,7 @@ const RELATION_SYNC_THROTTLE_MS = 1000 * 60 * 60 * 6;
 const RELATION_SYNC_BATCH_LIMIT = 6;
 const RELATION_SYNC_MAX_GRAPH_NODES = 30;
 const IMPORT_TRACKED_SHOWS_MAX_ITEMS = 20;
+const HOME_FEED_MAX_RESULTS = 40;
 const RELATION_INCLUDE_TYPES = new Set(["PREQUEL", "SEQUEL"]);
 
 const showInput = {
@@ -592,6 +593,7 @@ export const getHomeFeed = query({
 
     return selectedEntries
       .sort((a, b) => b.lastWatchedAt - a.lastWatchedAt)
+      .slice(0, HOME_FEED_MAX_RESULTS)
       .map(
         ({
           relationRootAnilistId: _relationRootAnilistId,
@@ -605,27 +607,26 @@ export const getHomeFeed = query({
 });
 
 export const getDistinctTrackedUserIds = internalQuery({
-  args: {},
-  handler: async (ctx) => {
-    const PAGE_SIZE = 512;
-    let cursor: string | null = null;
-    let isDone = false;
-    const userIds = new Set<string>();
+  args: {
+    cursor: v.optional(v.string()),
+    pageSize: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const safePageSize = Math.max(1, Math.min(args.pageSize ?? 512, 512));
+    const page = await ctx.db.query("userShows").paginate({
+      numItems: safePageSize,
+      cursor: args.cursor ?? null,
+    });
 
-    while (!isDone) {
-      const page = await ctx.db
-        .query("userShows")
-        .paginate({ numItems: PAGE_SIZE, cursor });
+    const userIds = Array.from(
+      new Set(page.page.map((row) => row.userId.toString()))
+    );
 
-      for (const row of page.page) {
-        userIds.add(row.userId.toString());
-      }
-
-      cursor = page.continueCursor;
-      isDone = page.isDone;
-    }
-
-    return Array.from(userIds);
+    return {
+      userIds,
+      continueCursor: page.continueCursor,
+      isDone: page.isDone,
+    };
   },
 });
 
@@ -651,9 +652,29 @@ export const dailyReconcileProjections = internalAction({
       backfillIsDone = backfillResult.isDone;
     }
 
-    const userIdStrings: string[] = await ctx.runQuery(
-      internal.shows.getDistinctTrackedUserIds
-    );
+    const trackedUserIds = new Set<string>();
+    let trackedCursor: string | undefined;
+    let trackedIsDone = false;
+
+    while (!trackedIsDone) {
+      const trackedPage: {
+        userIds: string[];
+        continueCursor: string | null;
+        isDone: boolean;
+      } = await ctx.runQuery(internal.shows.getDistinctTrackedUserIds, {
+        cursor: trackedCursor,
+        pageSize: 512,
+      });
+
+      for (const userId of trackedPage.userIds) {
+        trackedUserIds.add(userId);
+      }
+
+      trackedCursor = trackedPage.continueCursor ?? undefined;
+      trackedIsDone = trackedPage.isDone;
+    }
+
+    const userIdStrings = Array.from(trackedUserIds);
 
     let rebuilt = 0;
     for (const userIdStr of userIdStrings) {
@@ -1473,6 +1494,7 @@ export const applyAnimeRelationSync = internalMutation({
                 isAutoTracked: true,
               }),
         });
+        await upsertFeedProjectionForUserShow(ctx, existingUserShow._id);
         continue;
       }
 
@@ -2832,6 +2854,7 @@ export const addToWatchlist = mutation({
           relationRootAnilistId,
           ...(isAnimeRoot ? { isAutoTracked: false } : {}),
         });
+        await upsertFeedProjectionForUserShow(ctx, existing._id);
       }
       return { status: existing.status };
     }
@@ -3315,6 +3338,7 @@ export const importTrackedShows = mutation({
           completedAt: normalizedImportStatus === "completed" ? now : undefined,
           droppedAt: normalizedImportStatus === "dropped" ? now : undefined,
         });
+        await upsertFeedProjectionForUserShow(ctx, userShowId);
       }
 
       const showKey = String(showId);
@@ -4309,6 +4333,20 @@ export const resetUserTrackingDataBatch = internalMutation({
 
     remaining -= watchedEpisodes.length;
 
+    const feedProjections =
+      remaining > 0
+        ? await ctx.db
+            .query("feedProjections")
+            .withIndex("by_user", (q) => q.eq("userId", args.userId))
+            .take(remaining)
+        : [];
+
+    for (const entry of feedProjections) {
+      await ctx.db.delete(entry._id);
+    }
+
+    remaining -= feedProjections.length;
+
     const userShows =
       remaining > 0
         ? await ctx.db
@@ -4351,6 +4389,7 @@ export const resetUserTrackingDataBatch = internalMutation({
 
     const deletedTotal =
       watchedEpisodes.length +
+      feedProjections.length +
       userShows.length +
       userFavorites.length +
       customLists.length;
@@ -4358,6 +4397,7 @@ export const resetUserTrackingDataBatch = internalMutation({
     return {
       removedUserShows: userShows.length,
       removedWatchedEpisodes: watchedEpisodes.length,
+      removedFeedProjections: feedProjections.length,
       removedFavorites: userFavorites.length,
       removedLists: customLists.length,
       deletedTotal,
@@ -4373,6 +4413,7 @@ export const resetUserTrackingData = action({
 
     let removedUserShows = 0;
     let removedWatchedEpisodes = 0;
+    let removedFeedProjections = 0;
     let removedFavorites = 0;
     let removedLists = 0;
     let batches = 0;
@@ -4381,6 +4422,7 @@ export const resetUserTrackingData = action({
       const batchResult: {
         removedUserShows: number;
         removedWatchedEpisodes: number;
+        removedFeedProjections: number;
         removedFavorites: number;
         removedLists: number;
         deletedTotal: number;
@@ -4392,6 +4434,7 @@ export const resetUserTrackingData = action({
 
       removedUserShows += batchResult.removedUserShows;
       removedWatchedEpisodes += batchResult.removedWatchedEpisodes;
+      removedFeedProjections += batchResult.removedFeedProjections;
       removedFavorites += batchResult.removedFavorites;
       removedLists += batchResult.removedLists;
       batches += 1;
@@ -4400,6 +4443,7 @@ export const resetUserTrackingData = action({
         return {
           removedUserShows,
           removedWatchedEpisodes,
+          removedFeedProjections,
           removedFavorites,
           removedLists,
           batches,
@@ -4411,6 +4455,7 @@ export const resetUserTrackingData = action({
     return {
       removedUserShows,
       removedWatchedEpisodes,
+      removedFeedProjections,
       removedFavorites,
       removedLists,
       batches,
@@ -4431,6 +4476,13 @@ export const resetGlobalMediaDataBatch = internalMutation({
       await ctx.db.delete(entry._id);
     }
     remaining -= watchedEpisodes.length;
+
+    const feedProjections =
+      remaining > 0 ? await ctx.db.query("feedProjections").take(remaining) : [];
+    for (const entry of feedProjections) {
+      await ctx.db.delete(entry._id);
+    }
+    remaining -= feedProjections.length;
 
     const userShows =
       remaining > 0 ? await ctx.db.query("userShows").take(remaining) : [];
@@ -4467,6 +4519,7 @@ export const resetGlobalMediaDataBatch = internalMutation({
 
     const deletedTotal =
       watchedEpisodes.length +
+      feedProjections.length +
       userShows.length +
       userFavorites.length +
       customLists.length +
@@ -4475,6 +4528,7 @@ export const resetGlobalMediaDataBatch = internalMutation({
 
     return {
       removedWatchedEpisodes: watchedEpisodes.length,
+      removedFeedProjections: feedProjections.length,
       removedUserShows: userShows.length,
       removedFavorites: userFavorites.length,
       removedLists: customLists.length,
@@ -4490,6 +4544,7 @@ export const resetGlobalMediaData = internalAction({
   args: {},
   handler: async (ctx) => {
     let removedWatchedEpisodes = 0;
+    let removedFeedProjections = 0;
     let removedUserShows = 0;
     let removedFavorites = 0;
     let removedLists = 0;
@@ -4500,6 +4555,7 @@ export const resetGlobalMediaData = internalAction({
     while (batches < RESET_GLOBAL_MEDIA_MAX_BATCHES) {
       const batchResult: {
         removedWatchedEpisodes: number;
+        removedFeedProjections: number;
         removedUserShows: number;
         removedFavorites: number;
         removedLists: number;
@@ -4512,6 +4568,7 @@ export const resetGlobalMediaData = internalAction({
       });
 
       removedWatchedEpisodes += batchResult.removedWatchedEpisodes;
+      removedFeedProjections += batchResult.removedFeedProjections;
       removedUserShows += batchResult.removedUserShows;
       removedFavorites += batchResult.removedFavorites;
       removedLists += batchResult.removedLists;
@@ -4522,6 +4579,7 @@ export const resetGlobalMediaData = internalAction({
       if (!batchResult.hasMore || batchResult.deletedTotal === 0) {
         return {
           removedWatchedEpisodes,
+          removedFeedProjections,
           removedUserShows,
           removedFavorites,
           removedLists,
@@ -4535,6 +4593,7 @@ export const resetGlobalMediaData = internalAction({
 
     return {
       removedWatchedEpisodes,
+      removedFeedProjections,
       removedUserShows,
       removedFavorites,
       removedLists,
