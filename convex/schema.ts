@@ -112,6 +112,7 @@ export default defineSchema({
   })
     .index("by_user", ["userId"])
     .index("by_user_status", ["userId", "status"])
+    .index("by_user_status_mediaType", ["userId", "status", "mediaType"])
     .index("by_user_mediaType", ["userId", "mediaType"])
     .index("by_user_relation_root", ["userId", "relationRootAnilistId"])
     .index("by_user_show", ["userId", "showId"])

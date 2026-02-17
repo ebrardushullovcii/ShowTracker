@@ -75,6 +75,18 @@ type AnimeCompletionBehavior =
   | "auto_open_next"
   | "auto_pause_others_keep_next";
 
+function isValidAnimeHomeRelationMode(value: unknown): value is AnimeHomeRelationMode {
+  return value === "core_only" || value === "all_relations";
+}
+
+function isValidAnimeCompletionBehavior(value: unknown): value is AnimeCompletionBehavior {
+  return (
+    value === "ask_every_time" ||
+    value === "auto_open_next" ||
+    value === "auto_pause_others_keep_next"
+  );
+}
+
 const ANIME_SETTINGS_UPDATE_TIMEOUT_MS = 12000;
 
 type WatchActionTarget =
@@ -692,6 +704,7 @@ export function ShowDetailScreen() {
   const [isStatusMenuVisible, setIsStatusMenuVisible] = useState(false);
   const [isMarkingShow, setIsMarkingShow] = useState(false);
   const [trackingError, setTrackingError] = useState<string | null>(null);
+  const [trackingNotice, setTrackingNotice] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isAddToListModalVisible, setIsAddToListModalVisible] = useState(false);
@@ -712,6 +725,7 @@ export function ShowDetailScreen() {
   const animeSettingsOpIdRef = useRef(0);
   const expandedSeasonsRef = useRef(expandedSeasons);
   const seasonWatchedKeysRef = useRef(seasonWatchedKeys);
+  const loadingSeasonsRef = useRef<Set<number>>(new Set());
   const [apiRelatedAnime, setApiRelatedAnime] = useState<AniListRelatedShow[]>([]);
   const [isLoadingRelatedAnime, setIsLoadingRelatedAnime] = useState(false);
 
@@ -848,18 +862,27 @@ export function ShowDetailScreen() {
       : "skip"
   );
 
-  const globalAnimeRelationMode =
-    (animeFranchiseSettings?.globalRelationMode as AnimeHomeRelationMode | undefined) ??
-    "core_only";
+  const globalAnimeRelationMode = isValidAnimeHomeRelationMode(
+    animeFranchiseSettings?.globalRelationMode
+  )
+    ? animeFranchiseSettings.globalRelationMode
+    : "core_only";
   const franchiseAnimeRelationMode =
-    (animeFranchiseSettings?.franchiseRelationMode as AnimeHomeRelationMode | null | undefined) ??
-    null;
-  const effectiveAnimeRelationMode =
-    (animeFranchiseSettings?.effectiveRelationMode as AnimeHomeRelationMode | undefined) ??
-    globalAnimeRelationMode;
-  const animeCompletionBehavior =
-    (animeFranchiseSettings?.completionBehavior as AnimeCompletionBehavior | undefined) ??
-    "ask_every_time";
+    animeFranchiseSettings?.franchiseRelationMode === null
+      ? null
+      : isValidAnimeHomeRelationMode(animeFranchiseSettings?.franchiseRelationMode)
+        ? animeFranchiseSettings.franchiseRelationMode
+        : null;
+  const effectiveAnimeRelationMode = isValidAnimeHomeRelationMode(
+    animeFranchiseSettings?.effectiveRelationMode
+  )
+    ? animeFranchiseSettings.effectiveRelationMode
+    : globalAnimeRelationMode;
+  const animeCompletionBehavior = isValidAnimeCompletionBehavior(
+    animeFranchiseSettings?.completionBehavior
+  )
+    ? animeFranchiseSettings.completionBehavior
+    : "ask_every_time";
 
   const relatedAnimeTrackingArgs = useMemo(() => {
     if (!show || show.mediaType !== "anime") {
@@ -999,6 +1022,20 @@ export function ShowDetailScreen() {
     seasonWatchedKeysRef.current = seasonWatchedKeys;
   }, [seasonWatchedKeys]);
 
+  useEffect(() => {
+    if (!trackingNotice) {
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      setTrackingNotice(null);
+    }, 2500);
+
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [trackingNotice]);
+
   // Load watched episodes for expanded seasons
   useEffect(() => {
     if (trackingArgs === "skip" || !getWatchedEpisodesForSeasonAction) return;
@@ -1010,7 +1047,9 @@ export function ShowDetailScreen() {
 
     // Load watched episodes for each expanded season that hasn't been loaded yet.
     for (const seasonNumber of expandedSeasonNumbers) {
-      if (seasonWatchedKeys[seasonNumber]) continue;
+      if (seasonWatchedKeysRef.current[seasonNumber]) continue;
+      if (loadingSeasonsRef.current.has(seasonNumber)) continue;
+      loadingSeasonsRef.current.add(seasonNumber);
 
       void (async () => {
         try {
@@ -1027,14 +1066,22 @@ export function ShowDetailScreen() {
             return;
           }
 
-          setSeasonWatchedKeys((prev) => ({
-            ...prev,
-            [seasonNumber]: new Set(keys),
-          }));
+          setSeasonWatchedKeys((prev) => {
+            if (prev[seasonNumber]) {
+              return prev;
+            }
+
+            return {
+              ...prev,
+              [seasonNumber]: new Set(keys),
+            };
+          });
         } catch (error) {
           if (!isCancelled) {
             console.error("Failed to load watched episodes for season", seasonNumber, error);
           }
+        } finally {
+          loadingSeasonsRef.current.delete(seasonNumber);
         }
       })();
     }
@@ -1042,7 +1089,7 @@ export function ShowDetailScreen() {
     return () => {
       isCancelled = true;
     };
-  }, [expandedSeasons, trackingArgs, seasonWatchedKeys, getWatchedEpisodesForSeasonAction]);
+  }, [expandedSeasons, trackingArgs, getWatchedEpisodesForSeasonAction]);
 
   useEffect(() => {
     if (typeof relatedAnimeLookupId !== "number") {
@@ -1283,6 +1330,7 @@ export function ShowDetailScreen() {
             show: showLookupArgs,
             keepNext,
           });
+          setTrackingNotice("Paused related franchise titles and kept next season active.");
         } catch (pauseError) {
           console.error("Failed to auto-pause related seasons", pauseError);
           setTrackingError("Could not apply franchise pause preference.");
@@ -2343,6 +2391,10 @@ export function ShowDetailScreen() {
     choice: "rewatch" | "not_watched" | "not_watched_related"
   ) => {
     if (!watchActionTarget || isWatchActionRunning) return;
+    if (choice === "not_watched_related" && watchActionTarget.kind !== "show") {
+      setTrackingError("Could not update watch status. Please try again.");
+      return;
+    }
 
     setIsWatchActionRunning(true);
     let didSucceed = false;
@@ -3010,6 +3062,12 @@ export function ShowDetailScreen() {
           {trackingError && (
             <View className="mb-6 rounded-xl bg-primary/10 p-4">
               <Text className="text-sm text-primary">{trackingError}</Text>
+            </View>
+          )}
+
+          {!trackingError && trackingNotice && (
+            <View className="mb-6 rounded-xl bg-emerald-500/10 p-4">
+              <Text className="text-sm text-emerald-600">{trackingNotice}</Text>
             </View>
           )}
 

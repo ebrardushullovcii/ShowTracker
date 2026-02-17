@@ -2611,25 +2611,37 @@ export const getLibrary = query({
   handler: async (ctx, args) => {
     const userId = await getCurrentUserId(ctx);
 
-    // Use the by_user_status index when a specific status is requested,
-    // otherwise fall back to by_user for the full list.
-    const userShows = args.status
-      ? await ctx.db
-          .query("userShows")
-          .withIndex("by_user_status", (q) =>
-            q.eq("userId", userId).eq("status", args.status!)
-          )
-          .collect()
-      : await ctx.db
-          .query("userShows")
-          .withIndex("by_user", (q) => q.eq("userId", userId))
-          .collect();
+    const userShows =
+      args.status && args.mediaType
+        ? await ctx.db
+            .query("userShows")
+            .withIndex("by_user_status_mediaType", (q) =>
+              q
+                .eq("userId", userId)
+                .eq("status", args.status!)
+                .eq("mediaType", args.mediaType!)
+            )
+            .collect()
+        : args.status
+          ? await ctx.db
+              .query("userShows")
+              .withIndex("by_user_status", (q) =>
+                q.eq("userId", userId).eq("status", args.status!)
+              )
+              .collect()
+          : await ctx.db
+              .query("userShows")
+              .withIndex("by_user", (q) => q.eq("userId", userId))
+              .collect();
 
-    const filteredUserShows = args.mediaType
-      ? userShows.filter(
-          (userShow) => !userShow.mediaType || userShow.mediaType === args.mediaType
-        )
-      : userShows;
+    const filteredUserShows =
+      args.status && args.mediaType
+        ? userShows
+        : args.mediaType
+          ? userShows.filter(
+              (userShow) => !userShow.mediaType || userShow.mediaType === args.mediaType
+            )
+          : userShows;
 
     const hydrated = await Promise.all(
       filteredUserShows.map(async (userShow) => {
