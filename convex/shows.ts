@@ -17,8 +17,8 @@ import {
   getAniListMediaByMalId,
   type AniListAnimeRelations,
   type AniListRelatedShow,
-} from "../lib/api/anilist";
-import type { NormalizedShow } from "../lib/api/types";
+} from "@/lib/api/anilist";
+import type { NormalizedShow } from "@/lib/api/types";
 
 const RELATION_SYNC_THROTTLE_MS = 1000 * 60 * 60 * 6;
 const RELATION_SYNC_BATCH_LIMIT = 6;
@@ -241,45 +241,72 @@ export const rebuildFeedProjectionsForUser = internalMutation({
 export const refreshProjectionsForShow = internalMutation({
   args: {
     showId: v.id("shows"),
+    cursor: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const show = await ctx.db.get(args.showId);
     if (!show) {
-      return { updated: 0 };
+      return { updated: 0, nextCursor: null, isDone: true };
     }
 
     const BATCH_SIZE = 512;
-    let cursor: string | null = null;
-    let isDone = false;
+    const page = await ctx.db
+      .query("userShows")
+      .withIndex("by_showId", (q) => q.eq("showId", args.showId))
+      .paginate({ numItems: BATCH_SIZE, cursor: args.cursor ?? null });
+
     let updated = 0;
+    for (const userShow of page.page) {
+      const existing = await ctx.db
+        .query("feedProjections")
+        .withIndex("by_userShow", (q) => q.eq("userShowId", userShow._id))
+        .unique();
 
-    while (!isDone) {
-      const page = await ctx.db
-        .query("userShows")
-        .withIndex("by_showId", (q) => q.eq("showId", args.showId))
-        .paginate({ numItems: BATCH_SIZE, cursor });
+      const fields = buildFeedProjectionFields(userShow, show);
 
-      for (const userShow of page.page) {
-        const existing = await ctx.db
-          .query("feedProjections")
-          .withIndex("by_userShow", (q) => q.eq("userShowId", userShow._id))
-          .unique();
-
-        const fields = buildFeedProjectionFields(userShow, show);
-
-        if (existing) {
-          await ctx.db.patch(existing._id, fields);
-        } else {
-          await ctx.db.insert("feedProjections", fields);
-        }
-        updated += 1;
+      if (existing) {
+        await ctx.db.patch(existing._id, fields);
+      } else {
+        await ctx.db.insert("feedProjections", fields);
       }
-
-      cursor = page.continueCursor;
-      isDone = page.isDone;
+      updated += 1;
     }
 
-    return { updated };
+    return {
+      updated,
+      nextCursor: page.continueCursor,
+      isDone: page.isDone,
+    };
+  },
+});
+
+export const runRefreshProjectionsForShow = internalAction({
+  args: {
+    showId: v.id("shows"),
+  },
+  handler: async (ctx, args) => {
+    let cursor: string | undefined;
+    let isDone = false;
+    let totalUpdated = 0;
+    let rounds = 0;
+
+    while (!isDone) {
+      const batch: {
+        updated: number;
+        nextCursor: string | null;
+        isDone: boolean;
+      } = await ctx.runMutation(internal.shows.refreshProjectionsForShow, {
+        showId: args.showId,
+        cursor,
+      });
+
+      totalUpdated += batch.updated;
+      cursor = batch.nextCursor ?? undefined;
+      isDone = batch.isDone;
+      rounds += 1;
+    }
+
+    return { totalUpdated, rounds };
   },
 });
 
@@ -426,13 +453,13 @@ export const getHomeFeed = query({
           .withIndex("by_user_media", (q) =>
             q.eq("userId", typedUserId).eq("mediaType", "tv")
           )
-          .collect(),
+          .take(HOME_FEED_MAX_RESULTS * 2),
         ctx.db
           .query("feedProjections")
           .withIndex("by_user_media", (q) =>
             q.eq("userId", typedUserId).eq("mediaType", "anime")
           )
-          .collect(),
+          .take(HOME_FEED_MAX_RESULTS * 2),
         ctx.db
           .query("userAnimeHomeSettings")
           .withIndex("by_user", (q) => q.eq("userId", typedUserId))
@@ -502,7 +529,7 @@ export const getHomeFeed = query({
       const trackingState =
         totalEpisodes === null
           ? watchedCount > 0
-            ? "upcoming"
+            ? "in_progress"
             : "tba"
           : watchedCount === 0
             ? "not_started"
@@ -2688,28 +2715,22 @@ export const getLibrary = query({
                 q.eq("userId", userId).eq("status", args.status!)
               )
               .collect()
-          : await ctx.db
-              .query("userShows")
-              .withIndex("by_user", (q) => q.eq("userId", userId))
-              .collect();
-
-    const filteredUserShows =
-      args.status && args.mediaType
-        ? userShows
-        : args.mediaType
-          // TODO: Remove this in-memory filter once all query paths are fully index-backed.
-          ? userShows.filter((userShow) => userShow.mediaType === args.mediaType)
-          : userShows;
+          : args.mediaType
+            ? await ctx.db
+                .query("userShows")
+                .withIndex("by_user_mediaType", (q) =>
+                  q.eq("userId", userId).eq("mediaType", args.mediaType!)
+                )
+                .collect()
+            : await ctx.db
+                .query("userShows")
+                .withIndex("by_user", (q) => q.eq("userId", userId))
+                .collect();
 
     const hydrated = await Promise.all(
-      filteredUserShows.map(async (userShow) => {
+      userShows.map(async (userShow) => {
         const show = await ctx.db.get(userShow.showId);
         if (!show) {
-          return null;
-        }
-
-        // Defensive mediaType guard in case denormalized userShows rows are stale.
-        if (args.mediaType && show.mediaType !== args.mediaType) {
           return null;
         }
 
