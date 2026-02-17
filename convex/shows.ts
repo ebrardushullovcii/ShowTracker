@@ -248,26 +248,35 @@ export const refreshProjectionsForShow = internalMutation({
       return { updated: 0 };
     }
 
-    const userShows = await ctx.db
-      .query("userShows")
-      .withIndex("by_showId", (q) => q.eq("showId", args.showId))
-      .collect();
-
+    const BATCH_SIZE = 512;
+    let cursor: string | null = null;
+    let isDone = false;
     let updated = 0;
-    for (const userShow of userShows) {
-      const existing = await ctx.db
-        .query("feedProjections")
-        .withIndex("by_userShow", (q) => q.eq("userShowId", userShow._id))
-        .unique();
 
-      const fields = buildFeedProjectionFields(userShow, show);
+    while (!isDone) {
+      const page = await ctx.db
+        .query("userShows")
+        .withIndex("by_showId", (q) => q.eq("showId", args.showId))
+        .paginate({ numItems: BATCH_SIZE, cursor });
 
-      if (existing) {
-        await ctx.db.patch(existing._id, fields);
-      } else {
-        await ctx.db.insert("feedProjections", fields);
+      for (const userShow of page.page) {
+        const existing = await ctx.db
+          .query("feedProjections")
+          .withIndex("by_userShow", (q) => q.eq("userShowId", userShow._id))
+          .unique();
+
+        const fields = buildFeedProjectionFields(userShow, show);
+
+        if (existing) {
+          await ctx.db.patch(existing._id, fields);
+        } else {
+          await ctx.db.insert("feedProjections", fields);
+        }
+        updated += 1;
       }
-      updated += 1;
+
+      cursor = page.continueCursor;
+      isDone = page.isDone;
     }
 
     return { updated };
@@ -635,7 +644,7 @@ export const getDistinctTrackedUserIds = internalQuery({
     });
 
     const userIds = Array.from(
-      new Set(page.page.map((row) => row.userId.toString()))
+      new Set(page.page.map((row) => row.userId))
     );
 
     return {
@@ -668,34 +677,29 @@ export const dailyReconcileProjections = internalAction({
       backfillIsDone = backfillResult.isDone;
     }
 
-    const trackedUserIds = new Set<string>();
+    const trackedUserIds = new Set<Id<"users">>();
     let trackedCursor: string | undefined;
     let trackedIsDone = false;
 
     while (!trackedIsDone) {
-      const trackedPage: {
-        userIds: string[];
-        continueCursor: string | null;
-        isDone: boolean;
-      } = await ctx.runQuery(internal.shows.getDistinctTrackedUserIds, {
-        cursor: trackedCursor,
-        pageSize: 512,
-      });
+      const trackedPage = await ctx.runQuery(
+        internal.shows.getDistinctTrackedUserIds,
+        {
+          cursor: trackedCursor,
+          pageSize: 512,
+        }
+      );
 
       for (const userId of trackedPage.userIds) {
-        trackedUserIds.add(userId);
+        trackedUserIds.add(userId as Id<"users">);
       }
 
       trackedCursor = trackedPage.continueCursor ?? undefined;
       trackedIsDone = trackedPage.isDone;
     }
 
-    const userIdStrings = Array.from(trackedUserIds);
-
     let rebuilt = 0;
-    for (const userIdStr of userIdStrings) {
-      const typedUserId = userIdStr as Id<"users">;
-
+    for (const userId of trackedUserIds) {
       let deleteDone = false;
       while (!deleteDone) {
         const deleteBatch: {
@@ -704,7 +708,7 @@ export const dailyReconcileProjections = internalAction({
           nextCursor: string | null;
           isDone: boolean;
         } = await ctx.runMutation(internal.shows.rebuildFeedProjectionsForUser, {
-          userId: typedUserId,
+          userId,
           phase: "delete",
           pageSize: 256,
         });
@@ -721,7 +725,7 @@ export const dailyReconcileProjections = internalAction({
           nextCursor: string | null;
           isDone: boolean;
         } = await ctx.runMutation(internal.shows.rebuildFeedProjectionsForUser, {
-          userId: typedUserId,
+          userId,
           phase: "create",
           cursor: createCursor,
           pageSize: 256,

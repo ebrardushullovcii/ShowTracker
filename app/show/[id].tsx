@@ -2592,6 +2592,9 @@ export function ShowDetailScreen() {
           }
         } catch (error) {
           console.error("Failed background relation sync after franchise update", error);
+          if (localOpId === animeSettingsOpIdRef.current) {
+            setTrackingError("Could not sync franchise relations.");
+          }
         } finally {
           if (localOpId === animeSettingsOpIdRef.current) {
             setIsUpdatingAnimeSettings(false);
