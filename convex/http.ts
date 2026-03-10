@@ -8,7 +8,7 @@ const anilistUrl =
   process.env.EXPO_PUBLIC_ANILIST_URL ?? "https://graphql.anilist.co";
 const anilistProxyBaseDelayMs = 750;
 const anilistProxyMaxAttempts = 4;
-const allowLocalhostOrigins = process.env.ALLOW_LOCALHOST_ORIGINS === "true";
+const allowLocalhostOrigins = process.env.ALLOW_LOCALHOST_ORIGINS !== "false";
 
 const configuredWebOrigins = [
   process.env.SHOWTRACKER_WEB_ORIGINS,
@@ -83,6 +83,10 @@ function getCorsHeaders(request: Request) {
 
   const headers = new Headers(corsBaseHeaders);
   headers.set("Access-Control-Allow-Origin", origin);
+  const requestedHeaders = request.headers.get("access-control-request-headers");
+  if (requestedHeaders) {
+    headers.set("Access-Control-Allow-Headers", requestedHeaders);
+  }
   return headers;
 }
 

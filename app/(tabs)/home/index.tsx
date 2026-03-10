@@ -62,7 +62,7 @@ const DAY_IN_MS = 1000 * 60 * 60 * 24;
 const GRID_GAP = 12;
 const INITIAL_UPCOMING_HYDRATION_TIMEOUT_MS = 8000;
 const TMDB_AIRED_LOOKUP_BATCH_SIZE = 8;
-const WATCHLIST_FUTURE_FALLBACK_DAYS = 14;
+const WATCHLIST_FUTURE_FALLBACK_DAYS = 365;
 
 function estimateAiredEpisodesFromTmdb(details: TmdbShowDetails) {
   const today = new Date();
@@ -316,9 +316,13 @@ function getEpisodeCodeLabel(episode: UpcomingEpisode["episode"]) {
 function WatchlistCard({ item, isWeb }: { item: WatchlistItem; isWeb: boolean }) {
   const routeId = getWatchlistRouteId(item);
   const posterHeight = isWeb ? 280 : 240;
+  const safeWatchedEpisodes =
+    item.totalEpisodes !== null
+      ? Math.min(item.watchedEpisodes, item.totalEpisodes)
+      : item.watchedEpisodes;
   const watchedPercent =
     item.totalEpisodes && item.totalEpisodes > 0
-      ? Math.round((item.watchedEpisodes / item.totalEpisodes) * 100)
+      ? Math.min(100, Math.round((safeWatchedEpisodes / item.totalEpisodes) * 100))
       : null;
   const cornerLabel =
     item.remainingEpisodes === null
@@ -328,10 +332,10 @@ function WatchlistCard({ item, isWeb }: { item: WatchlistItem; isWeb: boolean })
       : `${item.remainingEpisodes} left`;
   const progressLabel =
     item.totalEpisodes === null
-      ? item.watchedEpisodes > 0
-        ? `${item.watchedEpisodes} watched`
+      ? safeWatchedEpisodes > 0
+        ? `${safeWatchedEpisodes} watched`
         : "Not started"
-      : `${item.watchedEpisodes}/${item.totalEpisodes} episodes`;
+      : `${safeWatchedEpisodes}/${item.totalEpisodes} episodes`;
   const statusLabel = item.status
     .replace(/_/g, " ")
     .replace(/\b\w/g, (char) => char.toUpperCase());
@@ -1175,11 +1179,19 @@ export function HomeScreen() {
 
   const filteredWatchlist = useMemo(() => {
     return watchlistItems.filter((item) => {
+      const routeId = getWatchlistRouteId(item);
+      const futureUpcomingCount = routeId
+        ? futureUpcomingCountByRoute.get(routeId) ?? 0
+        : 0;
+      const allRemainingEpisodesAreFuture =
+        typeof item.remainingEpisodes === "number" &&
+        futureUpcomingCount >= item.remainingEpisodes;
+
       if (item.status === "paused") return false;
       if (item.status === "dropped") return false;
-      if (item.status === "completed") return false;
       if (item.trackingState === "upcoming") return false;
-      if (typeof item.remainingEpisodes === "number" && item.remainingEpisodes <= 0) {
+      if (item.status === "completed") return false;
+      if (allRemainingEpisodesAreFuture) {
         return false;
       }
 
@@ -1190,15 +1202,14 @@ export function HomeScreen() {
           if (releasedRemaining <= 0) {
             return false;
           }
-        } else if (typeof item.remainingEpisodes === "number" && item.remainingEpisodes > 0) {
-          const routeId = getWatchlistRouteId(item);
-          if (routeId) {
-            const futureUpcomingCount = futureUpcomingCountByRoute.get(routeId) ?? 0;
-            if (futureUpcomingCount >= item.remainingEpisodes) {
-              return false;
-            }
-          }
+        } else if (typeof item.remainingEpisodes === "number" && item.remainingEpisodes <= 0) {
+          return false;
         }
+      } else if (
+        typeof item.remainingEpisodes === "number" &&
+        item.remainingEpisodes <= 0
+      ) {
+        return false;
       }
 
       if (mediaFilter !== "all" && item.mediaType !== mediaFilter) return false;
