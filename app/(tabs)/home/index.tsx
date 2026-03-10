@@ -520,11 +520,13 @@ function UpcomingAgendaPanel({
   episodes,
   todayKey,
   isWeb,
+  isLoading,
 }: {
   dateKey: string;
   episodes: UpcomingEpisode[];
   todayKey: string;
   isWeb: boolean;
+  isLoading?: boolean;
 }) {
   const date = parseLocalDate(dateKey) ?? new Date();
   const isToday = dateKey === todayKey;
@@ -565,13 +567,35 @@ function UpcomingAgendaPanel({
                 isToday ? "text-[#ffb0a4]" : "text-zinc-200"
               }`}
             >
-              {isToday ? "Current" : `${episodes.length} releases`}
+              {isLoading ? "Loading" : isToday ? "Current" : `${episodes.length} releases`}
             </Text>
           </View>
         </View>
       </View>
 
-      {episodes.length === 0 ? (
+      {isLoading ? (
+        <View className="gap-3 px-4 py-4">
+          {Array.from({ length: isWeb ? 4 : 3 }, (_, index) => (
+            <View
+              key={`agenda-loading-${index}`}
+              className="overflow-hidden rounded-[24px] border border-[#2e2026] bg-[#140f12] px-4 py-4"
+            >
+              <View className="flex-row gap-4">
+                <View className="h-[88px] w-[62px] rounded-[18px] bg-[#24191e]" />
+                <View className="flex-1 justify-between">
+                  <View className="h-3 w-24 rounded-full bg-[#24191e]" />
+                  <View className="h-5 w-4/5 rounded-full bg-[#2b1d22]" />
+                  <View className="h-3 w-2/3 rounded-full bg-[#24191e]" />
+                  <View className="flex-row gap-2">
+                    <View className="h-6 w-16 rounded-full bg-[#24191e]" />
+                    <View className="h-6 w-20 rounded-full bg-[#1d1519]" />
+                  </View>
+                </View>
+              </View>
+            </View>
+          ))}
+        </View>
+      ) : episodes.length === 0 ? (
         <View className="items-center justify-center px-6 py-12">
           <Text className="text-base font-semibold text-white">Nothing scheduled</Text>
           <Text className="mt-2 max-w-[280px] text-center text-sm leading-6 text-zinc-400">
@@ -692,6 +716,7 @@ function WebUpcomingCalendar({
   onGoToNextMonth,
   onGoToToday,
   isWide,
+  isLoading,
 }: {
   monthDate: Date;
   calendarDays: Date[];
@@ -703,10 +728,14 @@ function WebUpcomingCalendar({
   onGoToNextMonth: () => void;
   onGoToToday: () => void;
   isWide: boolean;
+  isLoading?: boolean;
 }) {
   const selectedEpisodes = episodesByDate.get(selectedDateKey) ?? [];
   const calendarWeeks = useMemo(
-    () => Array.from({ length: Math.ceil(calendarDays.length / 7) }, (_, index) => calendarDays.slice(index * 7, index * 7 + 7)),
+    () =>
+      Array.from({ length: Math.ceil(calendarDays.length / 7) }, (_, index) =>
+        calendarDays.slice(index * 7, index * 7 + 7)
+      ),
     [calendarDays]
   );
 
@@ -769,25 +798,52 @@ function WebUpcomingCalendar({
           </View>
 
           <View className="gap-0.5">
-            {calendarWeeks.map((weekDates, weekIndex) => (
-              <View key={`week-${weekIndex}`} className="flex-row items-stretch">
-                {weekDates.map((date) => {
-                  const dateKey = formatDateForApi(date);
-                  return (
-                    <View key={dateKey} className="flex-1 p-1">
-                      <WebCalendarCell
-                        date={date}
-                        monthDate={monthDate}
-                        todayKey={todayKey}
-                        selectedDateKey={selectedDateKey}
-                        episodes={episodesByDate.get(dateKey) ?? []}
-                        onSelectDate={onSelectDate}
-                      />
-                    </View>
-                  );
-                })}
-              </View>
-            ))}
+            {isLoading
+              ? Array.from({ length: 6 }, (_, weekIndex) => (
+                  <View key={`week-loading-${weekIndex}`} className="flex-row items-stretch">
+                    {Array.from({ length: 7 }, (_, dayIndex) => (
+                      <View key={`day-loading-${weekIndex}-${dayIndex}`} className="flex-1 p-1">
+                        <View className="min-h-[132px] rounded-[24px] border border-[#2b1d22] bg-[#120d10] px-3 py-3">
+                          <View className="flex-row items-start justify-between gap-2">
+                            <View>
+                              <View className="h-3 w-8 rounded-full bg-[#24191e]" />
+                              <View className="mt-2 h-8 w-10 rounded-[14px] bg-[#2b1d22]" />
+                            </View>
+                            <View className="h-6 w-8 rounded-full bg-[#24191e]" />
+                          </View>
+
+                          <View className="mt-3 gap-1.5">
+                            {Array.from({ length: 3 }, (_, previewIndex) => (
+                              <View
+                                key={`preview-loading-${weekIndex}-${dayIndex}-${previewIndex}`}
+                                className="h-[42px] rounded-2xl border border-[#24191e] bg-[#1a1316]"
+                              />
+                            ))}
+                          </View>
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+                ))
+              : calendarWeeks.map((weekDates, weekIndex) => (
+                  <View key={`week-${weekIndex}`} className="flex-row items-stretch">
+                    {weekDates.map((date) => {
+                      const dateKey = formatDateForApi(date);
+                      return (
+                        <View key={dateKey} className="flex-1 p-1">
+                          <WebCalendarCell
+                            date={date}
+                            monthDate={monthDate}
+                            todayKey={todayKey}
+                            selectedDateKey={selectedDateKey}
+                            episodes={episodesByDate.get(dateKey) ?? []}
+                            onSelectDate={onSelectDate}
+                          />
+                        </View>
+                      );
+                    })}
+                  </View>
+                ))}
           </View>
         </View>
       </View>
@@ -797,6 +853,7 @@ function WebUpcomingCalendar({
         episodes={selectedEpisodes}
         todayKey={todayKey}
         isWeb
+        isLoading={isLoading}
       />
     </View>
   );
@@ -811,6 +868,7 @@ function MobileUpcomingCalendar({
   onGoToPreviousWeek,
   onGoToNextWeek,
   onGoToToday,
+  isLoading,
 }: {
   weekStart: Date;
   selectedDateKey: string;
@@ -820,6 +878,7 @@ function MobileUpcomingCalendar({
   onGoToPreviousWeek: () => void;
   onGoToNextWeek: () => void;
   onGoToToday: () => void;
+  isLoading?: boolean;
 }) {
   const selectedEpisodes = episodesByDate.get(selectedDateKey) ?? [];
   const weekDates = useMemo(
@@ -870,44 +929,57 @@ function MobileUpcomingCalendar({
         </View>
 
         <View className="flex-row gap-2">
-          {weekDates.map((date) => {
-            const dateKey = formatDateForApi(date);
-            const isSelected = dateKey === selectedDateKey;
-            const isToday = dateKey === todayKey;
-            const hasEpisodes = (episodesByDate.get(dateKey)?.length ?? 0) > 0;
-
-            return (
-              <Pressable
-                key={dateKey}
-                onPress={() => onSelectDate(dateKey)}
-                accessibilityRole="button"
-                className={`min-w-0 flex-1 rounded-[22px] border px-1 py-3 ${
-                  isSelected
-                    ? "border-[#ff745f] bg-[#2a151a]"
-                    : isToday
-                      ? "border-[#87505a] bg-[#1d1318]"
-                      : "border-[#34252c] bg-[#141014]"
-                }`}
-                style={({ pressed }) => ({
-                  transform: [{ scale: pressed ? 0.985 : 1 }],
-                })}
-              >
-                <Text
-                  className={`text-center text-[10px] font-black uppercase tracking-[1.3px] ${
-                    isSelected ? "text-[#ffb0a4]" : "text-zinc-500"
-                  }`}
+          {isLoading
+            ? Array.from({ length: 7 }, (_, index) => (
+                <View
+                  key={`mobile-day-loading-${index}`}
+                  className="min-w-0 flex-1 rounded-[22px] border border-[#2b1d22] bg-[#120d10] px-1 py-3"
                 >
-                  {getShortWeekdayLabel(date)}
-                </Text>
-                <Text className="mt-2 text-center text-2xl font-black text-white">
-                  {date.getDate()}
-                </Text>
-                <View className="mt-2 h-3 items-center justify-center">
-                  {hasEpisodes ? <View className="h-2 w-2 rounded-full bg-[#ff9d8e]" /> : null}
+                  <View className="mx-auto h-3 w-7 rounded-full bg-[#24191e]" />
+                  <View className="mx-auto mt-2 h-8 w-8 rounded-[14px] bg-[#2b1d22]" />
+                  <View className="mt-2 h-3 items-center justify-center">
+                    <View className="h-2 w-2 rounded-full bg-[#24191e]" />
+                  </View>
                 </View>
-              </Pressable>
-            );
-          })}
+              ))
+            : weekDates.map((date) => {
+                const dateKey = formatDateForApi(date);
+                const isSelected = dateKey === selectedDateKey;
+                const isToday = dateKey === todayKey;
+                const hasEpisodes = (episodesByDate.get(dateKey)?.length ?? 0) > 0;
+
+                return (
+                  <Pressable
+                    key={dateKey}
+                    onPress={() => onSelectDate(dateKey)}
+                    accessibilityRole="button"
+                    className={`min-w-0 flex-1 rounded-[22px] border px-1 py-3 ${
+                      isSelected
+                        ? "border-[#ff745f] bg-[#2a151a]"
+                        : isToday
+                          ? "border-[#87505a] bg-[#1d1318]"
+                          : "border-[#34252c] bg-[#141014]"
+                    }`}
+                    style={({ pressed }) => ({
+                      transform: [{ scale: pressed ? 0.985 : 1 }],
+                    })}
+                  >
+                    <Text
+                      className={`text-center text-[10px] font-black uppercase tracking-[1.3px] ${
+                        isSelected ? "text-[#ffb0a4]" : "text-zinc-500"
+                      }`}
+                    >
+                      {getShortWeekdayLabel(date)}
+                    </Text>
+                    <Text className="mt-2 text-center text-2xl font-black text-white">
+                      {date.getDate()}
+                    </Text>
+                    <View className="mt-2 h-3 items-center justify-center">
+                      {hasEpisodes ? <View className="h-2 w-2 rounded-full bg-[#ff9d8e]" /> : null}
+                    </View>
+                  </Pressable>
+                );
+              })}
         </View>
       </View>
 
@@ -916,6 +988,7 @@ function MobileUpcomingCalendar({
         episodes={selectedEpisodes}
         todayKey={todayKey}
         isWeb={false}
+        isLoading={isLoading}
       />
     </View>
   );
@@ -1240,7 +1313,7 @@ export function HomeScreen() {
   }, [currentMonthDate]);
 
   const isWatchlistLoading = watchlist === undefined;
-  const isUpcomingLoading =
+  const isUpcomingContentLoading =
     activeTab === "upcoming" && (upcoming === undefined || isHydratingInitialUpcoming);
 
   const headerText =
@@ -1512,44 +1585,39 @@ export function HomeScreen() {
               </View>
 
               <View className="min-h-0 flex-1 pb-4">
-                {isUpcomingLoading ? (
-                  <View className="flex-1 items-center justify-center rounded-[28px] border border-[#563841] bg-[#0d090c]">
-                    <ActivityIndicator size="small" color="#ef4444" />
-                    <Text className="mt-3 text-sm text-zinc-400">Loading calendar...</Text>
-                  </View>
-                ) : (
-                  <ScrollView
-                    className="min-h-0 flex-1"
-                    contentContainerStyle={{ paddingBottom: 16 }}
-                    showsVerticalScrollIndicator={isWeb}
-                  >
-                    {usesMonthCalendarLayout ? (
-                      <WebUpcomingCalendar
-                        monthDate={currentMonthDate}
-                        calendarDays={webCalendarDays}
-                        episodesByDate={episodesByDate}
-                        selectedDateKey={selectedDateKey}
-                        todayKey={todayKey}
-                        onSelectDate={(dateKey) => handleSelectCalendarDate(dateKey)}
-                        onGoToPreviousMonth={goToPreviousMonth}
-                        onGoToNextMonth={goToNextMonth}
-                        onGoToToday={goToTodayCalendar}
-                        isWide={isWideCalendar}
-                      />
-                    ) : (
-                      <MobileUpcomingCalendar
-                        weekStart={currentWeekStart}
-                        selectedDateKey={selectedDateKey}
-                        todayKey={todayKey}
-                        episodesByDate={episodesByDate}
-                        onSelectDate={handleSelectCalendarDate}
-                        onGoToPreviousWeek={goToPreviousWeek}
-                        onGoToNextWeek={goToNextWeek}
-                        onGoToToday={goToTodayCalendar}
-                      />
-                    )}
-                  </ScrollView>
-                )}
+                <ScrollView
+                  className="min-h-0 flex-1"
+                  contentContainerStyle={{ paddingBottom: 16 }}
+                  showsVerticalScrollIndicator={isWeb}
+                >
+                  {usesMonthCalendarLayout ? (
+                    <WebUpcomingCalendar
+                      monthDate={currentMonthDate}
+                      calendarDays={webCalendarDays}
+                      episodesByDate={episodesByDate}
+                      selectedDateKey={selectedDateKey}
+                      todayKey={todayKey}
+                      onSelectDate={(dateKey) => handleSelectCalendarDate(dateKey)}
+                      onGoToPreviousMonth={goToPreviousMonth}
+                      onGoToNextMonth={goToNextMonth}
+                      onGoToToday={goToTodayCalendar}
+                      isWide={isWideCalendar}
+                      isLoading={isUpcomingContentLoading}
+                    />
+                  ) : (
+                    <MobileUpcomingCalendar
+                      weekStart={currentWeekStart}
+                      selectedDateKey={selectedDateKey}
+                      todayKey={todayKey}
+                      episodesByDate={episodesByDate}
+                      onSelectDate={handleSelectCalendarDate}
+                      onGoToPreviousWeek={goToPreviousWeek}
+                      onGoToNextWeek={goToNextWeek}
+                      onGoToToday={goToTodayCalendar}
+                      isLoading={isUpcomingContentLoading}
+                    />
+                  )}
+                </ScrollView>
               </View>
             </View>
           )
