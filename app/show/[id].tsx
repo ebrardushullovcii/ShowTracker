@@ -772,10 +772,12 @@ export function ShowDetailScreen() {
   const expandedSeasonsRef = useRef(expandedSeasons);
   const seasonWatchedKeysRef = useRef(seasonWatchedKeys);
   const loadingSeasonsRef = useRef<Set<number>>(new Set());
+  const seasonLoadGenerationRef = useRef(0);
   const [apiRelatedAnime, setApiRelatedAnime] = useState<AniListRelatedShow[]>([]);
   const [isLoadingRelatedAnime, setIsLoadingRelatedAnime] = useState(false);
 
   const resetLocalTrackingProgress = useCallback(() => {
+    seasonLoadGenerationRef.current += 1;
     loadingSeasonsRef.current.clear();
     setPendingOverrides({});
     setPendingEpisodeKeys({});
@@ -826,6 +828,8 @@ export function ShowDetailScreen() {
     trackingArgs
   );
   const canTrackShow = trackingArgs !== "skip";
+  const trackingLoaded = tracking !== undefined || !canTrackShow;
+  const isInWatchlist = trackingLoaded && tracking?.inWatchlist === true;
   
   // Use optimistic status if set, otherwise fall back to query result
   const activeTrackingStatus: ShowTrackingStatus = optimisticTrackingStatus ?? (
@@ -1132,7 +1136,9 @@ export function ShowDetailScreen() {
 
   // Load watched episodes for expanded seasons
   useEffect(() => {
-    if (trackingArgs === "skip" || !getWatchedEpisodesForSeasonAction) return;
+    if (trackingArgs === "skip" || !getWatchedEpisodesForSeasonAction || !isInWatchlist) {
+      return;
+    }
 
     let isCancelled = false;
     const expandedSeasonNumbers = Object.entries(expandedSeasons)
@@ -1146,11 +1152,12 @@ export function ShowDetailScreen() {
       loadingSeasonsRef.current.add(seasonNumber);
 
       void (async () => {
+        const loadGeneration = seasonLoadGenerationRef.current;
         try {
           const args = { ...trackingArgs, season: seasonNumber };
           const keys = await getWatchedEpisodesForSeasonAction(args);
 
-          if (isCancelled) {
+          if (isCancelled || seasonLoadGenerationRef.current !== loadGeneration) {
             return;
           }
           if (expandedSeasonsRef.current[seasonNumber] !== true) {
@@ -1183,7 +1190,7 @@ export function ShowDetailScreen() {
     return () => {
       isCancelled = true;
     };
-  }, [expandedSeasons, trackingArgs, getWatchedEpisodesForSeasonAction]);
+  }, [expandedSeasons, trackingArgs, getWatchedEpisodesForSeasonAction, isInWatchlist]);
 
   useEffect(() => {
     if (typeof relatedAnimeLookupId !== "number") {
@@ -1496,8 +1503,6 @@ export function ShowDetailScreen() {
 
   // Auto-expand earliest season with unwatched episodes
   // Wait for tracking data so we know which episodes are watched
-  const trackingLoaded = tracking !== undefined || !canTrackShow;
-  const isInWatchlist = trackingLoaded && tracking?.inWatchlist === true;
   const seasonProgressLoaded = watchedSeasonProgress !== undefined || !canTrackShow;
 
   useEffect(() => {
@@ -2289,6 +2294,7 @@ export function ShowDetailScreen() {
     setTrackingError(null);
 
     const seasonPayloads: { seasonNumber: number; episodes: NormalizedEpisode[] }[] = [];
+    const allEpisodeKeys: string[] = [];
 
     try {
       for (const season of seasons) {
@@ -2311,7 +2317,6 @@ export function ShowDetailScreen() {
       }
 
       // Collect all episode keys for the current season payloads
-      const allEpisodeKeys: string[] = [];
       for (const payload of seasonPayloads) {
         for (const episode of payload.episodes) {
           allEpisodeKeys.push(`${episode.seasonNumber}:${episode.episodeNumber}`);
@@ -2357,100 +2362,67 @@ export function ShowDetailScreen() {
         return next;
       });
 
-      // Run mutations in parallel with allSettled to track individual success/failure.
-      const promises = seasonPayloads.map((payload) =>
-        markSeasonWatched({
-          show: buildShowPayload(show),
-          season: payload.seasonNumber,
-          episodes: payload.episodes.map((episode) => ({
+      const result = await batchMarkEpisodesWatched({
+        show: buildShowPayload(show),
+        episodes: seasonPayloads.flatMap((payload) =>
+          payload.episodes.map((episode) => ({
+            season: episode.seasonNumber,
             episode: episode.episodeNumber,
             runtime: episode.runtime,
-          })),
-        })
-      );
+          }))
+        ),
+      });
 
-      const results = await Promise.allSettled(promises);
-
-      // Identify failed seasons
-      const failedIndices = results
-        .map((result, index) => (result.status === "rejected" ? index : -1))
-        .filter((index) => index !== -1);
-
-      if (failedIndices.length > 0) {
-        console.error("Some seasons failed to update:", failedIndices);
-        // Only revert optimistic overrides for failed seasons
-        const failedKeys: string[] = [];
-        for (const index of failedIndices) {
-          const payload = seasonPayloads[index];
-          for (const ep of payload.episodes) {
-            failedKeys.push(`${ep.seasonNumber}:${ep.episodeNumber}`);
+      setSeasonWatchedKeys((prev) => {
+        const next = { ...prev };
+        for (const payload of seasonPayloads) {
+          const seasonKeys = prev[payload.seasonNumber] ?? new Set<string>();
+          const newSeasonKeys = new Set(seasonKeys);
+          for (const episode of payload.episodes) {
+            const key = `${episode.seasonNumber}:${episode.episodeNumber}`;
+            newSeasonKeys.add(key);
           }
+          next[payload.seasonNumber] = newSeasonKeys;
         }
-        setPendingOverrides((prev) => {
-          const next = { ...prev };
-          for (const k of failedKeys) {
-            delete next[k];
-          }
-          return next;
-        });
-        setSeasonWatchedKeys((prev) => {
-          const next = { ...prev };
-          for (let index = 0; index < seasonPayloads.length; index += 1) {
-            if (failedIndices.includes(index)) {
-              continue;
-            }
+        return next;
+      });
 
-            const payload = seasonPayloads[index];
-            const seasonKeys = prev[payload.seasonNumber] ?? new Set<string>();
-            const newSeasonKeys = new Set(seasonKeys);
-            for (const episode of payload.episodes) {
-              newSeasonKeys.add(`${episode.seasonNumber}:${episode.episodeNumber}`);
-            }
-            next[payload.seasonNumber] = newSeasonKeys;
-          }
-          return next;
-        });
-        setTrackingError(
-          `Could not update ${failedIndices.length} season${failedIndices.length > 1 ? "s" : ""}. Please try again.`
-        );
-      } else {
-        // Success - update seasonWatchedKeys for all seasons
-        setSeasonWatchedKeys((prev) => {
-          const next = { ...prev };
-          for (const payload of seasonPayloads) {
-            const seasonKeys = prev[payload.seasonNumber] ?? new Set<string>();
-            const newSeasonKeys = new Set(seasonKeys);
-            for (const episode of payload.episodes) {
-              const key = `${episode.seasonNumber}:${episode.episodeNumber}`;
-              newSeasonKeys.add(key);
-            }
-            next[payload.seasonNumber] = newSeasonKeys;
-          }
-          return next;
-        });
-        
-        // Update tracking status optimistically
-        if (show) {
+      if (show) {
+        if (isTrackingStatus(result.status)) {
+          setOptimisticTrackingStatus(result.status);
+        } else {
           const changedEpisodeCount = Math.max(releasedEpisodeCount - watchedCountInPayloads, 0);
           const nextWatchedCount = totalWatchedEpisodesCount + changedEpisodeCount;
           setOptimisticTrackingStatus(
             shouldAutoCompleteShow(show, nextWatchedCount) ? "completed" : "watching"
           );
         }
+      }
 
-        if (show.mediaType === "anime") {
-          const firstPayload = seasonPayloads[0];
-          if (firstPayload) {
-            const season = seasons.find(
-              (entry) => entry.seasonNumber === firstPayload.seasonNumber
-            );
-            void maybePromptMoveToNextSeason(
-              firstPayload.seasonNumber,
-              season?.name || `Season ${firstPayload.seasonNumber}`
-            );
-          }
+      if (show.mediaType === "anime") {
+        const firstPayload = seasonPayloads[0];
+        if (firstPayload) {
+          const season = seasons.find(
+            (entry) => entry.seasonNumber === firstPayload.seasonNumber
+          );
+          void maybePromptMoveToNextSeason(
+            firstPayload.seasonNumber,
+            season?.name || `Season ${firstPayload.seasonNumber}`
+          );
         }
       }
+    } catch (mutationError) {
+      console.error("Failed to mark show watched", mutationError);
+      if (allEpisodeKeys.length > 0) {
+        setPendingOverrides((prev) => {
+          const next = { ...prev };
+          for (const k of allEpisodeKeys) {
+            delete next[k];
+          }
+          return next;
+        });
+      }
+      setTrackingError("Could not update show status.");
     } finally {
       setSeasonActionLoading((prev) => {
         const next = { ...prev };
