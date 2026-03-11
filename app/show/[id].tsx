@@ -92,6 +92,7 @@ const TERMINAL_SHOW_LIFECYCLE_STATUSES = new Set([
   "canceled",
   "cancelled",
 ]);
+const FULL_JIKAN_EPISODE_PAGE_BUDGET = 100;
 
 function isValidAnimeHomeRelationMode(value: unknown): value is AnimeHomeRelationMode {
   return value === "core_only" || value === "all_relations";
@@ -1496,6 +1497,7 @@ export function ShowDetailScreen() {
   // Auto-expand earliest season with unwatched episodes
   // Wait for tracking data so we know which episodes are watched
   const trackingLoaded = tracking !== undefined || !canTrackShow;
+  const isInWatchlist = trackingLoaded && tracking?.inWatchlist === true;
   const seasonProgressLoaded = watchedSeasonProgress !== undefined || !canTrackShow;
 
   useEffect(() => {
@@ -1612,7 +1614,10 @@ export function ShowDetailScreen() {
           let animeEpisodes: NormalizedEpisode[] = [];
           if (typeof normalized.malId === "number") {
             try {
-              animeEpisodes = await getJikanAnimeEpisodes(normalized.malId);
+              animeEpisodes = await getJikanAnimeEpisodes(
+                normalized.malId,
+                FULL_JIKAN_EPISODE_PAGE_BUDGET
+              );
             } catch (episodeError) {
               console.warn("Could not load Jikan episodes for AniList anime", episodeError);
             }
@@ -1631,7 +1636,10 @@ export function ShowDetailScreen() {
 
         const [jikanShow, jikanEpisodes] = await Promise.all([
           getJikanAnime(parsedId.externalId),
-          getJikanAnimeEpisodes(parsedId.externalId).catch(() => [] as NormalizedEpisode[]),
+          getJikanAnimeEpisodes(
+            parsedId.externalId,
+            FULL_JIKAN_EPISODE_PAGE_BUDGET
+          ).catch(() => [] as NormalizedEpisode[]),
         ]);
         if (isCancelled) return;
 
@@ -1683,7 +1691,11 @@ export function ShowDetailScreen() {
       setTrackingError("This title cannot be tracked yet.");
       return false;
     }
-    if (!tracking?.inWatchlist) {
+    if (!trackingLoaded) {
+      setTrackingError("Tracking is still loading. Please try again.");
+      return false;
+    }
+    if (!isInWatchlist) {
       return true;
     }
     if (isRemovingFromWatchlist || isSettingStatus) {
@@ -1713,6 +1725,10 @@ export function ShowDetailScreen() {
       setTrackingError("This title cannot be tracked yet.");
       return;
     }
+    if (!trackingLoaded) {
+      setTrackingError("Tracking is still loading. Please try again.");
+      return;
+    }
     if (isTogglingFavorite) {
       return;
     }
@@ -1740,10 +1756,14 @@ export function ShowDetailScreen() {
       setTrackingError("This title cannot be tracked yet.");
       return false;
     }
+    if (!trackingLoaded) {
+      setTrackingError("Tracking is still loading. Please try again.");
+      return false;
+    }
     if (isSettingStatus || isRemovingFromWatchlist) {
       return false;
     }
-    if (tracking?.inWatchlist && tracking?.status === nextStatus) {
+    if (isInWatchlist && tracking?.status === nextStatus) {
       return true;
     }
 
@@ -1752,7 +1772,7 @@ export function ShowDetailScreen() {
     setIsSettingStatus(true);
     setTrackingError(null);
     try {
-      if (!tracking?.inWatchlist && show.mediaType === "anime") {
+      if (!isInWatchlist && show.mediaType === "anime") {
         await addAnimeToWatchlistWithRelations(payload);
       }
 
@@ -1783,7 +1803,11 @@ export function ShowDetailScreen() {
       setTrackingError("This title cannot be tracked yet.");
       return;
     }
-    if (tracking?.inWatchlist) {
+    if (!trackingLoaded) {
+      setTrackingError("Tracking is still loading. Please try again.");
+      return;
+    }
+    if (isInWatchlist) {
       return;
     }
     if (isRemovingFromWatchlist || isSettingStatus) {
@@ -2369,6 +2393,23 @@ export function ShowDetailScreen() {
           }
           return next;
         });
+        setSeasonWatchedKeys((prev) => {
+          const next = { ...prev };
+          for (let index = 0; index < seasonPayloads.length; index += 1) {
+            if (failedIndices.includes(index)) {
+              continue;
+            }
+
+            const payload = seasonPayloads[index];
+            const seasonKeys = prev[payload.seasonNumber] ?? new Set<string>();
+            const newSeasonKeys = new Set(seasonKeys);
+            for (const episode of payload.episodes) {
+              newSeasonKeys.add(`${episode.seasonNumber}:${episode.episodeNumber}`);
+            }
+            next[payload.seasonNumber] = newSeasonKeys;
+          }
+          return next;
+        });
         setTrackingError(
           `Could not update ${failedIndices.length} season${failedIndices.length > 1 ? "s" : ""}. Please try again.`
         );
@@ -2927,11 +2968,12 @@ export function ShowDetailScreen() {
 
   const isFavorite = tracking?.isFavorite ?? false;
   const isWatchlistActionPending =
-    isSettingStatus || (isRemovingFromWatchlist && tracking?.inWatchlist !== false);
-  const isStatusMenuBusy = isSettingStatus || isWatchlistActionPending || isTogglingFavorite;
+    isSettingStatus || (isRemovingFromWatchlist && (trackingLoaded ? isInWatchlist : true));
+  const isStatusMenuBusy =
+    !trackingLoaded || isSettingStatus || isWatchlistActionPending || isTogglingFavorite;
   const showMediaType = show?.mediaType;
   const isFirstSavePrompt =
-    !tracking?.inWatchlist && showMediaType != null && showMediaType !== "movie";
+    trackingLoaded && !isInWatchlist && showMediaType != null && showMediaType !== "movie";
   const statusMenuOptions = isFirstSavePrompt
     ? trackingStatusOptions.filter(
         (option) => option.value === "watching" || option.value === "plan_to_watch"
@@ -2941,9 +2983,11 @@ export function ShowDetailScreen() {
     trackingStatusOptions.find((option) => option.value === activeTrackingStatusForMenu) ??
     trackingStatusOptions.find((option) => option.value === "plan_to_watch") ??
     trackingStatusOptions[0];
-  const watchlistActionLabel = isRemovingFromWatchlist && tracking?.inWatchlist !== false
+  const watchlistActionLabel = !trackingLoaded
+      ? "Loading..."
+      : isRemovingFromWatchlist && isInWatchlist
       ? "Removing..."
-      : tracking?.inWatchlist
+      : isInWatchlist
         ? "Remove from Watchlist"
         : "Add to Watchlist";
   const favoriteActionLabel = isTogglingFavorite
@@ -3094,9 +3138,11 @@ export function ShowDetailScreen() {
               <ProgressBar progress={watchProgressRatio} height={8} animated />
               <View className="mt-3 flex-row items-center justify-between">
                 <Text className="text-xs text-text-muted">
-                  {tracking?.inWatchlist
+                  {isInWatchlist
                     ? `Saved${tracking?.status ? ` · ${formatTrackingStatus(tracking.status)}` : ""}`
-                    : "Add to watchlist to track your progress"}
+                    : trackingLoaded
+                      ? "Add to watchlist to track your progress"
+                      : "Loading tracking..."}
                 </Text>
                 <Text className="text-xs font-semibold text-text-secondary">
                   {Math.round(watchProgressRatio * 100)}%
@@ -3113,7 +3159,9 @@ export function ShowDetailScreen() {
                     Tracking
                   </Text>
                   <Text className="mt-1 text-xs text-text-secondary">
-                    {tracking?.inWatchlist
+                    {!trackingLoaded
+                      ? "Loading your tracking state..."
+                      : isInWatchlist
                       ? `Current status: ${activeTrackingOption.label}`
                       : "Not in your watchlist yet."}
                   </Text>
@@ -3122,8 +3170,8 @@ export function ShowDetailScreen() {
                   </Text>
                 </View>
                 <Badge
-                  label={tracking?.inWatchlist ? activeTrackingOption.label : "Not Tracked"}
-                  variant={tracking?.inWatchlist ? "accent" : "default"}
+                  label={!trackingLoaded ? "Loading" : isInWatchlist ? activeTrackingOption.label : "Not Tracked"}
+                  variant={isInWatchlist ? "accent" : "default"}
                 />
               </View>
 
@@ -3134,7 +3182,7 @@ export function ShowDetailScreen() {
               >
                 <Pressable
                   onPress={() => {
-                    if (tracking?.inWatchlist) {
+                    if (isInWatchlist) {
                       void handleRemoveFromWatchlist();
                       return;
                     }
@@ -3155,14 +3203,14 @@ export function ShowDetailScreen() {
                     <ActivityIndicator size="small" color="#a1a1aa" />
                   ) : (
                     <Ionicons
-                      name={tracking?.inWatchlist ? "remove-circle-outline" : "add-circle-outline"}
+                      name={isInWatchlist ? "remove-circle-outline" : "add-circle-outline"}
                       size={15}
-                      color={tracking?.inWatchlist ? "#ef4444" : "#a1a1aa"}
+                      color={isInWatchlist ? "#ef4444" : "#a1a1aa"}
                     />
                   )}
                   <Text
                     className={`text-xs font-semibold uppercase tracking-wide ${
-                      tracking?.inWatchlist ? "text-primary" : "text-text-secondary"
+                      isInWatchlist ? "text-primary" : "text-text-secondary"
                     }`}
                   >
                     {watchlistActionLabel}
@@ -4075,7 +4123,9 @@ export function ShowDetailScreen() {
                 {cleanedShowTitle}
               </Text>
               <Text className="mt-2 text-sm text-text-secondary">
-                {tracking?.inWatchlist
+                {!trackingLoaded
+                  ? "Loading your current tracking state."
+                  : isInWatchlist
                   ? `Current status: ${activeTrackingOption.label}`
                   : isFirstSavePrompt
                     ? "Choose whether this should appear on Home right away or stay saved for later."
@@ -4098,7 +4148,7 @@ export function ShowDetailScreen() {
             <View className="gap-2 p-4">
               {statusMenuOptions.map((option) => {
                 const isActive =
-                  !!tracking?.inWatchlist && activeTrackingStatusForMenu === option.value;
+                  isInWatchlist && activeTrackingStatusForMenu === option.value;
                 const title =
                   isFirstSavePrompt && option.value === "watching"
                     ? "Show on Home now"
@@ -4148,7 +4198,7 @@ export function ShowDetailScreen() {
                 );
               })}
 
-              {tracking?.inWatchlist ? (
+              {isInWatchlist ? (
                 <Pressable
                   disabled={isStatusMenuBusy}
                   onPress={() => {

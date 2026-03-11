@@ -584,9 +584,14 @@ function selectHomeAnimeFranchiseRepresentative<T extends AnimeFranchiseSelectio
     }
   }
 
-  const autoTrackedDisplayable = orderedTimeline.find(
-    (entry) => isHomeFeedDisplayableEntry(entry) && entry.isAutoTracked
+  const hasManualWatchlistDisplayable = orderedTimeline.some(
+    (entry) => shouldShowHomeFeedWatchlistEntry(entry) && !entry.isAutoTracked
   );
+  const autoTrackedDisplayable = hasManualWatchlistDisplayable
+    ? undefined
+    : orderedTimeline.find(
+        (entry) => isHomeFeedDisplayableEntry(entry) && entry.isAutoTracked
+      );
   if (autoTrackedDisplayable) {
     return {
       entry: autoTrackedDisplayable,
@@ -3937,13 +3942,19 @@ export const importTrackedShows = mutation({
         watchedEpisodesCount
       );
 
-      if (normalizedImportStatus !== item.status) {
-        await ctx.db.patch(userShowId, {
-          status: normalizedImportStatus,
-          statusChangedAt: now,
+      if (normalizedImportStatus !== item.status || normalizedImportStatus === "paused") {
+        const importStatusPatch: Partial<Doc<"userShows">> = {
           completedAt: normalizedImportStatus === "completed" ? now : undefined,
           droppedAt: normalizedImportStatus === "dropped" ? now : undefined,
-        });
+          autoPausedAt: undefined,
+        };
+
+        if (normalizedImportStatus !== item.status) {
+          importStatusPatch.status = normalizedImportStatus;
+          importStatusPatch.statusChangedAt = now;
+        }
+
+        await ctx.db.patch(userShowId, importStatusPatch);
         await upsertFeedProjectionForUserShow(ctx, userShowId);
       }
 

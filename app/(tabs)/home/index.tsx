@@ -1631,6 +1631,8 @@ export function HomeScreen() {
         (item) =>
           item.mediaType === "tv" &&
           typeof item.tmdbId === "number" &&
+          item.remainingEpisodes !== null &&
+          item.remainingEpisodes > 0 &&
           tmdbAiredEpisodeCountById[item.tmdbId] === undefined &&
           (tmdbAiredLookupFailuresById[item.tmdbId] ?? 0) < 3
       ).length,
