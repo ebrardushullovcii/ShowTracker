@@ -1920,11 +1920,6 @@ export function ShowDetailScreen() {
     const seasonNumbers = Array.from(
       new Set(uniqueEpisodes.map((entry) => entry.seasonNumber))
     );
-    const addedCount = uniqueEpisodes.filter(
-      (entry) =>
-        !watchedEpisodeKeys.has(`${entry.seasonNumber}:${entry.episodeNumber}`)
-    ).length;
-
     setTrackingError(null);
     setPendingOverrides((prev) => {
       const next = { ...prev };
@@ -1949,7 +1944,7 @@ export function ShowDetailScreen() {
     });
 
     try {
-      await batchMarkEpisodesWatched({
+      const result = await batchMarkEpisodesWatched({
         show: buildShowPayload(show),
         episodes: uniqueEpisodes.map((entry) => ({
           season: entry.seasonNumber,
@@ -1976,10 +1971,8 @@ export function ShowDetailScreen() {
         return next;
       });
 
-      if (shouldAutoCompleteShow(show, totalWatchedEpisodesCount + addedCount)) {
-        setOptimisticTrackingStatus("completed");
-      } else {
-        setOptimisticTrackingStatus("watching");
+      if (isTrackingStatus(result.status)) {
+        setOptimisticTrackingStatus(result.status);
       }
 
       if (
@@ -2305,6 +2298,7 @@ export function ShowDetailScreen() {
       // Use total episodes from show data when available, otherwise fall back to released episodes count
       const totalEpisodes = show?.totalEpisodes ?? allEpisodeKeys.length;
       const isFullyWatched = watchedCountInPayloads >= totalEpisodes;
+      const currentlyWatchedEpisodeKeys = new Set(watchedEpisodeKeys);
 
       setSeasonActionLoading((prev) => {
         const next = { ...prev };
@@ -2392,7 +2386,14 @@ export function ShowDetailScreen() {
         // Update tracking status optimistically
         if (show) {
           const changedEpisodeCount = seasonPayloads.reduce(
-            (sum, payload) => sum + payload.episodes.length,
+            (sum, payload) =>
+              sum +
+              payload.episodes.reduce((payloadSum, episode) => {
+                const key = `${episode.seasonNumber}:${episode.episodeNumber}`;
+                const isCurrentlyWatched = currentlyWatchedEpisodeKeys.has(key);
+                const willBeWatched = !isFullyWatched;
+                return payloadSum + Number(isCurrentlyWatched !== willBeWatched);
+              }, 0),
             0
           );
           const nextWatchedCount = isFullyWatched
