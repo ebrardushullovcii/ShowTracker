@@ -17,7 +17,8 @@ function resolveJikanBaseUrl() {
 const jikanBaseUrl = resolveJikanBaseUrl();
 
 const cacheTtlMs = 15 * 60 * 1000;
-const MAX_JIKAN_EPISODE_PAGES = 100;
+// Default to a short crawl unless a caller explicitly opts into more pages.
+const DEFAULT_CONSERVATIVE_JIKAN_EPISODE_PAGES = 3;
 
 export type JikanAnime = {
   mal_id: number;
@@ -185,7 +186,7 @@ export async function getJikanAnimeEpisodes(
 ): Promise<NormalizedEpisode[]> {
   const safeMaxPages = Number.isFinite(maxPages)
     ? Math.max(1, Math.floor(maxPages as number))
-    : MAX_JIKAN_EPISODE_PAGES;
+    : DEFAULT_CONSERVATIVE_JIKAN_EPISODE_PAGES;
   const cacheKey = `jikan-anime-episodes:${malId}:${safeMaxPages}`;
   const cached = getCached<NormalizedEpisode[]>(cacheKey);
   if (cached) {

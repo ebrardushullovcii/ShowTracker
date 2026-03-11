@@ -1606,18 +1606,39 @@ export function HomeScreen() {
   const isWatchlistLoading = watchlist === undefined;
   const isWatchlistFutureCountsLoading =
     activeTab === "watchlist" && watchlist !== undefined && watchlistFutureUpcomingCounts === undefined;
+  const upcomingCount = upcomingGroups.reduce((sum, group) => sum + group.episodes.length, 0);
+  const visibleWatchlistItems = useMemo(
+    () => filteredWatchlist.slice(0, watchlistVisibleCount),
+    [filteredWatchlist, watchlistVisibleCount]
+  );
+  const hasMoreWatchlist = watchlistVisibleCount < filteredWatchlist.length;
+  const visibleWatchlistRows = useMemo(
+    () => chunkItems(visibleWatchlistItems, columns),
+    [columns, visibleWatchlistItems]
+  );
+  const watchlistSkeletonCount = Math.max(columns * 2, 6);
+  const watchlistSkeletonRows = useMemo(
+    () => chunkItems(Array.from({ length: watchlistSkeletonCount }, (_, index) => index), columns),
+    [columns, watchlistSkeletonCount]
+  );
+  const watchlistTailSkeletonItems = useMemo(
+    () => watchlistSkeletonRows[0] ?? Array.from({ length: columns }, (_, index) => index),
+    [columns, watchlistSkeletonRows]
+  );
   const pendingWatchlistTmdbLookups = useMemo(
     () =>
-      watchlistItems.filter(
+      visibleWatchlistItems.filter(
         (item) =>
           item.mediaType === "tv" &&
           typeof item.tmdbId === "number" &&
-          item.remainingEpisodes !== null &&
-          item.remainingEpisodes > 0 &&
           tmdbAiredEpisodeCountById[item.tmdbId] === undefined &&
           (tmdbAiredLookupFailuresById[item.tmdbId] ?? 0) < 3
       ).length,
-    [tmdbAiredEpisodeCountById, tmdbAiredLookupFailuresById, watchlistItems]
+    [
+      tmdbAiredEpisodeCountById,
+      tmdbAiredLookupFailuresById,
+      visibleWatchlistItems,
+    ]
   );
   const isWatchlistFilterSettling =
     activeTab === "watchlist" &&
@@ -1638,21 +1659,6 @@ export function HomeScreen() {
         };
 
   const watchlistCount = isWatchlistVisualLoading ? watchlistItems.length : filteredWatchlist.length;
-  const upcomingCount = upcomingGroups.reduce((sum, group) => sum + group.episodes.length, 0);
-  const visibleWatchlistItems = useMemo(
-    () => filteredWatchlist.slice(0, watchlistVisibleCount),
-    [filteredWatchlist, watchlistVisibleCount]
-  );
-  const hasMoreWatchlist = watchlistVisibleCount < filteredWatchlist.length;
-  const visibleWatchlistRows = useMemo(
-    () => chunkItems(visibleWatchlistItems, columns),
-    [columns, visibleWatchlistItems]
-  );
-  const watchlistSkeletonCount = Math.max(columns * 2, 6);
-  const watchlistSkeletonRows = useMemo(
-    () => chunkItems(Array.from({ length: watchlistSkeletonCount }, (_, index) => index), columns),
-    [columns, watchlistSkeletonCount]
-  );
 
   useEffect(() => {
     if (activeTab !== "upcoming" || !usesMonthCalendarLayout) {
@@ -1887,13 +1893,25 @@ export function HomeScreen() {
         </Pressable>
       </View>
     ) : null;
+  const watchlistSettlingFooter =
+    !isWatchlistLoading && isWatchlistFilterSettling ? (
+      <View className="gap-3 pt-3">
+        <View key="watchlist-skeleton-row-0" className="flex-row gap-3">
+          {watchlistTailSkeletonItems.map((item) => (
+            <View key={`watchlist-skeleton-${item}`} style={{ flex: 1 / columns }}>
+              <WatchlistCardSkeleton isWeb={isWeb} />
+            </View>
+          ))}
+        </View>
+      </View>
+    ) : null;
 
   return (
     <ScreenWrapper>
       <View className="flex-1" onLayout={(e) => setGridWidth(e.nativeEvent.layout.width)}>
         {gridWidth > 0 ? (
           activeTab === "watchlist" ? (
-            isWatchlistVisualLoading ? (
+            isWatchlistLoading ? (
               <ScrollView
                 className="flex-1"
                 contentContainerStyle={{ paddingBottom: 24 }}
@@ -1942,14 +1960,35 @@ export function HomeScreen() {
                       ))}
                       {row.length < columns
                         ? Array.from({ length: columns - row.length }, (_, fillerIndex) => (
-                            <View
-                              key={`watchlist-row-${rowIndex}-filler-${fillerIndex}`}
-                              style={{ flex: 1 / columns }}
-                            />
+                            isWatchlistFilterSettling &&
+                            rowIndex === visibleWatchlistRows.length - 1 ? (
+                              <View
+                                key={`watchlist-skeleton-${watchlistTailSkeletonItems[fillerIndex]}`}
+                                style={{ flex: 1 / columns }}
+                              >
+                                <WatchlistCardSkeleton isWeb />
+                              </View>
+                            ) : (
+                              <View
+                                key={`watchlist-row-${rowIndex}-filler-${fillerIndex}`}
+                                style={{ flex: 1 / columns }}
+                              />
+                            )
                           ))
                         : null}
                     </View>
                   ))}
+                  {isWatchlistFilterSettling &&
+                  (visibleWatchlistRows.length === 0 ||
+                    visibleWatchlistRows[visibleWatchlistRows.length - 1]?.length === columns) ? (
+                    <View key="watchlist-skeleton-row-0" className="flex-row gap-3">
+                      {watchlistTailSkeletonItems.map((item) => (
+                        <View key={`watchlist-skeleton-${item}`} style={{ flex: 1 / columns }}>
+                          <WatchlistCardSkeleton isWeb />
+                        </View>
+                      ))}
+                    </View>
+                  ) : null}
                 </View>
 
                 {watchlistFooter}
@@ -1967,7 +2006,7 @@ export function HomeScreen() {
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={{ paddingBottom: 24 }}
                 ListHeaderComponent={watchlistHeader}
-                ListFooterComponent={watchlistFooter}
+                ListFooterComponent={isWatchlistFilterSettling ? watchlistSettlingFooter : watchlistFooter}
               />
             )
           ) : (

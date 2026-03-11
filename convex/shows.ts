@@ -1340,8 +1340,10 @@ function computeWatchedEpisodeAggregates(
 async function refreshUserShowTrackingAggregates(
   ctx: MutationCtx,
   userId: Id<"users">,
-  showId: Id<"shows">
+  showId: Id<"shows">,
+  options: { deriveStatus?: boolean } = {}
 ) {
+  const { deriveStatus = true } = options;
   const userShow = await ctx.db
     .query("userShows")
     .withIndex("by_user_show", (q) => q.eq("userId", userId).eq("showId", showId))
@@ -1362,16 +1364,6 @@ async function refreshUserShowTrackingAggregates(
     .collect();
 
   const aggregates = computeWatchedEpisodeAggregates(watchedEpisodes, show);
-  const nextStatus = getDerivedUserShowStatusFromProgress(
-    userShow.status,
-    {
-      mediaType: show.mediaType,
-      status: show.status,
-      totalEpisodes: show.totalEpisodes,
-      totalSeasons: show.totalSeasons,
-    },
-    aggregates.watchedEpisodesCount
-  );
   const now = Date.now();
   const patch: Partial<Doc<"userShows">> = {
     watchedEpisodesCount: aggregates.watchedEpisodesCount,
@@ -1379,6 +1371,20 @@ async function refreshUserShowTrackingAggregates(
     watchedRuntimeMinutes: aggregates.watchedRuntimeMinutes,
     lastWatchedAt: aggregates.lastWatchedAt,
   };
+  let nextStatus = userShow.status;
+
+  if (deriveStatus) {
+    nextStatus = getDerivedUserShowStatusFromProgress(
+      userShow.status,
+      {
+        mediaType: show.mediaType,
+        status: show.status,
+        totalEpisodes: show.totalEpisodes,
+        totalSeasons: show.totalSeasons,
+      },
+      aggregates.watchedEpisodesCount
+    );
+  }
 
   if (nextStatus !== userShow.status) {
     patch.status = nextStatus;
@@ -1650,10 +1656,11 @@ async function findShowByLookup(
     (candidate) => extractLookupYear(candidate.firstAired) === requestedYear
   );
 
-  return pickBestLookupCandidate(
-    yearMatches.length > 0 ? yearMatches : compatibleTitleMatches,
-    mediaType
-  );
+  if (yearMatches.length === 0) {
+    return null;
+  }
+
+  return pickBestLookupCandidate(yearMatches, mediaType);
 }
 
 async function ensureShowRecordId(
@@ -3916,7 +3923,9 @@ export const importTrackedShows = mutation({
         insertedEpisodes += 1;
       }
 
-      const refreshed = await refreshUserShowTrackingAggregates(ctx, userId, showId);
+      const refreshed = await refreshUserShowTrackingAggregates(ctx, userId, showId, {
+        deriveStatus: false,
+      });
 
       const watchedEpisodesCount = Math.max(
         0,

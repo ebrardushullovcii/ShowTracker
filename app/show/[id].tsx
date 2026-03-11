@@ -2300,7 +2300,11 @@ export function ShowDetailScreen() {
           sum + Math.min(getSeasonWatchedCount(payload.seasonNumber), payload.episodes.length),
         0
       );
-      const isFullyWatched = watchedCountInPayloads >= releasedEpisodeCount;
+      const showActionEpisodeCount = totalEpisodesCount ?? releasedEpisodeCount;
+      const isFullyWatched =
+        showActionEpisodeCount > 0
+          ? totalWatchedEpisodesCount >= showActionEpisodeCount
+          : watchedCountInPayloads >= releasedEpisodeCount;
 
       if (isFullyWatched) {
         setWatchActionTarget({
