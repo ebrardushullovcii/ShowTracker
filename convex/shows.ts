@@ -517,9 +517,10 @@ function selectAnimeFranchiseRepresentative<T extends AnimeFranchiseSelectionEnt
 }
 
 function isHomeFeedDisplayableEntry(
-  entry: Pick<AnimeFranchiseSelectionEntry, "status" | "remainingEpisodes">
+  entry: Pick<WatchlistEntryLike, "status" | "remainingEpisodes">
 ) {
   return (
+    entry.remainingEpisodes != null &&
     entry.status !== "paused" &&
     entry.status !== "dropped" &&
     !isCompletedWatchlistEntry(entry)
@@ -779,7 +780,7 @@ export const getHomeFeed = query({
 
     for (const item of hydrated) {
       if (item.mediaType !== "anime") {
-        if (hasWatchlistProgress(item)) {
+        if (isHomeFeedDisplayableEntry(item) && hasWatchlistProgress(item)) {
           selectedEntries.push(item);
         }
         continue;
@@ -1201,6 +1202,10 @@ function isWatchedEpisodeWithinKnownShowBounds(
   show: ShowProgressMeta,
   entry: Pick<TrackedWatchedEpisodeLike, "season" | "episode">
 ) {
+  if (show.mediaType === "movie" && entry.season === 0 && entry.episode === 0) {
+    return true;
+  }
+
   if (
     !Number.isFinite(entry.season) ||
     entry.season < 1 ||
@@ -1964,7 +1969,7 @@ export const ensureNextMainlineAnimeEntryActive = internalMutation({
       isProjectionMainlineAnime
     );
 
-    if (!nextEntry || !nextEntry.isAutoTracked) {
+    if (!nextEntry) {
       return { activated: false, userShowId: null as Id<"userShows"> | null };
     }
 
@@ -4208,6 +4213,22 @@ export const batchMarkEpisodesWatched = mutation({
         watchHistory: [now],
       });
       addedCount += 1;
+    }
+
+    if (addedCount === 0) {
+      const currentWatchedEpisodes =
+        typeof userShow?.watchedEpisodesCount === "number"
+          ? userShow.watchedEpisodesCount
+          : computeWatchedEpisodeAggregates(watchedEpisodes, args.show).watchedEpisodesCount;
+
+      return {
+        processedCount: uniqueEpisodes.length,
+        addedCount,
+        watchedEpisodes: currentWatchedEpisodes,
+        status:
+          userShow?.status ??
+          getDerivedUserShowStatusFromProgress(null, args.show, currentWatchedEpisodes),
+      };
     }
 
     const addedEpisodesForAggregate = uniqueEpisodes

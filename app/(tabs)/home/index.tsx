@@ -14,7 +14,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { Link } from "expo-router";
 import { useAction, useQuery } from "convex/react";
-import { FlashList } from "@shopify/flash-list";
+import { FlashList, type ListRenderItem } from "@shopify/flash-list";
 import { api } from "@/convex/_generated/api";
 import { PageIntro } from "@/components/PageIntro";
 import { ScreenWrapper } from "@/components/ScreenWrapper";
@@ -64,7 +64,7 @@ const DAY_IN_MS = 1000 * 60 * 60 * 24;
 const GRID_GAP = 12;
 const INITIAL_UPCOMING_HYDRATION_TIMEOUT_MS = 8000;
 const TMDB_AIRED_LOOKUP_BATCH_SIZE = 8;
-const WATCHLIST_FUTURE_FALLBACK_DAYS = 365;
+const WATCHLIST_FUTURE_LOOKAHEAD_DAYS = 365;
 
 function estimateAiredEpisodesFromTmdb(details: TmdbShowDetails) {
   const today = new Date();
@@ -1270,7 +1270,7 @@ export function HomeScreen() {
   const [selectedDateKey, setSelectedDateKey] = useState(todayKey);
   const watchlistFutureStartDate = todayKey;
   const watchlistFutureEndDate = useMemo(
-    () => addDaysToDateString(todayKey, WATCHLIST_FUTURE_FALLBACK_DAYS),
+    () => addDaysToDateString(todayKey, WATCHLIST_FUTURE_LOOKAHEAD_DAYS),
     [todayKey]
   );
   const effectiveWidth = gridWidth || Math.max(width - 40, 0);
@@ -1326,8 +1326,8 @@ export function HomeScreen() {
         }
       : "skip"
   );
-  const watchlistFutureUpcoming = useQuery(
-    api.schedule.getUpcomingSchedule,
+  const watchlistFutureUpcomingCounts = useQuery(
+    api.schedule.getFutureUpcomingCountsForWatchlist,
     activeTab === "watchlist"
       ? {
           startDate: watchlistFutureStartDate,
@@ -1411,25 +1411,18 @@ export function HomeScreen() {
 
   const watchlistItems = useMemo(() => (watchlist ?? []) as WatchlistItem[], [watchlist]);
 
-  const watchlistFutureUpcomingGroups = useMemo(
-    () => (watchlistFutureUpcoming ?? []) as UpcomingGroup[],
-    [watchlistFutureUpcoming]
-  );
-
   const futureUpcomingCountByRoute = useMemo(() => {
     const counts = new Map<string, number>();
 
-    for (const group of watchlistFutureUpcomingGroups) {
-      for (const entry of group.episodes) {
-        if (!entry.routeId || entry.daysUntil <= 0) {
-          continue;
-        }
-        counts.set(entry.routeId, (counts.get(entry.routeId) ?? 0) + 1);
-      }
+    for (const entry of (watchlistFutureUpcomingCounts ?? []) as {
+      routeId: string;
+      futureCount: number;
+    }[]) {
+      counts.set(entry.routeId, entry.futureCount);
     }
 
     return counts;
-  }, [watchlistFutureUpcomingGroups]);
+  }, [watchlistFutureUpcomingCounts]);
 
   useEffect(() => {
     if (activeTab !== "watchlist") {
@@ -1512,7 +1505,7 @@ export function HomeScreen() {
 
   const filteredWatchlist = useMemo(() => {
     return watchlistItems.filter((item) => {
-      const routeId = getWatchlistRouteId(item);
+      const routeId = item.id;
       const futureUpcomingCount = routeId
         ? futureUpcomingCountByRoute.get(routeId) ?? 0
         : 0;
@@ -1531,7 +1524,8 @@ export function HomeScreen() {
       if (item.mediaType === "tv" && typeof item.tmdbId === "number") {
         const airedEpisodes = tmdbAiredEpisodeCountById[item.tmdbId];
         if (typeof airedEpisodes === "number") {
-          const releasedRemaining = Math.max(airedEpisodes - item.watchedEpisodes, 0);
+          const watchedEpisodes = Math.min(item.watchedEpisodes, airedEpisodes);
+          const releasedRemaining = Math.max(airedEpisodes - watchedEpisodes, 0);
           if (releasedRemaining <= 0) {
             return false;
           }
@@ -1750,8 +1744,8 @@ export function HomeScreen() {
     [currentMonthDate, usesMonthCalendarLayout]
   );
 
-  const renderWatchlistItem = useCallback(
-    ({ item, index }: { item: WatchlistItem; index: number }) => {
+  const renderWatchlistItem = useCallback<ListRenderItem<WatchlistItem>>(
+    ({ item, index }) => {
       const columnIndex = index % columns;
       const halfGap = GRID_GAP / 2;
 
@@ -1887,7 +1881,7 @@ export function HomeScreen() {
                 key={`watchlist-${columns}`}
                 data={visibleWatchlistItems}
                 keyExtractor={(item: WatchlistItem) => `${item.mediaType}-${item.id}`}
-                renderItem={renderWatchlistItem as any}
+                renderItem={renderWatchlistItem}
                 numColumns={columns}
                 ItemSeparatorComponent={() => <View style={{ height: GRID_GAP }} />}
                 onEndReached={loadMoreWatchlist}

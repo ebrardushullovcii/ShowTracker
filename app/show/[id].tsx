@@ -1857,7 +1857,7 @@ export function ShowDetailScreen() {
           if (
             activeTrackingStatus === "completed" &&
             show?.totalEpisodes &&
-            watchedEpisodeKeys.size - 1 < show.totalEpisodes
+            totalWatchedEpisodesCount - 1 < show.totalEpisodes
           ) {
             setOptimisticTrackingStatus("watching");
           }
@@ -1976,7 +1976,7 @@ export function ShowDetailScreen() {
         return next;
       });
 
-      if (shouldAutoCompleteShow(show, watchedEpisodeKeys.size + addedCount)) {
+      if (shouldAutoCompleteShow(show, totalWatchedEpisodesCount + addedCount)) {
         setOptimisticTrackingStatus("completed");
       } else {
         setOptimisticTrackingStatus("watching");

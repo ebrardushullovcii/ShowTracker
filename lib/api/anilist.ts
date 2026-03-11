@@ -272,7 +272,11 @@ async function request<T>(
       }
 
       if (response.status !== 429) {
-        if (!isLastUrl && response.status === 403) {
+        if (
+          !isLastUrl &&
+          (response.status === 403 ||
+            (response.status >= 500 && response.status < 600))
+        ) {
           break;
         }
 
