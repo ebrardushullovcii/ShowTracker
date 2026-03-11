@@ -92,6 +92,7 @@ const TERMINAL_SHOW_LIFECYCLE_STATUSES = new Set([
   "canceled",
   "cancelled",
 ]);
+const SMALL_INITIAL_EPISODE_PAGE_BUDGET = 1;
 const FULL_JIKAN_EPISODE_PAGE_BUDGET = 100;
 
 function isValidAnimeHomeRelationMode(value: unknown): value is AnimeHomeRelationMode {
@@ -773,6 +774,7 @@ export function ShowDetailScreen() {
   const seasonWatchedKeysRef = useRef(seasonWatchedKeys);
   const loadingSeasonsRef = useRef<Set<number>>(new Set());
   const seasonLoadGenerationRef = useRef(0);
+  const prevInWatchlistRef = useRef<boolean | null>(null);
   const [apiRelatedAnime, setApiRelatedAnime] = useState<AniListRelatedShow[]>([]);
   const [isLoadingRelatedAnime, setIsLoadingRelatedAnime] = useState(false);
 
@@ -856,11 +858,14 @@ export function ShowDetailScreen() {
   ]);
 
   useEffect(() => {
-    if (tracking?.inWatchlist !== false) {
-      return;
+    const currentInWatchlist =
+      typeof tracking?.inWatchlist === "boolean" ? tracking.inWatchlist : null;
+
+    if (prevInWatchlistRef.current === true && currentInWatchlist === false) {
+      resetLocalTrackingProgress();
     }
 
-    resetLocalTrackingProgress();
+    prevInWatchlistRef.current = currentInWatchlist;
   }, [resetLocalTrackingProgress, tracking?.inWatchlist]);
 
   useEffect(() => {
@@ -1621,7 +1626,7 @@ export function ShowDetailScreen() {
             try {
               animeEpisodes = await getJikanAnimeEpisodes(
                 normalized.malId,
-                FULL_JIKAN_EPISODE_PAGE_BUDGET
+                SMALL_INITIAL_EPISODE_PAGE_BUDGET
               );
             } catch (episodeError) {
               console.warn("Could not load Jikan episodes for AniList anime", episodeError);
@@ -1636,6 +1641,31 @@ export function ShowDetailScreen() {
               normalized.backdropUrl ?? normalized.posterUrl
             )
           );
+
+          if (typeof normalized.malId === "number") {
+            void getJikanAnimeEpisodes(
+              normalized.malId,
+              FULL_JIKAN_EPISODE_PAGE_BUDGET
+            )
+              .then((fullEpisodes) => {
+                if (isCancelled || fullEpisodes.length === 0) {
+                  return;
+                }
+
+                setSeasons(
+                  createAnimeSeason(
+                    normalized.totalEpisodes,
+                    fullEpisodes,
+                    normalized.backdropUrl ?? normalized.posterUrl
+                  )
+                );
+              })
+              .catch((episodeError) => {
+                if (!isCancelled) {
+                  console.warn("Could not refresh full Jikan episodes for AniList anime", episodeError);
+                }
+              });
+          }
           return;
         }
 
@@ -1643,7 +1673,7 @@ export function ShowDetailScreen() {
           getJikanAnime(parsedId.externalId),
           getJikanAnimeEpisodes(
             parsedId.externalId,
-            FULL_JIKAN_EPISODE_PAGE_BUDGET
+            SMALL_INITIAL_EPISODE_PAGE_BUDGET
           ).catch(() => [] as NormalizedEpisode[]),
         ]);
         if (isCancelled) return;
@@ -1677,6 +1707,29 @@ export function ShowDetailScreen() {
             resolvedShow.backdropUrl ?? resolvedShow.posterUrl
           )
         );
+
+        void getJikanAnimeEpisodes(
+          parsedId.externalId,
+          FULL_JIKAN_EPISODE_PAGE_BUDGET
+        )
+          .then((fullEpisodes) => {
+            if (isCancelled || fullEpisodes.length === 0) {
+              return;
+            }
+
+            setSeasons(
+              createAnimeSeason(
+                resolvedShow.totalEpisodes,
+                fullEpisodes,
+                resolvedShow.backdropUrl ?? resolvedShow.posterUrl
+              )
+            );
+          })
+          .catch((episodeError) => {
+            if (!isCancelled) {
+              console.warn("Could not refresh full Jikan episodes for MAL anime", episodeError);
+            }
+          });
       } catch (loadError) {
         if (isCancelled) return;
         console.error("Failed to load show detail", loadError);
@@ -2935,8 +2988,26 @@ export function ShowDetailScreen() {
     ? Math.min(1, clampedWatchedEpisodesCount / totalEpisodesCount)
     : 0;
 
+  const releasedEpisodeCountForShowAction = useMemo(() => {
+    let count = 0;
+
+    for (const season of seasons) {
+      const episodes = season.episodes ?? [];
+      if (episodes.length === 0) {
+        continue;
+      }
+
+      count += episodes.filter((episode) => isEpisodeReleased(episode.airDate)).length;
+    }
+
+    return count > 0 ? count : null;
+  }, [seasons]);
+
+  const showActionEpisodeCount =
+    totalEpisodesCount ?? releasedEpisodeCountForShowAction;
   const isShowFullyWatched =
-    totalEpisodesCount !== null && clampedWatchedEpisodesCount >= totalEpisodesCount;
+    showActionEpisodeCount !== null &&
+    totalWatchedEpisodesCount >= showActionEpisodeCount;
 
   const isFavorite = tracking?.isFavorite ?? false;
   const isWatchlistActionPending =
