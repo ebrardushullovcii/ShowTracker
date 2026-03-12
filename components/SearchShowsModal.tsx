@@ -1,7 +1,6 @@
 import { useMemo, useState, useCallback, useEffect } from "react";
 import {
   ActivityIndicator,
-  FlatList,
   Image,
   Modal,
   Pressable,
@@ -9,6 +8,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { FlashList } from "@shopify/flash-list";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Ionicons } from "@expo/vector-icons";
@@ -319,7 +319,7 @@ export function SearchShowsModal({ visible, onClose, listId, existingShowIds }: 
                 </Text>
               </View>
             ) : (
-              <FlatList
+              <FlashList
                 data={paginatedShows}
                 keyExtractor={(item) => item.id}
                 renderItem={renderItem}

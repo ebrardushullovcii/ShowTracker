@@ -95,6 +95,13 @@ const TERMINAL_SHOW_LIFECYCLE_STATUSES = new Set([
 const SMALL_INITIAL_EPISODE_PAGE_BUDGET = 1;
 const FULL_JIKAN_EPISODE_PAGE_BUDGET = 100;
 
+function shouldRefreshFullAnimeEpisodes(
+  totalEpisodes: number | null | undefined,
+  loadedEpisodes: NormalizedEpisode[]
+) {
+  return typeof totalEpisodes !== "number" || loadedEpisodes.length < totalEpisodes;
+}
+
 function isValidAnimeHomeRelationMode(value: unknown): value is AnimeHomeRelationMode {
   return value === "core_only" || value === "all_relations";
 }
@@ -1642,7 +1649,10 @@ export function ShowDetailScreen() {
             )
           );
 
-          if (typeof normalized.malId === "number") {
+          if (
+            typeof normalized.malId === "number" &&
+            shouldRefreshFullAnimeEpisodes(normalized.totalEpisodes, animeEpisodes)
+          ) {
             void getJikanAnimeEpisodes(
               normalized.malId,
               FULL_JIKAN_EPISODE_PAGE_BUDGET
@@ -1708,28 +1718,30 @@ export function ShowDetailScreen() {
           )
         );
 
-        void getJikanAnimeEpisodes(
-          parsedId.externalId,
-          FULL_JIKAN_EPISODE_PAGE_BUDGET
-        )
-          .then((fullEpisodes) => {
-            if (isCancelled || fullEpisodes.length === 0) {
-              return;
-            }
+        if (shouldRefreshFullAnimeEpisodes(resolvedShow.totalEpisodes, jikanEpisodes)) {
+          void getJikanAnimeEpisodes(
+            parsedId.externalId,
+            FULL_JIKAN_EPISODE_PAGE_BUDGET
+          )
+            .then((fullEpisodes) => {
+              if (isCancelled || fullEpisodes.length === 0) {
+                return;
+              }
 
-            setSeasons(
-              createAnimeSeason(
-                resolvedShow.totalEpisodes,
-                fullEpisodes,
-                resolvedShow.backdropUrl ?? resolvedShow.posterUrl
-              )
-            );
-          })
-          .catch((episodeError) => {
-            if (!isCancelled) {
-              console.warn("Could not refresh full Jikan episodes for MAL anime", episodeError);
-            }
-          });
+              setSeasons(
+                createAnimeSeason(
+                  resolvedShow.totalEpisodes,
+                  fullEpisodes,
+                  resolvedShow.backdropUrl ?? resolvedShow.posterUrl
+                )
+              );
+            })
+            .catch((episodeError) => {
+              if (!isCancelled) {
+                console.warn("Could not refresh full Jikan episodes for MAL anime", episodeError);
+              }
+            });
+        }
       } catch (loadError) {
         if (isCancelled) return;
         console.error("Failed to load show detail", loadError);
@@ -2440,16 +2452,14 @@ export function ShowDetailScreen() {
         return next;
       });
 
-      if (show) {
-        if (isTrackingStatus(result.status)) {
-          setOptimisticTrackingStatus(result.status);
-        } else {
-          const changedEpisodeCount = Math.max(releasedEpisodeCount - watchedCountInPayloads, 0);
-          const nextWatchedCount = totalWatchedEpisodesCount + changedEpisodeCount;
-          setOptimisticTrackingStatus(
-            shouldAutoCompleteShow(show, nextWatchedCount) ? "completed" : "watching"
-          );
-        }
+      if (isTrackingStatus(result.status)) {
+        setOptimisticTrackingStatus(result.status);
+      } else {
+        const changedEpisodeCount = Math.max(releasedEpisodeCount - watchedCountInPayloads, 0);
+        const nextWatchedCount = totalWatchedEpisodesCount + changedEpisodeCount;
+        setOptimisticTrackingStatus(
+          shouldAutoCompleteShow(show, nextWatchedCount) ? "completed" : "watching"
+        );
       }
 
       if (show.mediaType === "anime") {
