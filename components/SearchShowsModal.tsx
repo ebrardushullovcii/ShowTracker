@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback, useEffect } from "react";
+import { useMemo, useState, useCallback, useEffect, useRef } from "react";
 import {
   ActivityIndicator,
   Image,
@@ -114,6 +114,7 @@ export function SearchShowsModal({ visible, onClose, listId, existingShowIds }: 
   const [addError, setAddError] = useState<string | null>(null);
   const [visibleCount, setVisibleCount] = useState(ITEMS_PER_PAGE);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const isMomentumLatchRef = useRef(false);
   const debouncedQuery = useDebouncedValue(query, 350);
 
   const watchlist = useQuery(api.shows.getUserWatchlistShows);
@@ -147,12 +148,19 @@ export function SearchShowsModal({ visible, onClose, listId, existingShowIds }: 
   const isLoading = watchlist === undefined;
 
   useEffect(() => {
-    if (!visible) {
+    if (visible === false) {
+      setQuery("");
+      setAddError(null);
+      setAddingShowId(null);
+      setVisibleCount(ITEMS_PER_PAGE);
+      setIsLoadingMore(false);
+      isMomentumLatchRef.current = false;
       return;
     }
 
     setVisibleCount(ITEMS_PER_PAGE);
     setIsLoadingMore(false);
+    isMomentumLatchRef.current = false;
   }, [debouncedQuery, visible]);
 
   const handleAddShow = useCallback(async (show: WatchlistShow) => {
@@ -170,10 +178,11 @@ export function SearchShowsModal({ visible, onClose, listId, existingShowIds }: 
   }, [listId, addToList]);
 
   const handleLoadMore = useCallback(() => {
-    if (!hasMore || isLoading || isLoadingMore) {
+    if (!hasMore || isLoading || isLoadingMore || isMomentumLatchRef.current) {
       return;
     }
 
+    isMomentumLatchRef.current = true;
     setIsLoadingMore(true);
     setVisibleCount((prev) => Math.min(prev + ITEMS_PER_PAGE, filteredShows.length));
   }, [filteredShows.length, hasMore, isLoading, isLoadingMore]);
@@ -183,18 +192,20 @@ export function SearchShowsModal({ visible, onClose, listId, existingShowIds }: 
       return;
     }
 
-    const timer = setTimeout(() => {
-      setIsLoadingMore(false);
-    }, 120);
+    setIsLoadingMore(false);
+  }, [isLoadingMore, paginatedShows.length]);
 
-    return () => clearTimeout(timer);
-  }, [isLoadingMore]);
+  const handleMomentumScrollBegin = useCallback(() => {
+    isMomentumLatchRef.current = false;
+  }, []);
 
   const handleClose = () => {
     setQuery("");
     setVisibleCount(ITEMS_PER_PAGE);
     setIsLoadingMore(false);
     setAddError(null);
+    setAddingShowId(null);
+    isMomentumLatchRef.current = false;
     onClose();
   };
 
@@ -326,6 +337,7 @@ export function SearchShowsModal({ visible, onClose, listId, existingShowIds }: 
                 ListFooterComponent={renderFooter}
                 onEndReached={handleLoadMore}
                 onEndReachedThreshold={0.35}
+                onMomentumScrollBegin={handleMomentumScrollBegin}
                 contentContainerStyle={{ padding: 16 }}
                 showsVerticalScrollIndicator={false}
               />

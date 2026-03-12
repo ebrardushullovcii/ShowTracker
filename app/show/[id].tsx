@@ -25,7 +25,11 @@ import {
   getAniListMediaByMalId,
   type AniListRelatedShow,
 } from "@/lib/api/anilist";
-import { getJikanAnime, getJikanAnimeEpisodes } from "@/lib/api/jikan";
+import {
+  getJikanAnime,
+  getJikanAnimeEpisodes,
+  getJikanAnimeEpisodesPage,
+} from "@/lib/api/jikan";
 import {
   normalizeTmdbSeason,
   normalizeTmdbShowDetails,
@@ -96,10 +100,14 @@ const SMALL_INITIAL_EPISODE_PAGE_BUDGET = 1;
 const FULL_JIKAN_EPISODE_PAGE_BUDGET = 100;
 
 function shouldRefreshFullAnimeEpisodes(
+  page1HasNext: boolean,
   totalEpisodes: number | null | undefined,
   loadedEpisodes: NormalizedEpisode[]
 ) {
-  return typeof totalEpisodes !== "number" || loadedEpisodes.length < totalEpisodes;
+  return (
+    page1HasNext ||
+    (typeof totalEpisodes === "number" && loadedEpisodes.length < totalEpisodes)
+  );
 }
 
 function isValidAnimeHomeRelationMode(value: unknown): value is AnimeHomeRelationMode {
@@ -1629,12 +1637,15 @@ export function ShowDetailScreen() {
           }
 
           let animeEpisodes: NormalizedEpisode[] = [];
+          let animePage1HasNext = false;
           if (typeof normalized.malId === "number") {
             try {
-              animeEpisodes = await getJikanAnimeEpisodes(
+              const page1 = await getJikanAnimeEpisodesPage(
                 normalized.malId,
                 SMALL_INITIAL_EPISODE_PAGE_BUDGET
               );
+              animeEpisodes = page1.episodes;
+              animePage1HasNext = page1.hasNextPage;
             } catch (episodeError) {
               console.warn("Could not load Jikan episodes for AniList anime", episodeError);
             }
@@ -1651,7 +1662,11 @@ export function ShowDetailScreen() {
 
           if (
             typeof normalized.malId === "number" &&
-            shouldRefreshFullAnimeEpisodes(normalized.totalEpisodes, animeEpisodes)
+            shouldRefreshFullAnimeEpisodes(
+              animePage1HasNext,
+              normalized.totalEpisodes,
+              animeEpisodes
+            )
           ) {
             void getJikanAnimeEpisodes(
               normalized.malId,
@@ -1679,14 +1694,18 @@ export function ShowDetailScreen() {
           return;
         }
 
-        const [jikanShow, jikanEpisodes] = await Promise.all([
+        const [jikanShow, jikanPage1] = await Promise.all([
           getJikanAnime(parsedId.externalId),
-          getJikanAnimeEpisodes(
+          getJikanAnimeEpisodesPage(
             parsedId.externalId,
             SMALL_INITIAL_EPISODE_PAGE_BUDGET
-          ).catch(() => [] as NormalizedEpisode[]),
+          ).catch(() => ({
+            episodes: [] as NormalizedEpisode[],
+            hasNextPage: false,
+          })),
         ]);
         if (isCancelled) return;
+        const jikanEpisodes = jikanPage1.episodes;
 
         let resolvedShow = jikanShow;
         try {
@@ -1718,7 +1737,13 @@ export function ShowDetailScreen() {
           )
         );
 
-        if (shouldRefreshFullAnimeEpisodes(resolvedShow.totalEpisodes, jikanEpisodes)) {
+        if (
+          shouldRefreshFullAnimeEpisodes(
+            jikanPage1.hasNextPage,
+            resolvedShow.totalEpisodes,
+            jikanEpisodes
+          )
+        ) {
           void getJikanAnimeEpisodes(
             parsedId.externalId,
             FULL_JIKAN_EPISODE_PAGE_BUDGET
