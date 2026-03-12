@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback, useEffect, useRef } from "react";
+import { useMemo, useState, useCallback, useEffect } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -114,7 +114,6 @@ export function SearchShowsModal({ visible, onClose, listId, existingShowIds }: 
   const [addError, setAddError] = useState<string | null>(null);
   const [visibleCount, setVisibleCount] = useState(ITEMS_PER_PAGE);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const endReachedDuringMomentumRef = useRef(false);
   const debouncedQuery = useDebouncedValue(query, 350);
 
   const watchlist = useQuery(api.shows.getUserWatchlistShows);
@@ -145,6 +144,7 @@ export function SearchShowsModal({ visible, onClose, listId, existingShowIds }: 
   }, [filteredShows, visibleCount]);
 
   const hasMore = paginatedShows.length < filteredShows.length;
+  const isLoading = watchlist === undefined;
 
   useEffect(() => {
     if (!visible) {
@@ -153,7 +153,6 @@ export function SearchShowsModal({ visible, onClose, listId, existingShowIds }: 
 
     setVisibleCount(ITEMS_PER_PAGE);
     setIsLoadingMore(false);
-    endReachedDuringMomentumRef.current = false;
   }, [debouncedQuery, visible]);
 
   const handleAddShow = useCallback(async (show: WatchlistShow) => {
@@ -171,14 +170,13 @@ export function SearchShowsModal({ visible, onClose, listId, existingShowIds }: 
   }, [listId, addToList]);
 
   const handleLoadMore = useCallback(() => {
-    if (!hasMore || isLoading) {
+    if (!hasMore || isLoading || isLoadingMore) {
       return;
     }
 
     setIsLoadingMore(true);
     setVisibleCount((prev) => Math.min(prev + ITEMS_PER_PAGE, filteredShows.length));
-    endReachedDuringMomentumRef.current = true;
-  }, [filteredShows.length, hasMore, isLoading]);
+  }, [filteredShows.length, hasMore, isLoading, isLoadingMore]);
 
   useEffect(() => {
     if (!isLoadingMore) {
@@ -196,12 +194,9 @@ export function SearchShowsModal({ visible, onClose, listId, existingShowIds }: 
     setQuery("");
     setVisibleCount(ITEMS_PER_PAGE);
     setIsLoadingMore(false);
-    endReachedDuringMomentumRef.current = false;
     setAddError(null);
     onClose();
   };
-
-  const isLoading = watchlist === undefined;
 
   const renderItem = useCallback(({ item }: { item: WatchlistShow }) => {
     const isAlreadyInList = existingShowIdsSet.has(item.id);
@@ -329,16 +324,8 @@ export function SearchShowsModal({ visible, onClose, listId, existingShowIds }: 
                 keyExtractor={(item) => item.id}
                 renderItem={renderItem}
                 ListFooterComponent={renderFooter}
-                onEndReached={() => {
-                  if (endReachedDuringMomentumRef.current) {
-                    return;
-                  }
-                  handleLoadMore();
-                }}
+                onEndReached={handleLoadMore}
                 onEndReachedThreshold={0.35}
-                onMomentumScrollBegin={() => {
-                  endReachedDuringMomentumRef.current = false;
-                }}
                 contentContainerStyle={{ padding: 16 }}
                 showsVerticalScrollIndicator={false}
               />
