@@ -1612,13 +1612,6 @@ export function HomeScreen() {
     [filteredWatchlist, watchlistVisibleCount]
   );
   const hasMoreWatchlist = watchlistVisibleCount < filteredWatchlist.length;
-<<<<<<< HEAD
-  const visibleWatchlistRows = useMemo(
-    () => chunkItems(visibleWatchlistItems, columns),
-    [columns, visibleWatchlistItems]
-  );
-=======
->>>>>>> origin/main
   const watchlistSkeletonCount = Math.max(columns * 2, 6);
   const watchlistSkeletonRows = useMemo(
     () => chunkItems(Array.from({ length: watchlistSkeletonCount }, (_, index) => index), columns),
@@ -1936,7 +1929,6 @@ export function HomeScreen() {
         {gridWidth > 0 ? (
           activeTab === "watchlist" ? (
             isWatchlistLoading ? (
-<<<<<<< HEAD
               <ScrollView
                 className="flex-1"
                 contentContainerStyle={{ paddingBottom: 24 }}
@@ -1965,8 +1957,6 @@ export function HomeScreen() {
                 </View>
               </ScrollView>
             ) : isWeb ? (
-=======
->>>>>>> origin/main
               <ScrollView
                 className="flex-1"
                 contentContainerStyle={{ paddingBottom: 24 }}
@@ -2016,11 +2006,7 @@ export function HomeScreen() {
                       {row.length < columns
                         ? Array.from({ length: columns - row.length }, (_, fillerIndex) => (
                             isWatchlistFilterSettling &&
-<<<<<<< HEAD
-                            rowIndex === visibleWatchlistRows.length - 1 ? (
-=======
                             rowIndex === displayWatchlistRows.length - 1 ? (
->>>>>>> origin/main
                               <View
                                 key={`watchlist-skeleton-${watchlistTailSkeletonItems[fillerIndex]}`}
                                 style={{ flex: 1 / columns }}
@@ -2038,13 +2024,8 @@ export function HomeScreen() {
                     </View>
                   ))}
                   {isWatchlistFilterSettling &&
-<<<<<<< HEAD
-                  (visibleWatchlistRows.length === 0 ||
-                    visibleWatchlistRows[visibleWatchlistRows.length - 1]?.length === columns) ? (
-=======
                   (displayWatchlistRows.length === 0 ||
                     displayWatchlistRows[displayWatchlistRows.length - 1]?.length === columns) ? (
->>>>>>> origin/main
                     <View key="watchlist-skeleton-row-0" className="flex-row gap-3">
                       {watchlistTailSkeletonItems.map((item) => (
                         <View key={`watchlist-skeleton-${item}`} style={{ flex: 1 / columns }}>
