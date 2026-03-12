@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback } from "react";
+import { useMemo, useState, useCallback, useEffect, useRef } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -30,7 +30,7 @@ interface WatchlistShow {
   status: string;
 }
 
-const ITEMS_PER_PAGE = 20;
+const ITEMS_PER_PAGE = 40;
 
 function ShowItemRow({
   show,
@@ -113,6 +113,8 @@ export function SearchShowsModal({ visible, onClose, listId, existingShowIds }: 
   const [addingShowId, setAddingShowId] = useState<string | null>(null);
   const [addError, setAddError] = useState<string | null>(null);
   const [visibleCount, setVisibleCount] = useState(ITEMS_PER_PAGE);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const endReachedDuringMomentumRef = useRef(false);
   const debouncedQuery = useDebouncedValue(query, 350);
 
   const watchlist = useQuery(api.shows.getUserWatchlistShows);
@@ -144,6 +146,16 @@ export function SearchShowsModal({ visible, onClose, listId, existingShowIds }: 
 
   const hasMore = paginatedShows.length < filteredShows.length;
 
+  useEffect(() => {
+    if (!visible) {
+      return;
+    }
+
+    setVisibleCount(ITEMS_PER_PAGE);
+    setIsLoadingMore(false);
+    endReachedDuringMomentumRef.current = false;
+  }, [debouncedQuery, visible]);
+
   const handleAddShow = useCallback(async (show: WatchlistShow) => {
     setAddError(null);
     setAddingShowId(show.id);
@@ -159,14 +171,32 @@ export function SearchShowsModal({ visible, onClose, listId, existingShowIds }: 
   }, [listId, addToList]);
 
   const handleLoadMore = useCallback(() => {
-    if (hasMore) {
-      setVisibleCount((prev) => prev + ITEMS_PER_PAGE);
+    if (!hasMore || isLoading) {
+      return;
     }
-  }, [hasMore]);
+
+    setIsLoadingMore(true);
+    setVisibleCount((prev) => Math.min(prev + ITEMS_PER_PAGE, filteredShows.length));
+    endReachedDuringMomentumRef.current = true;
+  }, [filteredShows.length, hasMore, isLoading]);
+
+  useEffect(() => {
+    if (!isLoadingMore) {
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      setIsLoadingMore(false);
+    }, 120);
+
+    return () => clearTimeout(timer);
+  }, [isLoadingMore]);
 
   const handleClose = () => {
     setQuery("");
     setVisibleCount(ITEMS_PER_PAGE);
+    setIsLoadingMore(false);
+    endReachedDuringMomentumRef.current = false;
     setAddError(null);
     onClose();
   };
@@ -188,16 +218,17 @@ export function SearchShowsModal({ visible, onClose, listId, existingShowIds }: 
   }, [existingShowIdsSet, addingShowId, handleAddShow]);
 
   const renderFooter = () => {
-    if (!hasMore) return null;
+    if (!hasMore && !isLoadingMore) return null;
     return (
-      <Pressable
-        onPress={handleLoadMore}
-        className="items-center justify-center py-4"
-      >
-        <Text className="text-sm text-primary font-medium">
-          Load more ({filteredShows.length - paginatedShows.length} remaining)
-        </Text>
-      </Pressable>
+      <View className="items-center justify-center py-4">
+        {isLoadingMore ? (
+          <ActivityIndicator size="small" color="#ef4444" />
+        ) : hasMore ? (
+          <Text className="text-xs font-medium text-text-secondary">
+            Scroll for more ({filteredShows.length - paginatedShows.length} remaining)
+          </Text>
+        ) : null}
+      </View>
     );
   };
 
@@ -298,6 +329,16 @@ export function SearchShowsModal({ visible, onClose, listId, existingShowIds }: 
                 keyExtractor={(item) => item.id}
                 renderItem={renderItem}
                 ListFooterComponent={renderFooter}
+                onEndReached={() => {
+                  if (endReachedDuringMomentumRef.current) {
+                    return;
+                  }
+                  handleLoadMore();
+                }}
+                onEndReachedThreshold={0.35}
+                onMomentumScrollBegin={() => {
+                  endReachedDuringMomentumRef.current = false;
+                }}
                 contentContainerStyle={{ padding: 16 }}
                 showsVerticalScrollIndicator={false}
               />
