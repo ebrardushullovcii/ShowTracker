@@ -96,8 +96,8 @@ const TERMINAL_SHOW_LIFECYCLE_STATUSES = new Set([
   "canceled",
   "cancelled",
 ]);
-const SMALL_INITIAL_EPISODE_PAGE_BUDGET = 1;
 const FULL_JIKAN_EPISODE_PAGE_BUDGET = 100;
+const FIRST_EPISODE_PAGE = 1;
 
 function shouldRefreshFullAnimeEpisodes(
   page1HasNext: boolean,
@@ -1642,7 +1642,7 @@ export function ShowDetailScreen() {
             try {
               const page1 = await getJikanAnimeEpisodesPage(
                 normalized.malId,
-                SMALL_INITIAL_EPISODE_PAGE_BUDGET
+                FIRST_EPISODE_PAGE
               );
               animeEpisodes = page1.episodes;
               animePage1HasNext = page1.hasNextPage;
@@ -1698,7 +1698,7 @@ export function ShowDetailScreen() {
           getJikanAnime(parsedId.externalId),
           getJikanAnimeEpisodesPage(
             parsedId.externalId,
-            SMALL_INITIAL_EPISODE_PAGE_BUDGET
+            FIRST_EPISODE_PAGE
           ).catch(() => ({
             episodes: [] as NormalizedEpisode[],
             hasNextPage: false,

@@ -1,5 +1,9 @@
 import { getCached, setCached } from "@/lib/api/cache";
-import type { NormalizedEpisode, NormalizedShow } from "@/lib/api/types";
+import type {
+  JikanAnimeEpisodesPage,
+  NormalizedEpisode,
+  NormalizedShow,
+} from "@/lib/api/types";
 import {
   normalizeJikanAnime,
   parseJikanDurationToMinutes,
@@ -73,11 +77,6 @@ type JikanAnimeEpisodesResponse = {
     last_visible_page?: number;
     current_page?: number;
   };
-};
-
-type JikanAnimeEpisodesPage = {
-  episodes: NormalizedEpisode[];
-  hasNextPage: boolean;
 };
 
 type JikanAnimeRelationsResponse = {
