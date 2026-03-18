@@ -18,11 +18,7 @@ Use this skill when the user:
 - Wants to search for tools, templates, or workflows
 - Mentions they wish they had help with a specific domain (design, testing, deployment, etc.)
 
-## Two Skill Ecosystems
-
-There are two skill ecosystems you can search:
-
-### 1. Skills.sh (Vercel)
+## What is the Skills CLI?
 
 The Skills CLI (`npx skills`) is the package manager for the open agent skills ecosystem. Skills are modular packages that extend agent capabilities with specialized knowledge, workflows, and tools.
 
@@ -34,19 +30,6 @@ The Skills CLI (`npx skills`) is the package manager for the open agent skills e
 - `npx skills update` - Update all installed skills
 
 **Browse skills at:** https://skills.sh/
-
-### 2. ClawHub (OpenClaw)
-
-ClawHub is the public skills registry for OpenClaw. Use the `clawhub` CLI to search and install OpenClaw-specific skills.
-
-**Key commands:**
-
-- `clawhub search [query]` - Search for OpenClaw skills
-- `clawhub install <skill-slug>` - Install a skill
-- `clawhub update --all` - Update all installed skills
-- `clawhub list` - List installed skills
-
-**Browse skills at:** https://clawhub.ai/
 
 ## How to Help Users Find Skills
 
@@ -60,7 +43,7 @@ When a user asks for help with something, identify:
 
 ### Step 2: Search for Skills
 
-**For Skills.sh (Vercel agents like Codex, Claude Code, Pi):**
+Run the find command with a relevant query:
 
 ```bash
 npx skills find [query]
@@ -79,23 +62,6 @@ Install with npx skills add <owner/repo@skill>
 
 vercel-labs/agent-skills@vercel-react-best-practices
 └ https://skills.sh/vercel-labs/agent-skills/vercel-react-best-practices
-```
-
-**For ClawHub (OpenClaw):**
-
-```bash
-clawhub search [query]
-```
-
-For example:
-
-- User asks "find a browser automation skill" → `clawhub search browser`
-- User asks "I need a weather skill" → `clawhub search weather`
-
-The command will return results with install commands like:
-
-```
-clawhub install <skill-name>
 ```
 
 ### Step 3: Present Options to the User
@@ -147,13 +113,6 @@ When searching, consider these common categories:
 1. **Use specific keywords**: "react testing" is better than just "testing"
 2. **Try alternative terms**: If "deploy" doesn't work, try "deployment" or "ci-cd"
 3. **Check popular sources**: Many skills come from `vercel-labs/agent-skills` or `ComposioHQ/awesome-claude-skills`
-
-## Which Ecosystem to Use?
-
-- **Skills.sh**: For Codex, Claude Code, Pi, and other Vercel-compatible agents
-- **ClawHub**: For OpenClaw-specific skills (native OpenClaw tools, integrations)
-
-Search both if unsure! OpenClaw can use skills from either ecosystem.
 
 ## When No Skills Are Found
 
