@@ -584,9 +584,14 @@ function selectHomeAnimeFranchiseRepresentative<T extends AnimeFranchiseSelectio
     }
   }
 
-  const autoTrackedDisplayable = orderedTimeline.find(
-    (entry) => isHomeFeedDisplayableEntry(entry) && entry.isAutoTracked
+  const hasManualWatchlistDisplayable = orderedTimeline.some(
+    (entry) => shouldShowHomeFeedWatchlistEntry(entry) && !entry.isAutoTracked
   );
+  const autoTrackedDisplayable = hasManualWatchlistDisplayable
+    ? undefined
+    : orderedTimeline.find(
+        (entry) => isHomeFeedDisplayableEntry(entry) && entry.isAutoTracked
+      );
   if (autoTrackedDisplayable) {
     return {
       entry: autoTrackedDisplayable,
@@ -1340,8 +1345,10 @@ function computeWatchedEpisodeAggregates(
 async function refreshUserShowTrackingAggregates(
   ctx: MutationCtx,
   userId: Id<"users">,
-  showId: Id<"shows">
+  showId: Id<"shows">,
+  options: { deriveStatus?: boolean } = {}
 ) {
+  const { deriveStatus = true } = options;
   const userShow = await ctx.db
     .query("userShows")
     .withIndex("by_user_show", (q) => q.eq("userId", userId).eq("showId", showId))
@@ -1362,16 +1369,6 @@ async function refreshUserShowTrackingAggregates(
     .collect();
 
   const aggregates = computeWatchedEpisodeAggregates(watchedEpisodes, show);
-  const nextStatus = getDerivedUserShowStatusFromProgress(
-    userShow.status,
-    {
-      mediaType: show.mediaType,
-      status: show.status,
-      totalEpisodes: show.totalEpisodes,
-      totalSeasons: show.totalSeasons,
-    },
-    aggregates.watchedEpisodesCount
-  );
   const now = Date.now();
   const patch: Partial<Doc<"userShows">> = {
     watchedEpisodesCount: aggregates.watchedEpisodesCount,
@@ -1379,6 +1376,20 @@ async function refreshUserShowTrackingAggregates(
     watchedRuntimeMinutes: aggregates.watchedRuntimeMinutes,
     lastWatchedAt: aggregates.lastWatchedAt,
   };
+  let nextStatus = userShow.status;
+
+  if (deriveStatus) {
+    nextStatus = getDerivedUserShowStatusFromProgress(
+      userShow.status,
+      {
+        mediaType: show.mediaType,
+        status: show.status,
+        totalEpisodes: show.totalEpisodes,
+        totalSeasons: show.totalSeasons,
+      },
+      aggregates.watchedEpisodesCount
+    );
+  }
 
   if (nextStatus !== userShow.status) {
     patch.status = nextStatus;
@@ -1493,30 +1504,50 @@ function hasConflictingLookupIdentity(
     imdbId?: string;
   }
 ) {
-  if (typeof args.tmdbId === "number" && typeof candidate.tmdbId === "number") {
-    return candidate.tmdbId !== args.tmdbId;
+  if (
+    typeof args.tmdbId === "number" &&
+    typeof candidate.tmdbId === "number" &&
+    candidate.tmdbId !== args.tmdbId
+  ) {
+    return true;
   }
 
-  if (typeof args.tvdbId === "number" && typeof candidate.tvdbId === "number") {
-    return candidate.tvdbId !== args.tvdbId;
+  if (
+    typeof args.tvdbId === "number" &&
+    typeof candidate.tvdbId === "number" &&
+    candidate.tvdbId !== args.tvdbId
+  ) {
+    return true;
   }
 
-  if (typeof args.anilistId === "number" && typeof candidate.anilistId === "number") {
-    return candidate.anilistId !== args.anilistId;
+  if (
+    typeof args.anilistId === "number" &&
+    typeof candidate.anilistId === "number" &&
+    candidate.anilistId !== args.anilistId
+  ) {
+    return true;
   }
 
-  if (typeof args.malId === "number" && typeof candidate.malId === "number") {
-    return candidate.malId !== args.malId;
+  if (
+    typeof args.malId === "number" &&
+    typeof candidate.malId === "number" &&
+    candidate.malId !== args.malId
+  ) {
+    return true;
   }
 
-  if (typeof args.tvmazeId === "number" && typeof candidate.tvmazeId === "number") {
-    return candidate.tvmazeId !== args.tvmazeId;
+  if (
+    typeof args.tvmazeId === "number" &&
+    typeof candidate.tvmazeId === "number" &&
+    candidate.tvmazeId !== args.tvmazeId
+  ) {
+    return true;
   }
 
   const requestedImdbId = args.imdbId?.trim().toLowerCase();
   const candidateImdbId = candidate.imdbId?.trim().toLowerCase();
-  if (requestedImdbId && candidateImdbId) {
-    return candidateImdbId !== requestedImdbId;
+  if (requestedImdbId && candidateImdbId && candidateImdbId !== requestedImdbId) {
+    return true;
   }
 
   return false;
@@ -1650,10 +1681,11 @@ async function findShowByLookup(
     (candidate) => extractLookupYear(candidate.firstAired) === requestedYear
   );
 
-  return pickBestLookupCandidate(
-    yearMatches.length > 0 ? yearMatches : compatibleTitleMatches,
-    mediaType
-  );
+  if (yearMatches.length === 0) {
+    return null;
+  }
+
+  return pickBestLookupCandidate(yearMatches, mediaType);
 }
 
 async function ensureShowRecordId(
@@ -3916,7 +3948,9 @@ export const importTrackedShows = mutation({
         insertedEpisodes += 1;
       }
 
-      const refreshed = await refreshUserShowTrackingAggregates(ctx, userId, showId);
+      const refreshed = await refreshUserShowTrackingAggregates(ctx, userId, showId, {
+        deriveStatus: false,
+      });
 
       const watchedEpisodesCount = Math.max(
         0,
@@ -3928,13 +3962,19 @@ export const importTrackedShows = mutation({
         watchedEpisodesCount
       );
 
-      if (normalizedImportStatus !== item.status) {
-        await ctx.db.patch(userShowId, {
-          status: normalizedImportStatus,
-          statusChangedAt: now,
+      if (normalizedImportStatus !== item.status || normalizedImportStatus === "paused") {
+        const importStatusPatch: Partial<Doc<"userShows">> = {
           completedAt: normalizedImportStatus === "completed" ? now : undefined,
           droppedAt: normalizedImportStatus === "dropped" ? now : undefined,
-        });
+          autoPausedAt: undefined,
+        };
+
+        if (normalizedImportStatus !== item.status) {
+          importStatusPatch.status = normalizedImportStatus;
+          importStatusPatch.statusChangedAt = now;
+        }
+
+        await ctx.db.patch(userShowId, importStatusPatch);
         await upsertFeedProjectionForUserShow(ctx, userShowId);
       }
 

@@ -1,5 +1,9 @@
 import { getCached, setCached } from "@/lib/api/cache";
-import type { NormalizedEpisode, NormalizedShow } from "@/lib/api/types";
+import type {
+  JikanAnimeEpisodesPage,
+  NormalizedEpisode,
+  NormalizedShow,
+} from "@/lib/api/types";
 import {
   normalizeJikanAnime,
   parseJikanDurationToMinutes,
@@ -17,7 +21,8 @@ function resolveJikanBaseUrl() {
 const jikanBaseUrl = resolveJikanBaseUrl();
 
 const cacheTtlMs = 15 * 60 * 1000;
-const MAX_JIKAN_EPISODE_PAGES = 100;
+// Default to a short crawl unless a caller explicitly opts into more pages.
+const DEFAULT_CONSERVATIVE_JIKAN_EPISODE_PAGES = 3;
 
 export type JikanAnime = {
   mal_id: number;
@@ -185,7 +190,7 @@ export async function getJikanAnimeEpisodes(
 ): Promise<NormalizedEpisode[]> {
   const safeMaxPages = Number.isFinite(maxPages)
     ? Math.max(1, Math.floor(maxPages as number))
-    : MAX_JIKAN_EPISODE_PAGES;
+    : DEFAULT_CONSERVATIVE_JIKAN_EPISODE_PAGES;
   const cacheKey = `jikan-anime-episodes:${malId}:${safeMaxPages}`;
   const cached = getCached<NormalizedEpisode[]>(cacheKey);
   if (cached) {
@@ -196,27 +201,10 @@ export async function getJikanAnimeEpisodes(
   let page = 1;
 
   while (page <= safeMaxPages) {
-    const response = await request<JikanAnimeEpisodesResponse>(
-      `/anime/${malId}/episodes`,
-      { page: String(page) }
-    );
+    const pageResult = await getJikanAnimeEpisodesPage(malId, page);
+    episodes.push(...pageResult.episodes);
 
-    for (const episode of response.data) {
-      const episodeNumber =
-        typeof episode.mal_id === "number" && episode.mal_id > 0
-          ? episode.mal_id
-          : episodes.length + 1;
-      episodes.push({
-        id: `jikan-episode:${malId}:${episodeNumber}`,
-        seasonNumber: 1,
-        episodeNumber,
-        name: episode.title ?? episode.title_romanji ?? `Episode ${episodeNumber}`,
-        airDate: normalizeDateString(episode.aired),
-        runtime: parseJikanDurationToMinutes(episode.duration),
-      });
-    }
-
-    if (!response.pagination?.has_next_page) {
+    if (!pageResult.hasNextPage) {
       break;
     }
 
@@ -227,6 +215,48 @@ export async function getJikanAnimeEpisodes(
 
   setCached(cacheKey, episodes, cacheTtlMs);
   return episodes;
+}
+
+export async function getJikanAnimeEpisodesPage(
+  malId: number,
+  page = 1
+): Promise<JikanAnimeEpisodesPage> {
+  const safePage = Math.max(1, Math.floor(page));
+  const cacheKey = `jikan-anime-episodes-page:${malId}:${safePage}`;
+  const cached = getCached<JikanAnimeEpisodesPage>(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
+  const response = await request<JikanAnimeEpisodesResponse>(
+    `/anime/${malId}/episodes`,
+    { page: String(safePage) }
+  );
+
+  const episodes = response.data.map((episode, index) => {
+    const fallbackEpisodeNumber = (safePage - 1) * 100 + index + 1;
+    const episodeNumber =
+      typeof episode.mal_id === "number" && episode.mal_id > 0
+        ? episode.mal_id
+        : fallbackEpisodeNumber;
+
+    return {
+      id: `jikan-episode:${malId}:${episodeNumber}`,
+      seasonNumber: 1,
+      episodeNumber,
+      name: episode.title ?? episode.title_romanji ?? `Episode ${episodeNumber}`,
+      airDate: normalizeDateString(episode.aired),
+      runtime: parseJikanDurationToMinutes(episode.duration),
+    };
+  });
+
+  const result = {
+    episodes,
+    hasNextPage: Boolean(response.pagination?.has_next_page),
+  };
+
+  setCached(cacheKey, result, cacheTtlMs);
+  return result;
 }
 
 export async function getJikanAnimeRelations(
