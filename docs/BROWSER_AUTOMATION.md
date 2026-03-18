@@ -4,6 +4,21 @@ How agents should use browser tooling in this repo during development.
 
 ## Default Tool Choice
 
+The default browser automation tool for this repo is **Chrome DevTools MCP**. It provides direct access to Chrome's debugging protocol for inspecting elements, analyzing network requests, debugging JavaScript, and capturing screenshots.
+
+Use Chrome DevTools MCP when:
+- Debugging UI issues or visual regressions
+- Inspecting DOM elements and styles
+- Analyzing network requests and responses
+- Debugging JavaScript execution
+- Capturing screenshots for verification
+
+Use `agent-browser` when:
+- Performing multi-step user flows (login, signup, checkout)
+- Testing navigation and routing
+- Filling out forms programmatically
+- Tasks that don't require DevTools inspection
+
 ## Setup Expectations
 
 ### Chrome DevTools MCP
