@@ -7,7 +7,7 @@
     "version": "0.1.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "backgroundColor": "#09090b",
+    "backgroundColor": "#0b0f1a",
     "primaryColor": "#ef4444",
     "userInterfaceStyle": "automatic",
     "splash": {
@@ -27,11 +27,11 @@
     "ios": {
       "supportsTablet": true,
       "icon": "./assets/icon.png",
-      "backgroundColor": "#09090b"
+      "backgroundColor": "#0b0f1a"
     },
     "android": {
       "icon": "./assets/icon.png",
-      "backgroundColor": "#09090b",
+      "backgroundColor": "#0b0f1a",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "monochromeImage": "./assets/monochrome-icon.png",
@@ -45,8 +45,8 @@
       "name": "ShowTracker",
       "shortName": "ShowTracker",
       "description": "Track shows, anime, and movies across web and mobile.",
-      "themeColor": "#09090b",
-      "backgroundColor": "#09090b",
+      "themeColor": "#0b0f1a",
+      "backgroundColor": "#0b0f1a",
       "display": "standalone"
     }
   }
