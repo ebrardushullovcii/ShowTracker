@@ -812,6 +812,7 @@ export function ShowDetailScreen() {
   const removeFromWatchlist = useMutation(api.shows.removeFromWatchlist);
   const setWatchlistStatus = useMutation(api.shows.setWatchlistStatus);
   const setFavoriteStatus = useMutation(api.shows.setFavoriteStatus);
+  const refreshTrackedShowMetadata = useAction(api.shows.refreshTrackedShowMetadata);
   const addAnimeToWatchlistWithRelations = useAction(
     api.shows.addAnimeToWatchlistWithRelations
   );
@@ -1616,6 +1617,13 @@ export function ShowDetailScreen() {
           );
           setShow(normalized);
 
+          void refreshTrackedShowMetadata({
+            tmdbId: parsedId.externalId,
+            mediaType: parsedId.mediaType === "movie" ? "movie" : "tv",
+          }).catch((error) => {
+            console.warn("Background TMDB metadata refresh failed", error);
+          });
+
           if (parsedId.mediaType === "tv") {
             setSeasons(
               createSeasonPlaceholders(normalized.totalSeasons ?? 0, details.seasons)
@@ -1778,7 +1786,7 @@ export function ShowDetailScreen() {
 
     void loadShow();
     return () => { isCancelled = true; };
-  }, [parsedId]);
+  }, [parsedId, refreshTrackedShowMetadata]);
 
   const handleRemoveFromWatchlist = async () => {
     if (!show) return false;
