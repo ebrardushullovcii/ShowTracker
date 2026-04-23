@@ -226,8 +226,8 @@ Phase 12: Notifications
 
 ### Next Up
 
-- [ ] Home schedule: show items based on actual air time when the source provides it, instead of only date buckets
-- [ ] Home screen: add an auto-paused section under the main active shows list for "haven't watched in a while" entries
+- [x] Home schedule: show items based on actual air time when the source provides it, instead of only date buckets
+- [x] Home screen: add an auto-paused section under the main active shows list for "haven't watched in a while" entries
 - [ ] Production tracking audit: investigate why some recently watched shows are already marked paused by the next episode window (example: One Piece)
 
 ### Known Issues (To Fix)

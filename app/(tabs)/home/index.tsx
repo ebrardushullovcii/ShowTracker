@@ -1386,6 +1386,8 @@ export function HomeScreen() {
   const [activeTab, setActiveTab] = useState<HomeTab>("watchlist");
   const [mediaFilter, setMediaFilter] = useState<HomeMediaFilter>("all");
   const [watchlistVisibleCount, setWatchlistVisibleCount] = useState(0);
+  const [pausedVisibleCount, setPausedVisibleCount] = useState(0);
+  const [notStartedVisibleCount, setNotStartedVisibleCount] = useState(0);
   const [isLoadingMoreWatchlist, setIsLoadingMoreWatchlist] = useState(false);
   const [isHydratingInitialUpcoming, setIsHydratingInitialUpcoming] = useState(false);
   const [isMonthPickerVisible, setIsMonthPickerVisible] = useState(false);
@@ -1709,6 +1711,12 @@ export function HomeScreen() {
       if (item.status !== "paused") {
         return false;
       }
+      if (typeof item.remainingEpisodes !== "number" || item.remainingEpisodes <= 0) {
+        return false;
+      }
+      if (typeof item.watchedEpisodes !== "number" || item.watchedEpisodes <= 0) {
+        return false;
+      }
       if (
         pausedSectionMode === "auto_paused_only" &&
         typeof item.autoPausedAt !== "number"
@@ -1765,6 +1773,7 @@ export function HomeScreen() {
 
   const columns = getColumnCount(effectiveWidth, isWeb);
   const watchlistPageSize = Math.max(columns * 3, 6);
+  const secondarySectionPageSize = Math.max(columns * 2, 6);
   const isWideCalendar = usesMonthCalendarLayout && effectiveWidth >= 1180;
   const webCalendarDays = useMemo(() => {
     const gridStart = startOfWeekDate(currentMonthDate);
@@ -1923,6 +1932,24 @@ export function HomeScreen() {
   }, [filteredWatchlist.length, watchlistPageSize]);
 
   useEffect(() => {
+    setPausedVisibleCount((current) =>
+      Math.min(
+        pausedSectionWatchlist.length,
+        Math.max(current, secondarySectionPageSize)
+      )
+    );
+  }, [pausedSectionWatchlist.length, secondarySectionPageSize]);
+
+  useEffect(() => {
+    setNotStartedVisibleCount((current) =>
+      Math.min(
+        notStartedSectionWatchlist.length,
+        Math.max(current, secondarySectionPageSize)
+      )
+    );
+  }, [notStartedSectionWatchlist.length, secondarySectionPageSize]);
+
+  useEffect(() => {
     if (watchlist === undefined) {
       setSettledWatchlistSnapshot({
         key: "",
@@ -1987,13 +2014,24 @@ export function HomeScreen() {
     () => chunkItems(displayWatchlistItems, columns),
     [columns, displayWatchlistItems]
   );
+  const visiblePausedSectionItems = useMemo(
+    () => pausedSectionWatchlist.slice(0, pausedVisibleCount),
+    [pausedSectionWatchlist, pausedVisibleCount]
+  );
+  const visibleNotStartedSectionItems = useMemo(
+    () => notStartedSectionWatchlist.slice(0, notStartedVisibleCount),
+    [notStartedSectionWatchlist, notStartedVisibleCount]
+  );
+  const hasMorePausedSection = pausedVisibleCount < pausedSectionWatchlist.length;
+  const hasMoreNotStartedSection =
+    notStartedVisibleCount < notStartedSectionWatchlist.length;
   const autoPausedRows = useMemo(
-    () => chunkItems(pausedSectionWatchlist, columns),
-    [pausedSectionWatchlist, columns]
+    () => chunkItems(visiblePausedSectionItems, columns),
+    [visiblePausedSectionItems, columns]
   );
   const notStartedRows = useMemo(
-    () => chunkItems(notStartedSectionWatchlist, columns),
-    [notStartedSectionWatchlist, columns]
+    () => chunkItems(visibleNotStartedSectionItems, columns),
+    [visibleNotStartedSectionItems, columns]
   );
 
   const goToTodayCalendar = useCallback(() => {
@@ -2185,6 +2223,29 @@ export function HomeScreen() {
               </View>
             ))}
           </View>
+          {hasMorePausedSection ? (
+            <View className="items-center pt-4">
+              <Pressable
+                accessibilityRole="button"
+                className="rounded-full border border-amber-300/20 bg-amber-400/10 px-4 py-2.5"
+                onPress={() =>
+                  setPausedVisibleCount((count) =>
+                    Math.min(
+                      count + secondarySectionPageSize,
+                      pausedSectionWatchlist.length
+                    )
+                  )
+                }
+                style={({ pressed }) => ({
+                  opacity: pressed ? 0.9 : 1,
+                })}
+              >
+                <Text className="text-[11px] font-black uppercase tracking-[1.2px] text-amber-100">
+                  Show more
+                </Text>
+              </Pressable>
+            </View>
+          ) : null}
         </View>
       </View>
     ) : null;
@@ -2238,6 +2299,29 @@ export function HomeScreen() {
               </View>
             ))}
           </View>
+          {hasMoreNotStartedSection ? (
+            <View className="items-center pt-4">
+              <Pressable
+                accessibilityRole="button"
+                className="rounded-full border border-sky-300/20 bg-sky-400/10 px-4 py-2.5"
+                onPress={() =>
+                  setNotStartedVisibleCount((count) =>
+                    Math.min(
+                      count + secondarySectionPageSize,
+                      notStartedSectionWatchlist.length
+                    )
+                  )
+                }
+                style={({ pressed }) => ({
+                  opacity: pressed ? 0.9 : 1,
+                })}
+              >
+                <Text className="text-[11px] font-black uppercase tracking-[1.2px] text-sky-100">
+                  Show more
+                </Text>
+              </Pressable>
+            </View>
+          ) : null}
         </View>
       </View>
     ) : null;

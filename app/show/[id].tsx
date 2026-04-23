@@ -11,7 +11,7 @@ import {
   useWindowDimensions,
 } from "react-native";
 import { Link, useLocalSearchParams, useRouter } from "expo-router";
-import { useAction, useMutation, useQuery } from "convex/react";
+import { useAction, useConvexAuth, useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { ScreenWrapper } from "@/components/ScreenWrapper";
 import { Badge } from "@/components/Badge";
@@ -745,6 +745,7 @@ export function ShowDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const parsedId = useMemo(() => parseShowRouteId(id), [id]);
   const { width } = useWindowDimensions();
+  const { isAuthenticated } = useConvexAuth();
   const isDesktop = Platform.OS === "web" && width >= 1024;
 
   const [show, setShow] = useState<NormalizedShow | null>(null);
@@ -790,6 +791,7 @@ export function ShowDetailScreen() {
   const loadingSeasonsRef = useRef<Set<number>>(new Set());
   const seasonLoadGenerationRef = useRef(0);
   const prevInWatchlistRef = useRef<boolean | null>(null);
+  const metadataRefreshKeyRef = useRef<string | null>(null);
   const [apiRelatedAnime, setApiRelatedAnime] = useState<AniListRelatedShow[]>([]);
   const [isLoadingRelatedAnime, setIsLoadingRelatedAnime] = useState(false);
 
@@ -1617,13 +1619,6 @@ export function ShowDetailScreen() {
           );
           setShow(normalized);
 
-          void refreshTrackedShowMetadata({
-            tmdbId: parsedId.externalId,
-            mediaType: parsedId.mediaType === "movie" ? "movie" : "tv",
-          }).catch((error) => {
-            console.warn("Background TMDB metadata refresh failed", error);
-          });
-
           if (parsedId.mediaType === "tv") {
             setSeasons(
               createSeasonPlaceholders(normalized.totalSeasons ?? 0, details.seasons)
@@ -1786,7 +1781,30 @@ export function ShowDetailScreen() {
 
     void loadShow();
     return () => { isCancelled = true; };
-  }, [parsedId, refreshTrackedShowMetadata]);
+  }, [parsedId]);
+
+  useEffect(() => {
+    if (!isAuthenticated || !trackingLoaded || !isInWatchlist || showLookupArgs === "skip") {
+      return;
+    }
+
+    const refreshKey = JSON.stringify(showLookupArgs);
+    if (metadataRefreshKeyRef.current === refreshKey) {
+      return;
+    }
+
+    metadataRefreshKeyRef.current = refreshKey;
+    void refreshTrackedShowMetadata(showLookupArgs).catch((refreshError) => {
+      console.warn("Background tracked show metadata refresh failed", refreshError);
+      metadataRefreshKeyRef.current = null;
+    });
+  }, [
+    isAuthenticated,
+    isInWatchlist,
+    refreshTrackedShowMetadata,
+    showLookupArgs,
+    trackingLoaded,
+  ]);
 
   const handleRemoveFromWatchlist = async () => {
     if (!show) return false;

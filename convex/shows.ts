@@ -451,22 +451,20 @@ function shouldShowHomeFeedWatchlistEntry(
   );
 }
 
-function isHomeFeedAutoPausedEntry(
-  entry: Pick<WatchlistEntryLike, "status" | "watchedEpisodes" | "remainingEpisodes" | "autoPausedAt">
+function isHomeFeedPausedSectionEntry(
+  entry: Pick<
+    WatchlistEntryLike,
+    "status" | "watchedEpisodes" | "remainingEpisodes" | "autoPausedAt"
+  >,
+  pausedSectionMode: HomePausedSectionMode
 ) {
   return (
     entry.status === "paused" &&
-    typeof entry.autoPausedAt === "number" &&
     typeof entry.remainingEpisodes === "number" &&
     entry.remainingEpisodes > 0 &&
-    hasWatchlistProgress(entry)
+    hasWatchlistProgress(entry) &&
+    (pausedSectionMode === "all_paused" || typeof entry.autoPausedAt === "number")
   );
-}
-
-function isHomeFeedPausedSectionEntry(
-  entry: Pick<WatchlistEntryLike, "status" | "remainingEpisodes" | "autoPausedAt">
-) {
-  return entry.status === "paused" && !isCompletedWatchlistEntry(entry);
 }
 
 function isHomeFeedNotStartedSectionEntry(
@@ -580,6 +578,7 @@ function selectHomeAnimeFranchiseRepresentative<T extends AnimeFranchiseSelectio
   entries: T[],
   options: {
     isMainlineEntry: (entry: T) => boolean;
+    pausedSectionMode: HomePausedSectionMode;
     preferMainlineOnly: boolean;
     sortEntries: (a: T, b: T) => number;
   }
@@ -650,7 +649,7 @@ function selectHomeAnimeFranchiseRepresentative<T extends AnimeFranchiseSelectio
   }
 
   const pausedSectionDisplayable = orderedTimeline
-    .filter((entry) => isHomeFeedPausedSectionEntry(entry))
+    .filter((entry) => isHomeFeedPausedSectionEntry(entry, options.pausedSectionMode))
     .sort((a, b) => {
       const autoPausedDelta = Number(Boolean(b.autoPausedAt)) - Number(Boolean(a.autoPausedAt));
       if (autoPausedDelta !== 0) {
@@ -754,6 +753,33 @@ function getExternalShowIdFromProjection(p: {
   return null;
 }
 
+function getShowRouteId(show: {
+  mediaType: "tv" | "anime" | "movie";
+  tmdbId?: number | null;
+  anilistId?: number | null;
+  malId?: number | null;
+  tvmazeId?: number | null;
+}) {
+  if (show.mediaType === "anime") {
+    if (typeof show.anilistId === "number") {
+      return `anilist:anime:${show.anilistId}`;
+    }
+    if (typeof show.malId === "number") {
+      return `jikan:anime:${show.malId}`;
+    }
+  }
+
+  if (typeof show.tmdbId === "number") {
+    return `tmdb:${show.mediaType}:${show.tmdbId}`;
+  }
+
+  if (show.mediaType === "tv" && typeof show.tvmazeId === "number") {
+    return `tvmaze:tv:${show.tvmazeId}`;
+  }
+
+  return null;
+}
+
 export const getHomeFeed = query({
   args: {},
   handler: async (ctx) => {
@@ -797,6 +823,9 @@ export const getHomeFeed = query({
     const globalRelationMode =
       (homeSettings?.relationMode as AnimeHomeRelationMode | undefined) ??
       DEFAULT_ANIME_HOME_RELATION_MODE;
+    const pausedSectionMode =
+      (homeSettings?.pausedSectionMode as HomePausedSectionMode | undefined) ??
+      DEFAULT_HOME_PAUSED_SECTION_MODE;
     const relationModeByRoot = new Map<number, AnimeHomeRelationMode>();
     for (const row of franchiseSettings) {
       relationModeByRoot.set(
@@ -805,7 +834,11 @@ export const getHomeFeed = query({
       );
     }
     const autoPausedAtByUserShowId = new Map<Id<"userShows">, number | null>();
-    for (const userShow of pausedUserShows) {
+    const pausedUserShowsForSection = pausedUserShows.filter(
+      (userShow) =>
+        pausedSectionMode === "all_paused" || typeof userShow.autoPausedAt === "number"
+    );
+    for (const userShow of pausedUserShowsForSection) {
       autoPausedAtByUserShowId.set(userShow._id, userShow.autoPausedAt ?? null);
     }
 
@@ -900,7 +933,7 @@ export const getHomeFeed = query({
       if (item.mediaType !== "anime") {
         if (
           shouldShowHomeFeedWatchlistEntry(item) ||
-          isHomeFeedPausedSectionEntry(item) ||
+          isHomeFeedPausedSectionEntry(item, pausedSectionMode) ||
           isHomeFeedNotStartedSectionEntry(item)
         ) {
           selectedEntries.push(item);
@@ -934,6 +967,7 @@ export const getHomeFeed = query({
 
       const selected = selectHomeAnimeFranchiseRepresentative(entries, {
         isMainlineEntry: isProjectionMainlineAnime,
+        pausedSectionMode,
         preferMainlineOnly: effectiveRelationMode === "core_only",
         sortEntries: sortProjectionAnimeCandidates,
       });
@@ -951,13 +985,13 @@ export const getHomeFeed = query({
     const selectedActiveEntries = selectedEntries
       .filter(
         (entry) =>
-          !isHomeFeedPausedSectionEntry(entry) &&
+          !isHomeFeedPausedSectionEntry(entry, pausedSectionMode) &&
           !isHomeFeedNotStartedSectionEntry(entry)
       )
       .sort((a, b) => b.lastWatchedAt - a.lastWatchedAt)
       .slice(0, HOME_FEED_MAX_RESULTS);
     const selectedPausedEntries = selectedEntries
-      .filter((entry) => isHomeFeedPausedSectionEntry(entry))
+      .filter((entry) => isHomeFeedPausedSectionEntry(entry, pausedSectionMode))
       .sort((a, b) => {
         const autoPausedDelta = Number(Boolean(b.autoPausedAt)) - Number(Boolean(a.autoPausedAt));
         if (autoPausedDelta !== 0) {
@@ -1016,18 +1050,13 @@ export const getDistinctTrackedUserIds = internalQuery({
 export const getUserShowsByUserIdForAudit = internalQuery({
   args: {
     userId: v.id("users"),
+    paginationOpts: paginationOptsValidator,
   },
-  handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      return [] as Array<Doc<"userShows">>;
-    }
-
-    return ctx.db
+  handler: async (ctx, args) =>
+    ctx.db
       .query("userShows")
       .withIndex("by_user", (q) => q.eq("userId", args.userId))
-      .collect();
-  },
+      .paginate(args.paginationOpts),
 });
 
 export const dailyReconcileProjections = internalAction({
@@ -1835,14 +1864,7 @@ async function findShowByLookup(
 
 export const findShowByLookupForRefresh = internalQuery({
   args: showLookupInput,
-  handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      return null;
-    }
-
-    return findShowByLookup(ctx, args);
-  },
+  handler: async (ctx, args) => findShowByLookup(ctx, args),
 });
 
 async function ensureShowRecordId(
@@ -1866,6 +1888,28 @@ async function ensureShow(
 }
 
 async function fetchLatestNormalizedShowForExistingShow(show: Doc<"shows">) {
+  if (show.mediaType === "anime") {
+    if (typeof show.anilistId === "number") {
+      try {
+        return await getAniListMediaById(show.anilistId);
+      } catch (error) {
+        if (typeof show.malId !== "number" && typeof show.tmdbId !== "number") {
+          throw error;
+        }
+      }
+    }
+
+    if (typeof show.malId === "number") {
+      try {
+        return await getJikanAnime(show.malId);
+      } catch (error) {
+        if (typeof show.tmdbId !== "number") {
+          throw error;
+        }
+      }
+    }
+  }
+
   if (typeof show.tmdbId === "number") {
     const details = await getTmdbShowDetails(
       show.mediaType === "movie" ? "movie" : "tv",
@@ -1875,16 +1919,6 @@ async function fetchLatestNormalizedShowForExistingShow(show: Doc<"shows">) {
       show.mediaType === "movie" ? "movie" : "tv",
       details
     );
-  }
-
-  if (show.mediaType === "anime") {
-    if (typeof show.anilistId === "number") {
-      return getAniListMediaById(show.anilistId);
-    }
-
-    if (typeof show.malId === "number") {
-      return getJikanAnime(show.malId);
-    }
   }
 
   return null;
@@ -2823,14 +2857,7 @@ export const getShowById = internalQuery({
   args: {
     showId: v.id("shows"),
   },
-  handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      return null;
-    }
-
-    return ctx.db.get(args.showId);
-  },
+  handler: async (ctx, args) => ctx.db.get(args.showId),
 });
 
 export const upsertShowByInternalId = internalMutation({
@@ -2839,11 +2866,6 @@ export const upsertShowByInternalId = internalMutation({
     show: v.object(showInput),
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      throw new Error("Unauthorized");
-    }
-
     const existing = await ctx.db.get(args.showId);
     if (!existing) {
       throw new Error("Show not found");
@@ -2857,17 +2879,21 @@ export const upsertShowByInternalId = internalMutation({
 
 async function refreshShowMetadataAndRepairTracking(
   ctx: ActionCtx,
-  showId: Id<"shows">
+  showId: Id<"shows">,
+  options?: {
+    repairUserId?: Id<"users">;
+  }
 ): Promise<
   | {
       refreshed: false;
       repairedUsers: number;
-      reason: "show_not_found" | "unsupported_show_source";
+      externalShowId: string | null;
+      reason: "show_not_found" | "unsupported_show_source" | "not_tracked";
     }
   | {
       refreshed: true;
       repairedUsers: number;
-      showId: Id<"shows">;
+      externalShowId: string | null;
       totalEpisodes: number | null;
       totalSeasons: number | null;
       status: string | null;
@@ -2876,12 +2902,22 @@ async function refreshShowMetadataAndRepairTracking(
 > {
   const show = await ctx.runQuery(internal.shows.getShowById, { showId });
   if (!show) {
-    return { refreshed: false, repairedUsers: 0, reason: "show_not_found" as const };
+    return {
+      refreshed: false,
+      repairedUsers: 0,
+      externalShowId: null,
+      reason: "show_not_found" as const,
+    };
   }
 
   const latest = await fetchLatestNormalizedShowForExistingShow(show);
   if (!latest) {
-    return { refreshed: false, repairedUsers: 0, reason: "unsupported_show_source" as const };
+    return {
+      refreshed: false,
+      repairedUsers: 0,
+      externalShowId: getShowRouteId(show),
+      reason: "unsupported_show_source" as const,
+    };
   }
 
   const refreshedShowId = await ctx.runMutation(internal.shows.upsertShowByInternalId, {
@@ -2894,23 +2930,55 @@ async function refreshShowMetadataAndRepairTracking(
   const userShows = await ctx.runQuery(internal.shows.findUserShowByShowId, {
     showId: refreshedShowId,
   });
+  const targetUserShows =
+    options?.repairUserId !== undefined
+      ? userShows.filter((userShow) => userShow.userId === options.repairUserId)
+      : userShows;
 
-  const repairedUsers = new Set<string>();
-  for (const userShow of userShows) {
-    await ctx.runAction(internal.shows.rebuildUserShowTrackingAggregatesForUser, {
-      userId: userShow.userId,
-    });
-    repairedUsers.add(String(userShow.userId));
+  if (options?.repairUserId !== undefined && targetUserShows.length === 0) {
+    return {
+      refreshed: false,
+      repairedUsers: 0,
+      externalShowId: getShowRouteId({
+        mediaType: latest.mediaType,
+        tmdbId: latest.tmdbId,
+        anilistId: latest.anilistId,
+        malId: latest.malId,
+        tvmazeId: latest.tvmazeId,
+      }),
+      reason: "not_tracked" as const,
+    };
   }
 
-  await ctx.runAction(internal.shows.runRefreshProjectionsForShow, {
-    showId: refreshedShowId,
-  });
+  const repairedUsers = new Set<string>();
+  if (options?.repairUserId !== undefined) {
+    await ctx.runAction(internal.shows.rebuildUserShowTrackingAggregatesForUser, {
+      userId: options.repairUserId,
+    });
+    repairedUsers.add(String(options.repairUserId));
+  } else {
+    for (const userShow of targetUserShows) {
+      await ctx.runAction(internal.shows.rebuildUserShowTrackingAggregatesForUser, {
+        userId: userShow.userId,
+      });
+      repairedUsers.add(String(userShow.userId));
+    }
+
+    await ctx.runAction(internal.shows.runRefreshProjectionsForShow, {
+      showId: refreshedShowId,
+    });
+  }
 
   return {
     refreshed: true,
     repairedUsers: repairedUsers.size,
-    showId: refreshedShowId,
+    externalShowId: getShowRouteId({
+      mediaType: latest.mediaType,
+      tmdbId: latest.tmdbId,
+      anilistId: latest.anilistId,
+      malId: latest.malId,
+      tvmazeId: latest.tvmazeId,
+    }),
     totalEpisodes: latest.totalEpisodes ?? null,
     totalSeasons: latest.totalSeasons ?? null,
     status: latest.status ?? null,
@@ -2921,13 +2989,20 @@ async function refreshShowMetadataAndRepairTracking(
 export const refreshTrackedShowMetadata = action({
   args: showLookupInput,
   handler: async (ctx, args): ReturnType<typeof refreshShowMetadataAndRepairTracking> => {
-    await getCurrentUserId(ctx);
+    const userId = await getCurrentUserId(ctx);
     const show = await ctx.runQuery(internal.shows.findShowByLookupForRefresh, args);
     if (!show) {
-      return { refreshed: false, repairedUsers: 0, reason: "show_not_found" as const };
+      return {
+        refreshed: false,
+        repairedUsers: 0,
+        externalShowId: null,
+        reason: "show_not_found" as const,
+      };
     }
 
-    return refreshShowMetadataAndRepairTracking(ctx, show._id);
+    return refreshShowMetadataAndRepairTracking(ctx, show._id, {
+      repairUserId: userId,
+    });
   },
 });
 
@@ -2941,12 +3016,16 @@ export const repairShowMetadataById = internalAction({
 });
 
 export const auditTrackedShowHealth = action({
-  args: {},
-  handler: async (ctx): Promise<{
+  args: {
+    continueCursor: v.optional(v.string()),
+    pageSize: v.optional(v.number()),
+  },
+  handler: async (ctx, args): Promise<{
     scanned: number;
+    continueCursor: string | null;
+    isDone: boolean;
     issues: Array<{
-      showId: Id<"shows">;
-      userShowId: Id<"userShows">;
+      externalShowId: string | null;
       title: string;
       mediaType: "tv" | "anime" | "movie";
       status: UserShowStatus;
@@ -2960,15 +3039,18 @@ export const auditTrackedShowHealth = action({
     }>;
   }> => {
     const userId = await getCurrentUserId(ctx);
-    const userShowsPage = {
-      page: await ctx.runQuery(internal.shows.getUserShowsByUserIdForAudit, { userId }),
-      continueCursor: "",
-      isDone: true,
-    } as {
+    const pageSize = Math.max(1, Math.min(args.pageSize ?? 25, 100));
+    const userShowsPage: {
       page: Array<Doc<"userShows">>;
       continueCursor: string;
       isDone: boolean;
-    };
+    } = await ctx.runQuery(internal.shows.getUserShowsByUserIdForAudit, {
+      userId,
+      paginationOpts: {
+        cursor: args.continueCursor ?? null,
+        numItems: pageSize,
+      },
+    });
 
     const today = new Date();
     const startDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
@@ -2989,8 +3071,7 @@ export const auditTrackedShowHealth = action({
     );
 
     const results: Array<{
-      showId: Id<"shows">;
-      userShowId: Id<"userShows">;
+      externalShowId: string | null;
       title: string;
       mediaType: "tv" | "anime" | "movie";
       status: UserShowStatus;
@@ -3011,7 +3092,29 @@ export const auditTrackedShowHealth = action({
         continue;
       }
 
-      const latest = await fetchLatestNormalizedShowForExistingShow(show);
+      let latest: NormalizedShow | null = null;
+      try {
+        latest = await fetchLatestNormalizedShowForExistingShow(show);
+      } catch (error) {
+        results.push({
+          externalShowId: getShowRouteId(show),
+          title: show.title,
+          mediaType: show.mediaType,
+          status: userShow.status,
+          watchedEpisodesCount: Math.max(0, Math.floor(userShow.watchedEpisodesCount ?? 0)),
+          storedTotalEpisodes:
+            typeof show.totalEpisodes === "number" ? show.totalEpisodes : null,
+          liveTotalEpisodes: null,
+          staleMetadata: false,
+          shouldResumeFromAutoPause: false,
+          homeVisibilityRisk: false,
+          notes: [
+            "metadata refresh failed during audit",
+            error instanceof Error ? error.message : "Unknown error",
+          ],
+        });
+        continue;
+      }
       const watchedEpisodesCount = Math.max(0, Math.floor(userShow.watchedEpisodesCount ?? 0));
       const storedTotalEpisodes = typeof show.totalEpisodes === "number" ? show.totalEpisodes : null;
       const liveTotalEpisodes = typeof latest?.totalEpisodes === "number" ? latest.totalEpisodes : null;
@@ -3057,8 +3160,7 @@ export const auditTrackedShowHealth = action({
 
       if (staleMetadata || shouldResumeFromAutoPause || homeVisibilityRisk) {
         results.push({
-          showId: show._id,
-          userShowId: userShow._id,
+          externalShowId: getShowRouteId(show),
           title: show.title,
           mediaType: show.mediaType,
           status: userShow.status,
@@ -3075,6 +3177,8 @@ export const auditTrackedShowHealth = action({
 
     return {
       scanned: userShowsPage.page.length,
+      continueCursor: userShowsPage.isDone ? null : userShowsPage.continueCursor,
+      isDone: userShowsPage.isDone,
       issues: results,
     };
   },
@@ -3162,17 +3266,11 @@ export const findUserShowByShowId = internalQuery({
   args: {
     showId: v.id("shows"),
   },
-  handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      return [];
-    }
-
-    return await ctx.db
+  handler: async (ctx, args) =>
+    ctx.db
       .query("userShows")
       .withIndex("by_showId", (q) => q.eq("showId", args.showId))
-      .collect();
-  },
+      .collect(),
 });
 
 export const getUserShowTracking = query({

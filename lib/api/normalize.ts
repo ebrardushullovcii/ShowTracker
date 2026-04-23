@@ -275,10 +275,7 @@ export function normalizeTvMazeScheduleEntry(
     ? entry.runtime
     : DEFAULTS.EPISODE_RUNTIME_MINUTES;
   const normalizedAirDate =
-    entry.airstamp?.trim() ||
-    (entry.airdate && entry.airtime?.trim()
-      ? `${entry.airdate}T${entry.airtime.trim()}`
-      : entry.airdate ?? undefined);
+    entry.airstamp?.trim() || (entry.airdate ?? undefined);
 
   return {
     showId: `tvmaze:${entry.show.id}`,
