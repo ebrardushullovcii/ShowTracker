@@ -1,6 +1,6 @@
 import { Feather, Ionicons } from "@expo/vector-icons";
 import { Tabs } from "expo-router";
-import { Platform, View, useWindowDimensions } from "react-native";
+import { Platform, Pressable, View, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { DESKTOP_SIDEBAR_BREAKPOINT } from "@/constants/navigation";
 
@@ -11,13 +11,13 @@ export default function TabsLayout() {
   const isMobileWeb = Platform.OS === "web" && !isDesktop;
   const iosBottomInset = Math.max(insets.bottom, 16);
   const mobileTabBarPaddingBottom =
-    Platform.OS === "ios" ? iosBottomInset + 10 : isMobileWeb ? 4 : 8;
-  const mobileTabBarPaddingTop = Platform.OS === "ios" ? 2 : isMobileWeb ? 4 : 6;
+    Platform.OS === "ios" ? iosBottomInset + 10 : isMobileWeb ? 0 : 8;
+  const mobileTabBarPaddingTop = Platform.OS === "ios" ? 2 : isMobileWeb ? 0 : 6;
   const mobileTabBarHeight =
     Platform.OS === "ios"
       ? Math.max(90, 50 + mobileTabBarPaddingTop + mobileTabBarPaddingBottom)
       : isMobileWeb
-        ? 62
+        ? 54
         : 64;
 
   return (
@@ -29,7 +29,7 @@ export default function TabsLayout() {
             tabBarStyle: isDesktop
               ? { display: "none" }
               : {
-                  backgroundColor: "rgba(9,9,11,0.92)",
+                  backgroundColor: "#09090b",
                   borderTopWidth: 2,
                   borderTopColor: "#27272a",
                   height: mobileTabBarHeight,
@@ -39,6 +39,22 @@ export default function TabsLayout() {
                 },
             tabBarActiveTintColor: "#ef4444",
             tabBarInactiveTintColor: "#a1a1aa",
+            tabBarButton: isMobileWeb
+              ? (props) => (
+                  <Pressable
+                    {...props}
+                    style={[
+                      props.style,
+                      {
+                        height: "100%",
+                        justifyContent: "center",
+                        paddingBottom: 0,
+                        paddingTop: 0,
+                      },
+                    ]}
+                  />
+                )
+              : undefined,
             tabBarIconStyle: Platform.OS === "ios" ? { marginTop: -2 } : undefined,
             tabBarLabelStyle: {
               fontSize: 10,
