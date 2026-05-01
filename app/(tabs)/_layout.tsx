@@ -1,57 +1,8 @@
 import { Feather, Ionicons } from "@expo/vector-icons";
 import { Tabs } from "expo-router";
-import { Platform, Pressable, Text, View, useWindowDimensions } from "react-native";
+import { Platform, View, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { DESKTOP_SIDEBAR_BREAKPOINT } from "@/constants/navigation";
-
-const MOBILE_WEB_TAB_BAR_HEIGHT = 54;
-
-function MobileWebTabBar({ state, descriptors, navigation }: any) {
-  const routes = state.routes.filter((route: any) => descriptors[route.key]?.options?.href !== null);
-
-  return (
-    <View
-      className="absolute bottom-0 left-0 right-0 flex-row border-t-2 border-border-default bg-bg-base"
-      style={{ height: MOBILE_WEB_TAB_BAR_HEIGHT }}
-    >
-      {routes.map((route: any) => {
-        const focused = state.routes[state.index]?.key === route.key;
-        const options = descriptors[route.key]?.options ?? {};
-        const color = focused ? "#ef4444" : "#a1a1aa";
-        const title = options.title ?? route.name;
-        const onPress = () => {
-          const event = navigation.emit({
-            type: "tabPress",
-            target: route.key,
-            canPreventDefault: true,
-          });
-
-          if (!focused && !event.defaultPrevented) {
-            navigation.navigate(route.name, route.params);
-          }
-        };
-
-        return (
-          <Pressable
-            key={route.key}
-            accessibilityRole="button"
-            accessibilityState={focused ? { selected: true } : undefined}
-            onPress={onPress}
-            className="flex-1 items-center justify-center"
-          >
-            {options.tabBarIcon?.({ focused, color, size: 22 })}
-            <Text
-              className="mt-0.5 text-[10px] font-black uppercase tracking-[0.5px]"
-              style={{ color }}
-            >
-              {title}
-            </Text>
-          </Pressable>
-        );
-      })}
-    </View>
-  );
-}
 
 export default function TabsLayout() {
   const { width } = useWindowDimensions();
@@ -66,13 +17,12 @@ export default function TabsLayout() {
     Platform.OS === "ios"
       ? Math.max(90, 50 + mobileTabBarPaddingTop + mobileTabBarPaddingBottom)
       : isMobileWeb
-        ? MOBILE_WEB_TAB_BAR_HEIGHT
+        ? 54
         : 64;
 
   return (
     <View className="flex-1" style={{ backgroundColor: "#09090b" }}>
       <Tabs
-          tabBar={isMobileWeb ? (props) => <MobileWebTabBar {...props} /> : undefined}
           screenOptions={{
             headerShown: false,
             tabBarHideOnKeyboard: true,
@@ -86,6 +36,12 @@ export default function TabsLayout() {
                   paddingBottom: mobileTabBarPaddingBottom,
                   paddingTop: mobileTabBarPaddingTop,
                   position: isMobileWeb ? "absolute" : undefined,
+                  ...(isMobileWeb
+                    ? ({
+                        bottom: "calc(-1 * env(safe-area-inset-bottom, 0px))",
+                        paddingBottom: "env(safe-area-inset-bottom, 0px)",
+                      } as any)
+                    : null),
                 },
             tabBarActiveTintColor: "#ef4444",
             tabBarInactiveTintColor: "#a1a1aa",
