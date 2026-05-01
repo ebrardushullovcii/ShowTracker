@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Image,
@@ -79,6 +79,7 @@ export function ContinueTrackingRail({
   const shouldAutoPositionRef = useRef(true);
   const previousPrependCountRef = useRef(0);
   const currentPrependCountRef = useRef(prependItemCount);
+  const pendingPrependOffsetDeltaRef = useRef(0);
   const [, setIsDragging] = useState(false);
 
   useEffect(() => {
@@ -89,9 +90,10 @@ export function ContinueTrackingRail({
     hasAutoPositionedRef.current = false;
     shouldAutoPositionRef.current = true;
     previousPrependCountRef.current = currentPrependCountRef.current;
+    pendingPrependOffsetDeltaRef.current = 0;
   }, [resetScrollKey]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const previousCount = previousPrependCountRef.current;
     if (!hasAutoPositionedRef.current || shouldAutoPositionRef.current || prependItemCount <= previousCount) {
       previousPrependCountRef.current = prependItemCount;
@@ -99,10 +101,7 @@ export function ContinueTrackingRail({
     }
 
     const addedCount = prependItemCount - previousCount;
-    const offsetDelta = addedCount * (RAIL_CARD_WIDTH + RAIL_CARD_GAP);
-    const nextOffset = scrollOffsetXRef.current + offsetDelta;
-    scrollViewRef.current?.scrollTo({ x: nextOffset, animated: false });
-    scrollOffsetXRef.current = nextOffset;
+    pendingPrependOffsetDeltaRef.current += addedCount * (RAIL_CARD_WIDTH + RAIL_CARD_GAP);
     previousPrependCountRef.current = prependItemCount;
   }, [prependItemCount]);
 
@@ -171,6 +170,23 @@ export function ContinueTrackingRail({
     shouldAutoPositionRef.current = false;
   };
 
+  const handleContentSizeChange = () => {
+    if (shouldAutoPositionRef.current) {
+      autoPositionToAnchor();
+      return;
+    }
+
+    const offsetDelta = pendingPrependOffsetDeltaRef.current;
+    if (offsetDelta <= 0) {
+      return;
+    }
+
+    const nextOffset = scrollOffsetXRef.current + offsetDelta;
+    scrollViewRef.current?.scrollTo({ x: nextOffset, animated: false });
+    scrollOffsetXRef.current = nextOffset;
+    pendingPrependOffsetDeltaRef.current = 0;
+  };
+
   return (
     <View
       className="mb-6 overflow-hidden rounded-2xl border-2 border-border-default bg-bg-surface py-4 web:select-none"
@@ -202,7 +218,7 @@ export function ContinueTrackingRail({
         showsHorizontalScrollIndicator
         scrollEventThrottle={16}
         onScroll={handleScroll}
-        onContentSizeChange={autoPositionToAnchor}
+        onContentSizeChange={handleContentSizeChange}
         contentContainerStyle={{ gap: 12, paddingHorizontal: 16, paddingBottom: 4 }}
       >
         {items.map((item, index) => {
