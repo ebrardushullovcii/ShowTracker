@@ -36,8 +36,6 @@ export default function TabsLayout() {
                   height: mobileTabBarHeight,
                   paddingBottom: mobileTabBarPaddingBottom,
                   paddingTop: mobileTabBarPaddingTop,
-                  bottom: isMobileWeb ? 0 : undefined,
-                  position: isMobileWeb ? "absolute" : undefined,
                 },
             tabBarItemStyle: isMobileWeb ? { height: 58 } : undefined,
             tabBarActiveTintColor: "#ef4444",
