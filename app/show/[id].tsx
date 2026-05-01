@@ -53,6 +53,7 @@ type SeasonLoadState = Record<number, boolean>;
 type SeasonErrorState = Record<number, string | null>;
 type EpisodePendingState = Record<string, boolean>;
 type SeasonActionState = Record<number, boolean>;
+type SeasonWatchedKeyErrorState = Record<number, string | null>;
 type ShowTrackingStatus = UserTrackingStatus;
 
 type RelatedAnimeEntry = {
@@ -652,6 +653,10 @@ function getEpisodePositionKey(episode: NormalizedEpisode) {
   return `${episode.seasonNumber}:${episode.episodeNumber}`;
 }
 
+function getRailSeasonLoadKey(seasonNumber: number, reason: "previous" | "next" | "anchor") {
+  return `${seasonNumber}:${reason}`;
+}
+
 const episodeDateFormatter = new Intl.DateTimeFormat("en-US", {
   month: "short",
   day: "numeric",
@@ -808,6 +813,8 @@ export function ShowDetailScreen() {
   const [pendingEpisodeKeys, setPendingEpisodeKeys] = useState<EpisodePendingState>({});
   const [seasonActionLoading, setSeasonActionLoading] = useState<SeasonActionState>({});
   const [isRailLoadingMore, setIsRailLoadingMore] = useState(false);
+  const [seasonWatchedKeyErrors, setSeasonWatchedKeyErrors] =
+    useState<SeasonWatchedKeyErrorState>({});
   const [isRemovingFromWatchlist, setIsRemovingFromWatchlist] = useState(false);
   const [isTogglingFavorite, setIsTogglingFavorite] = useState(false);
   const [isSettingStatus, setIsSettingStatus] = useState(false);
@@ -840,7 +847,9 @@ export function ShowDetailScreen() {
   const widthRef = useRef(width);
   const expandedSeasonsRef = useRef(expandedSeasons);
   const seasonWatchedKeysRef = useRef(seasonWatchedKeys);
+  const seasonWatchedKeyErrorsRef = useRef(seasonWatchedKeyErrors);
   const loadingSeasonsRef = useRef<Set<number>>(new Set());
+  const inFlightSeasonsRef = useRef<Set<string>>(new Set());
   const seasonLoadGenerationRef = useRef(0);
   const prevInWatchlistRef = useRef<boolean | null>(null);
   const metadataRefreshKeyRef = useRef<string | null>(null);
@@ -854,6 +863,7 @@ export function ShowDetailScreen() {
     setPendingEpisodeKeys({});
     setSeasonActionLoading({});
     setSeasonWatchedKeys({});
+    setSeasonWatchedKeyErrors({});
     setEpisodeWatchCounts({});
     setMovieWatchCount(null);
     setOptimisticTrackingStatus(null);
@@ -1109,17 +1119,18 @@ export function ShowDetailScreen() {
   const getSeasonWatchedCount = useCallback(
     (seasonNumber: number) => {
       const hasLoadedSeasonKeys = seasonWatchedKeys[seasonNumber] !== undefined;
+      const hasSeasonWatchedKeyError = seasonWatchedKeyErrors[seasonNumber] !== undefined;
       const hasPendingOverridesForSeason = Object.keys(pendingOverrides).some((key) =>
         key.startsWith(`${seasonNumber}:`)
       );
 
-      if (hasLoadedSeasonKeys || hasPendingOverridesForSeason) {
+      if ((hasLoadedSeasonKeys && !hasSeasonWatchedKeyError) || hasPendingOverridesForSeason) {
         return countWatchedEpisodesForSeason(seasonNumber, watchedEpisodeKeys);
       }
 
       return watchedSeasonCountMap.get(seasonNumber) ?? 0;
     },
-    [pendingOverrides, seasonWatchedKeys, watchedEpisodeKeys, watchedSeasonCountMap]
+    [pendingOverrides, seasonWatchedKeyErrors, seasonWatchedKeys, watchedEpisodeKeys, watchedSeasonCountMap]
   );
 
   const totalWatchedEpisodesCount = useMemo(() => {
@@ -1200,6 +1211,10 @@ export function ShowDetailScreen() {
   }, [seasonWatchedKeys]);
 
   useEffect(() => {
+    seasonWatchedKeyErrorsRef.current = seasonWatchedKeyErrors;
+  }, [seasonWatchedKeyErrors]);
+
+  useEffect(() => {
     if (!trackingNotice) {
       return;
     }
@@ -1218,11 +1233,22 @@ export function ShowDetailScreen() {
       if (trackingArgs === "skip" || !getWatchedEpisodesForSeasonAction || !isInWatchlist) {
         return;
       }
+      const inFlightKey = getRailSeasonLoadKey(seasonNumber, "anchor");
       if (seasonWatchedKeysRef.current[seasonNumber]) return;
       if (loadingSeasonsRef.current.has(seasonNumber)) return;
+      if (inFlightSeasonsRef.current.has(inFlightKey)) return;
 
       loadingSeasonsRef.current.add(seasonNumber);
+      inFlightSeasonsRef.current.add(inFlightKey);
       const loadGeneration = seasonLoadGenerationRef.current;
+      setSeasonWatchedKeyErrors((prev) => {
+        if (prev[seasonNumber] === undefined) {
+          return prev;
+        }
+        const next = { ...prev };
+        delete next[seasonNumber];
+        return next;
+      });
 
       try {
         const keys = await getWatchedEpisodesForSeasonAction({
@@ -1247,10 +1273,23 @@ export function ShowDetailScreen() {
             [seasonNumber]: new Set(keys),
           };
         });
+        setSeasonWatchedKeyErrors((prev) => {
+          if (prev[seasonNumber] === undefined) {
+            return prev;
+          }
+          const next = { ...prev };
+          delete next[seasonNumber];
+          return next;
+        });
       } catch (error) {
         console.error("Failed to load watched episodes for season", seasonNumber, error);
+        setSeasonWatchedKeyErrors((prev) => ({
+          ...prev,
+          [seasonNumber]: error instanceof Error ? error.message : String(error),
+        }));
       } finally {
         loadingSeasonsRef.current.delete(seasonNumber);
+        inFlightSeasonsRef.current.delete(inFlightKey);
       }
     },
     [getWatchedEpisodesForSeasonAction, isInWatchlist, trackingArgs]
@@ -1541,8 +1580,11 @@ export function ShowDetailScreen() {
     if (!parsedId || parsedId.source !== "tmdb" || parsedId.mediaType !== "tv") {
       return season.episodes ?? [];
     }
+    const inFlightKey = `episodes:${season.seasonNumber}`;
     if (seasonLoading[season.seasonNumber]) return season.episodes ?? [];
+    if (inFlightSeasonsRef.current.has(inFlightKey)) return season.episodes ?? [];
 
+    inFlightSeasonsRef.current.add(inFlightKey);
     setSeasonLoading((prev) => ({ ...prev, [season.seasonNumber]: true }));
     setSeasonErrors((prev) => ({ ...prev, [season.seasonNumber]: null }));
 
@@ -1576,6 +1618,7 @@ export function ShowDetailScreen() {
       }));
       return null;
     } finally {
+      inFlightSeasonsRef.current.delete(inFlightKey);
       setSeasonLoading((prev) => ({ ...prev, [season.seasonNumber]: false }));
     }
   }, [parsedId, seasonLoading]);
@@ -3231,6 +3274,7 @@ export function ShowDetailScreen() {
   }, [loadedRailEpisodes]);
 
   const railAnchorEpisode = loadedRailEpisodes[railAnchorMeta.nextEpisodeIndex] ?? null;
+  const hasRailWatchedKeyError = Object.keys(seasonWatchedKeyErrors).length > 0;
 
   const getAdjacentRailSeason = useCallback(
     (direction: "previous" | "next") => {
@@ -3265,10 +3309,14 @@ export function ShowDetailScreen() {
 
   const loadAdjacentRailSeason = useCallback(
     async (direction: "previous" | "next") => {
-      if (isRailLoadingMore) return;
       const season = getAdjacentRailSeason(direction);
       if (!season) return;
+      const inFlightKey = getRailSeasonLoadKey(season.seasonNumber, direction);
+      if (inFlightSeasonsRef.current.has(inFlightKey)) {
+        return;
+      }
 
+      inFlightSeasonsRef.current.add(inFlightKey);
       setIsRailLoadingMore(true);
       try {
         await Promise.all([
@@ -3276,11 +3324,15 @@ export function ShowDetailScreen() {
           loadWatchedKeysForSeason(season.seasonNumber),
         ]);
       } finally {
+        inFlightSeasonsRef.current.delete(inFlightKey);
         setIsRailLoadingMore(false);
       }
     },
-    [getAdjacentRailSeason, isRailLoadingMore, loadWatchedKeysForSeason, resolveSeasonEpisodes]
+    [getAdjacentRailSeason, loadWatchedKeysForSeason, resolveSeasonEpisodes]
   );
+
+  const canLoadPreviousRail = getAdjacentRailSeason("previous") !== null;
+  const canLoadNextRail = getAdjacentRailSeason("next") !== null;
 
   const continueTrackingRailItems = useMemo<ContinueTrackingRailItem[]>(() => {
     if (!show || show.mediaType === "movie" || !canTrackShow) {
@@ -3298,7 +3350,9 @@ export function ShowDetailScreen() {
         kind: "episode",
         episode,
         watched: watchedEpisodeKeys.has(key),
-        isUpdating: pendingEpisodeKeys[key] || false,
+        isUpdating:
+          (pendingEpisodeKeys[key] || false) ||
+          seasonWatchedKeyErrors[episode.seasonNumber] !== undefined,
         watchCount: episodeWatchCounts[key],
         availability: getEpisodeAvailabilityLabel(episode.airDate),
       });
@@ -3313,7 +3367,10 @@ export function ShowDetailScreen() {
       return !watchedEpisodeKeys.has(key) && isEpisodeReleased(episode.airDate);
     });
     const canShowCaughtUp =
-      railAnchorMeta.latestWatchedIndex >= 0 && !hasLoadedReleasedUnwatchedEpisode;
+      railAnchorMeta.latestWatchedIndex >= 0 &&
+      !hasLoadedReleasedUnwatchedEpisode &&
+      !canLoadNextRail &&
+      !hasRailWatchedKeyError;
 
     if (canShowCaughtUp) {
       const line = getCaughtUpLine(show.id);
@@ -3329,19 +3386,27 @@ export function ShowDetailScreen() {
 
     return items;
   }, [
+    canLoadNextRail,
     canTrackShow,
     episodeWatchCounts,
+    hasRailWatchedKeyError,
     loadedRailEpisodes,
     pendingEpisodeKeys,
     railAnchorMeta.latestWatchedIndex,
     show,
+    seasonWatchedKeyErrors,
     totalEpisodesCount,
     totalWatchedEpisodesCount,
     watchedEpisodeKeys,
   ]);
 
-  const canLoadPreviousRail = getAdjacentRailSeason("previous") !== null;
-  const canLoadNextRail = getAdjacentRailSeason("next") !== null;
+  useEffect(() => {
+    if (railAnchorEpisode || !canLoadNextRail || show?.mediaType !== "tv") {
+      return;
+    }
+
+    void loadAdjacentRailSeason("next");
+  }, [canLoadNextRail, loadAdjacentRailSeason, railAnchorEpisode, show?.mediaType]);
 
   useEffect(() => {
     if (!railAnchorEpisode || show?.mediaType !== "tv") {
