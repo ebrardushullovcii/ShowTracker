@@ -9,7 +9,7 @@ export default function TabsLayout() {
   const insets = useSafeAreaInsets();
   const isDesktop = Platform.OS === "web" && width >= DESKTOP_SIDEBAR_BREAKPOINT;
   const isMobileWeb = Platform.OS === "web" && !isDesktop;
-  const mobileWebBottomInset = isMobileWeb ? 8 : 0;
+  const mobileWebBottomInset = isMobileWeb ? 16 : 0;
   const iosBottomInset = Math.max(insets.bottom, 16);
   const mobileTabBarPaddingBottom =
     Platform.OS === "ios" ? iosBottomInset + 10 : isMobileWeb ? mobileWebBottomInset : 8;
