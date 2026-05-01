@@ -11,14 +11,14 @@ export default function TabsLayout() {
   const isMobileWeb = Platform.OS === "web" && !isDesktop;
   const iosBottomInset = Math.max(insets.bottom, 16);
   const mobileTabBarPaddingBottom =
-    Platform.OS === "ios" ? iosBottomInset + 10 : isMobileWeb ? 14 : 10;
-  const mobileTabBarPaddingTop = Platform.OS === "ios" ? 2 : 6;
+    Platform.OS === "ios" ? iosBottomInset + 10 : isMobileWeb ? 4 : 8;
+  const mobileTabBarPaddingTop = Platform.OS === "ios" ? 2 : isMobileWeb ? 4 : 6;
   const mobileTabBarHeight =
     Platform.OS === "ios"
       ? Math.max(90, 50 + mobileTabBarPaddingTop + mobileTabBarPaddingBottom)
       : isMobileWeb
-        ? 76
-        : 68;
+        ? 62
+        : 64;
 
   return (
     <View className="flex-1" style={{ backgroundColor: "#09090b" }}>
