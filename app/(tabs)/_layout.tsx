@@ -17,7 +17,7 @@ export default function TabsLayout() {
     Platform.OS === "ios"
       ? Math.max(90, 50 + mobileTabBarPaddingTop + mobileTabBarPaddingBottom)
       : isMobileWeb
-        ? "calc(54px + env(safe-area-inset-bottom, 0px))"
+        ? 58
         : 64;
 
   return (
@@ -32,14 +32,13 @@ export default function TabsLayout() {
                   backgroundColor: "#09090b",
                   borderTopWidth: 2,
                   borderTopColor: "#27272a",
-                  height: mobileTabBarHeight as any,
-                  paddingBottom: isMobileWeb
-                    ? ("env(safe-area-inset-bottom, 0px)" as any)
-                    : mobileTabBarPaddingBottom,
+                  height: mobileTabBarHeight,
+                  paddingBottom: mobileTabBarPaddingBottom,
                   paddingTop: mobileTabBarPaddingTop,
+                  bottom: isMobileWeb ? 0 : undefined,
                   position: isMobileWeb ? "absolute" : undefined,
                 },
-            tabBarItemStyle: isMobileWeb ? { height: 54 } : undefined,
+            tabBarItemStyle: isMobileWeb ? { height: 58 } : undefined,
             tabBarActiveTintColor: "#ef4444",
             tabBarInactiveTintColor: "#a1a1aa",
             tabBarIconStyle: Platform.OS === "ios" ? { marginTop: -2 } : undefined,
