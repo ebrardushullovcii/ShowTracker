@@ -9,17 +9,16 @@ export default function TabsLayout() {
   const insets = useSafeAreaInsets();
   const isDesktop = Platform.OS === "web" && width >= DESKTOP_SIDEBAR_BREAKPOINT;
   const isMobileWeb = Platform.OS === "web" && !isDesktop;
-  const shouldLiftTabContent = Platform.OS === "ios" || Platform.OS === "android" || isMobileWeb;
-  const iosBottomInset = Math.max(insets.bottom, 18);
+  const iosBottomInset = Math.max(insets.bottom, 16);
   const mobileTabBarPaddingBottom =
-    Platform.OS === "ios" ? iosBottomInset + 8 : isMobileWeb ? 18 : 10;
+    Platform.OS === "ios" ? iosBottomInset + 14 : isMobileWeb ? 30 : 12;
   const mobileTabBarPaddingTop = Platform.OS === "ios" ? 2 : 6;
   const mobileTabBarHeight =
     Platform.OS === "ios"
-      ? Math.max(84, 50 + mobileTabBarPaddingTop + mobileTabBarPaddingBottom)
+      ? Math.max(90, 50 + mobileTabBarPaddingTop + mobileTabBarPaddingBottom)
       : isMobileWeb
-        ? 68
-        : 68;
+        ? 90
+        : 72;
 
   return (
     <View className="flex-1" style={{ backgroundColor: "#09090b" }}>
@@ -39,19 +38,13 @@ export default function TabsLayout() {
                 },
             tabBarActiveTintColor: "#ef4444",
             tabBarInactiveTintColor: "#a1a1aa",
-            tabBarIconStyle: shouldLiftTabContent
-              ? {
-                  marginTop: Platform.OS === "ios" ? -2 : 0,
-                  transform: [{ translateY: -6 }],
-                }
-              : undefined,
+            tabBarIconStyle: Platform.OS === "ios" ? { marginTop: -2 } : undefined,
             tabBarLabelStyle: {
               fontSize: 10,
               fontWeight: "900",
               textTransform: "uppercase" as const,
               letterSpacing: 0.5,
               marginBottom: Platform.OS === "ios" ? 2 : 0,
-              ...(shouldLiftTabContent ? { transform: [{ translateY: -6 }] } : null),
             },
             tabBarShowLabel: true,
           }}
