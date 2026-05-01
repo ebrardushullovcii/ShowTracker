@@ -76,16 +76,24 @@ export function ContinueTrackingRail({
   const scrollOffsetXRef = useRef(0);
   const dragStartScrollXRef = useRef(0);
   const hasAutoPositionedRef = useRef(false);
+  const shouldAutoPositionRef = useRef(true);
   const previousPrependCountRef = useRef(0);
+  const currentPrependCountRef = useRef(prependItemCount);
   const [, setIsDragging] = useState(false);
 
   useEffect(() => {
+    currentPrependCountRef.current = prependItemCount;
+  }, [prependItemCount]);
+
+  useEffect(() => {
     hasAutoPositionedRef.current = false;
+    shouldAutoPositionRef.current = true;
+    previousPrependCountRef.current = currentPrependCountRef.current;
   }, [resetScrollKey]);
 
   useEffect(() => {
     const previousCount = previousPrependCountRef.current;
-    if (!hasAutoPositionedRef.current || prependItemCount <= previousCount) {
+    if (!hasAutoPositionedRef.current || shouldAutoPositionRef.current || prependItemCount <= previousCount) {
       previousPrependCountRef.current = prependItemCount;
       return;
     }
@@ -149,7 +157,7 @@ export function ContinueTrackingRail({
   }
 
   const autoPositionToAnchor = () => {
-    if (hasAutoPositionedRef.current) {
+    if (!shouldAutoPositionRef.current) {
       return;
     }
 
@@ -160,6 +168,7 @@ export function ContinueTrackingRail({
     scrollViewRef.current?.scrollTo({ x: targetX, animated: false });
     scrollOffsetXRef.current = targetX;
     hasAutoPositionedRef.current = true;
+    shouldAutoPositionRef.current = false;
   };
 
   return (

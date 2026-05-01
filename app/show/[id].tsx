@@ -4021,7 +4021,7 @@ export function ShowDetailScreen() {
               }}
               fallbackImageUrl={show.backdropUrl ?? show.posterUrl ?? null}
               initialScrollIndex={railAnchorMeta.initialScrollIndex}
-              resetScrollKey={railAnchorEpisode ? `${show.id}:${getEpisodePositionKey(railAnchorEpisode)}` : show.id}
+              resetScrollKey={show.id}
               prependItemCount={railAnchorMeta.prependItemCount}
             />
           )}
