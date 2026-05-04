@@ -109,6 +109,7 @@ function isAbortError(error: unknown) {
 
 function getGridColumnCount(width: number, isWeb: boolean) {
   if (!isWeb) return 2;
+  if (width < 640) return 2;
   if (width >= 1800) return 8;
   if (width >= 1500) return 7;
   if (width >= 1260) return 6;
@@ -321,6 +322,7 @@ export function RecommendationsScreen() {
   const [activeTab, setActiveTab] = useState<RecTab>("all");
   const { width } = useWindowDimensions();
   const isWeb = Platform.OS === "web";
+  const isCompactLayout = width < 640;
   const columns = getGridColumnCount(width, isWeb);
 
   const [recommendations, setRecommendations] = useState<NormalizedShow[]>([]);
@@ -856,6 +858,7 @@ export function RecommendationsScreen() {
                     : undefined
                 }
                 className="mb-4"
+                compact={isCompactLayout}
               />
 
               <SegmentedControl
@@ -863,6 +866,7 @@ export function RecommendationsScreen() {
                 value={activeTab}
                 onValueChange={setActiveTab}
                 className="mb-4"
+                compact={isCompactLayout}
               />
 
               {isLoading && (
@@ -923,7 +927,7 @@ export function RecommendationsScreen() {
                   params: { id: createShowRouteId(item) },
                 }}
                 className="w-full"
-                posterClassName={isWeb ? "h-56" : "h-64"}
+                posterClassName={isCompactLayout ? "h-48" : isWeb ? "h-56" : "h-64"}
               />
             </View>
           )}

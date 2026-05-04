@@ -415,17 +415,21 @@ function getEpisodeCodeLabel(episode: UpcomingEpisode["episode"]) {
   ).padStart(2, "0")}`;
 }
 
-function WatchlistCard({ item, isWeb }: { item: WatchlistItem; isWeb: boolean }) {
+function WatchlistCard({
+  item,
+  isCompact,
+}: {
+  item: WatchlistItem;
+  isCompact: boolean;
+}) {
+  const { width } = useWindowDimensions();
+  const isSmallPhone = width < 390;
   const routeId = getWatchlistRouteId(item);
-  const posterHeight = isWeb ? 268 : 206;
+  const posterHeight = isCompact ? 206 : 268;
   const safeWatchedEpisodes =
     item.totalEpisodes !== null
       ? Math.min(item.watchedEpisodes, item.totalEpisodes)
       : item.watchedEpisodes;
-  const watchedPercent =
-    item.totalEpisodes && item.totalEpisodes > 0
-      ? Math.min(100, Math.round((safeWatchedEpisodes / item.totalEpisodes) * 100))
-      : null;
   const cornerLabel =
     item.remainingEpisodes === null
       ? item.trackingState === "tba"
@@ -455,7 +459,12 @@ function WatchlistCard({ item, isWeb }: { item: WatchlistItem; isWeb: boolean })
           />
         ) : (
           <View className="flex-1 items-center justify-center bg-zinc-800 px-3">
-            <Text className="text-center text-sm font-semibold text-zinc-400">
+            <Text
+              className="text-center text-sm font-semibold text-zinc-400"
+              numberOfLines={3}
+              adjustsFontSizeToFit
+              minimumFontScale={0.72}
+            >
               {item.title}
             </Text>
           </View>
@@ -465,12 +474,12 @@ function WatchlistCard({ item, isWeb }: { item: WatchlistItem; isWeb: boolean })
           colors={["rgba(0,0,0,0)", "rgba(0,0,0,0.5)", "rgba(0,0,0,0.9)"]}
           start={{ x: 0.5, y: 0 }}
           end={{ x: 0.5, y: 1 }}
-          style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: isWeb ? 112 : 88 }}
+          style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: isCompact ? 88 : 112 }}
         />
         <View
           pointerEvents="none"
           className="absolute bottom-0 left-0 right-0 border-t border-white/10 bg-black/45"
-          style={{ height: isWeb ? 78 : 62 }}
+          style={{ height: isCompact ? 62 : 78 }}
         />
         <View className="absolute right-2 top-2 rounded-md border border-white/20 bg-black/80 px-2 py-1">
           <Text className="text-[10px] font-black uppercase tracking-wide text-white">
@@ -478,7 +487,12 @@ function WatchlistCard({ item, isWeb }: { item: WatchlistItem; isWeb: boolean })
           </Text>
         </View>
         <View className="absolute bottom-0 left-0 right-0 px-2.5 pb-2">
-          <Text className={`${isWeb ? "text-sm" : "text-[13px]"} mb-0.5 font-bold text-white`} numberOfLines={1}>
+          <Text
+            className={`${isSmallPhone ? "text-[11px]" : isCompact ? "text-[13px]" : "text-sm"} mb-0.5 font-bold text-white`}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.62}
+          >
             {item.title}
           </Text>
           <Text className="text-[11px] text-zinc-300" numberOfLines={1}>
@@ -499,11 +513,6 @@ function WatchlistCard({ item, isWeb }: { item: WatchlistItem; isWeb: boolean })
               </Text>
             ) : null}
           </View>
-          {watchedPercent !== null ? (
-            <View className="mt-1.5 h-1 overflow-hidden rounded-full bg-white/15">
-              <View className="h-full bg-red-500" style={{ width: `${watchedPercent}%` }} />
-            </View>
-          ) : null}
         </View>
       </View>
     </View>
@@ -527,8 +536,8 @@ function WatchlistCard({ item, isWeb }: { item: WatchlistItem; isWeb: boolean })
   );
 }
 
-function WatchlistCardSkeleton({ isWeb }: { isWeb: boolean }) {
-  const posterHeight = isWeb ? 268 : 206;
+function WatchlistCardSkeleton({ isCompact }: { isCompact: boolean }) {
+  const posterHeight = isCompact ? 206 : 268;
 
   return (
     <View className="overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900">
@@ -548,9 +557,6 @@ function WatchlistCardSkeleton({ isWeb }: { isWeb: boolean }) {
           <View className="mt-1.5 flex-row items-center gap-2">
             <View className="h-2 w-14 rounded-full bg-white/10" />
             <View className="h-4 w-8 rounded-full bg-red-500/20" />
-          </View>
-          <View className="mt-1.5 h-1 overflow-hidden rounded-full bg-white/10">
-            <View className="h-full w-2/5 rounded-full bg-red-500/40" />
           </View>
         </View>
       </View>
@@ -1779,6 +1785,7 @@ export function HomeScreen() {
   }, [upcomingGroups]);
 
   const columns = getColumnCount(effectiveWidth, isWeb);
+  const isCompactHomeLayout = effectiveWidth < 640;
   const watchlistPageSize = Math.max(columns * 3, 6);
   const secondarySectionPageSize = Math.max(columns * 2, 6);
   const isWideCalendar = usesMonthCalendarLayout && effectiveWidth >= 1180;
@@ -2120,11 +2127,11 @@ export function HomeScreen() {
             paddingRight: columnIndex === columns - 1 ? 0 : halfGap,
           }}
         >
-          <WatchlistCard item={item} isWeb={isWeb} />
+          <WatchlistCard item={item} isCompact={isCompactHomeLayout} />
         </View>
       );
     },
-    [columns, isWeb]
+    [columns, isCompactHomeLayout]
   );
 
   const watchlistHeader = (
@@ -2136,7 +2143,7 @@ export function HomeScreen() {
         icon="sparkles-outline"
         rightLabel={`${watchlistCount} matched`}
         className="mb-3"
-        compact={!isWeb}
+        compact={isCompactHomeLayout}
       />
 
       <SegmentedControl
@@ -2147,6 +2154,7 @@ export function HomeScreen() {
         ]}
         value={activeTab}
         onValueChange={(value: HomeTab) => setActiveTab(value)}
+        compact={isCompactHomeLayout}
       />
 
       <SegmentedControl
@@ -2158,6 +2166,7 @@ export function HomeScreen() {
         ]}
         value={mediaFilter}
         onValueChange={(value: HomeMediaFilter) => setMediaFilter(value)}
+        compact={isCompactHomeLayout}
       />
 
       {!isWatchlistVisualLoading &&
@@ -2217,7 +2226,7 @@ export function HomeScreen() {
               <View key={`auto-paused-row-${rowIndex}`} className="flex-row gap-3">
                 {row.map((item) => (
                   <View key={`auto-paused-${item.mediaType}-${item.id}`} style={{ flex: 1 / columns }}>
-                    <WatchlistCard item={item} isWeb={isWeb} />
+                    <WatchlistCard item={item} isCompact={isCompactHomeLayout} />
                   </View>
                 ))}
                 {row.length < columns
@@ -2293,7 +2302,7 @@ export function HomeScreen() {
               <View key={`not-started-row-${rowIndex}`} className="flex-row gap-3">
                 {row.map((item) => (
                   <View key={`not-started-${item.mediaType}-${item.id}`} style={{ flex: 1 / columns }}>
-                    <WatchlistCard item={item} isWeb={isWeb} />
+                    <WatchlistCard item={item} isCompact={isCompactHomeLayout} />
                   </View>
                 ))}
                 {row.length < columns
@@ -2362,7 +2371,7 @@ export function HomeScreen() {
         <View key="watchlist-skeleton-row-0" className="flex-row gap-3">
           {watchlistTailSkeletonItems.map((item) => (
             <View key={`watchlist-skeleton-${item}`} style={{ flex: 1 / columns }}>
-              <WatchlistCardSkeleton isWeb={isWeb} />
+              <WatchlistCardSkeleton isCompact={isCompactHomeLayout} />
             </View>
           ))}
         </View>
@@ -2387,7 +2396,7 @@ export function HomeScreen() {
                     <View key={`watchlist-skeleton-row-${rowIndex}`} className="flex-row gap-3">
                       {row.map((item) => (
                         <View key={`watchlist-skeleton-${item}`} style={{ flex: 1 / columns }}>
-                          <WatchlistCardSkeleton isWeb={isWeb} />
+                          <WatchlistCardSkeleton isCompact={isCompactHomeLayout} />
                         </View>
                       ))}
                       {row.length < columns
@@ -2418,7 +2427,7 @@ export function HomeScreen() {
                           key={`${item.mediaType}-${item.id}`}
                           style={{ flex: 1 / columns }}
                         >
-                          <WatchlistCard item={item} isWeb />
+                          <WatchlistCard item={item} isCompact={isCompactHomeLayout} />
                         </View>
                       ))}
                       {row.length < columns
@@ -2429,7 +2438,7 @@ export function HomeScreen() {
                                 key={`watchlist-skeleton-${watchlistTailSkeletonItems[fillerIndex]}`}
                                 style={{ flex: 1 / columns }}
                               >
-                                <WatchlistCardSkeleton isWeb />
+                                <WatchlistCardSkeleton isCompact={isCompactHomeLayout} />
                               </View>
                             ) : (
                               <View
@@ -2447,7 +2456,7 @@ export function HomeScreen() {
                     <View key="watchlist-skeleton-row-0" className="flex-row gap-3">
                       {watchlistTailSkeletonItems.map((item) => (
                         <View key={`watchlist-skeleton-${item}`} style={{ flex: 1 / columns }}>
-                          <WatchlistCardSkeleton isWeb />
+                          <WatchlistCardSkeleton isCompact={isCompactHomeLayout} />
                         </View>
                       ))}
                     </View>
@@ -2491,7 +2500,7 @@ export function HomeScreen() {
                   icon="calendar-outline"
                   rightLabel={`${upcomingCount} episodes`}
                   className="mb-3"
-                  compact={!isWeb}
+                  compact={isCompactHomeLayout}
                 />
 
                 <SegmentedControl
@@ -2502,6 +2511,7 @@ export function HomeScreen() {
                   ]}
                   value={activeTab}
                   onValueChange={(value: HomeTab) => setActiveTab(value)}
+                  compact={isCompactHomeLayout}
                 />
 
                 <SegmentedControl
@@ -2512,6 +2522,7 @@ export function HomeScreen() {
                   ]}
                   value={mediaFilter}
                   onValueChange={(value: HomeMediaFilter) => setMediaFilter(value)}
+                  compact={isCompactHomeLayout}
                 />
 
               </View>

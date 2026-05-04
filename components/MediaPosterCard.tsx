@@ -2,9 +2,11 @@ import type { Href } from "expo-router";
 import { Link } from "expo-router";
 import {
   Image,
+  Platform,
   Pressable,
   Text,
   View,
+  useWindowDimensions,
   type StyleProp,
   type ViewStyle,
 } from "react-native";
@@ -41,6 +43,10 @@ export function MediaPosterCard({
   progress,
   unwatchedCount,
 }: MediaPosterCardProps) {
+  const { width } = useWindowDimensions();
+  const isCompact = Platform.OS !== "web" || width < 640;
+  const isSmallPhone = width < 390;
+
   return (
     <Link href={href} asChild>
       <Pressable
@@ -64,7 +70,12 @@ export function MediaPosterCard({
             />
           ) : (
             <View className="h-full w-full items-center justify-center bg-bg-surface px-3">
-              <Text className="text-center text-sm font-semibold text-text-primary">
+              <Text
+                className="text-center text-sm font-semibold text-text-primary"
+                numberOfLines={3}
+                adjustsFontSizeToFit
+                minimumFontScale={0.72}
+              >
                 {show.title}
               </Text>
             </View>
@@ -99,15 +110,22 @@ export function MediaPosterCard({
           ) : null}
         </View>
 
-        <View className="mt-2 gap-0.5 px-0.5">
-          <Text className="text-sm font-semibold text-text-primary" numberOfLines={1}>
+        <View
+          className={`${showOverview ? "h-[86px]" : isCompact ? "h-[40px]" : "h-[42px]"} mt-2 gap-0.5 px-0.5`}
+        >
+          <Text
+            className={`${isSmallPhone ? "text-[12px]" : "text-sm"} font-semibold leading-4 text-text-primary`}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.64}
+          >
             {show.title}
           </Text>
-          <Text className="text-xs text-text-secondary">
+          <Text className="text-xs leading-4 text-text-secondary" numberOfLines={1}>
             {show.firstAired?.slice(0, 4) ?? "TBA"}
           </Text>
           {showOverview && show.overview ? (
-            <Text className="text-xs leading-relaxed text-text-secondary" numberOfLines={3}>
+            <Text className="text-xs leading-relaxed text-text-secondary" numberOfLines={2}>
               {show.overview}
             </Text>
           ) : null}
