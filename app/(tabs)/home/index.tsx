@@ -417,7 +417,7 @@ function getEpisodeCodeLabel(episode: UpcomingEpisode["episode"]) {
 
 function WatchlistCard({ item, isWeb }: { item: WatchlistItem; isWeb: boolean }) {
   const routeId = getWatchlistRouteId(item);
-  const posterHeight = isWeb ? 280 : 240;
+  const posterHeight = isWeb ? 268 : 206;
   const safeWatchedEpisodes =
     item.totalEpisodes !== null
       ? Math.min(item.watchedEpisodes, item.totalEpisodes)
@@ -445,7 +445,7 @@ function WatchlistCard({ item, isWeb }: { item: WatchlistItem; isWeb: boolean })
   const metadataLabel = isAutoPaused ? formatPausedSinceLabel(item.autoPausedAt) : statusLabel;
 
   const card = (
-    <View className="overflow-hidden rounded-xl border-2 border-zinc-800 bg-zinc-900">
+    <View className="overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900">
       <View className="relative overflow-hidden" style={{ height: posterHeight }}>
         {item.posterUrl ? (
           <Image
@@ -462,45 +462,45 @@ function WatchlistCard({ item, isWeb }: { item: WatchlistItem; isWeb: boolean })
         )}
         <LinearGradient
           pointerEvents="none"
-          colors={["rgba(0,0,0,0)", "rgba(0,0,0,0.55)", "rgba(0,0,0,0.86)"]}
+          colors={["rgba(0,0,0,0)", "rgba(0,0,0,0.5)", "rgba(0,0,0,0.9)"]}
           start={{ x: 0.5, y: 0 }}
           end={{ x: 0.5, y: 1 }}
-          style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 118 }}
+          style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: isWeb ? 112 : 88 }}
         />
         <View
           pointerEvents="none"
-          className="absolute bottom-0 left-0 right-0 border-t border-white/10 bg-black/50"
-          style={{ height: 82 }}
+          className="absolute bottom-0 left-0 right-0 border-t border-white/10 bg-black/45"
+          style={{ height: isWeb ? 78 : 62 }}
         />
-        <View className="absolute right-2 top-2 rounded-md border-2 border-white/20 bg-black/80 px-2.5 py-1.5">
-          <Text className="text-[11px] font-black uppercase tracking-wide text-white">
+        <View className="absolute right-2 top-2 rounded-md border border-white/20 bg-black/80 px-2 py-1">
+          <Text className="text-[10px] font-black uppercase tracking-wide text-white">
             {cornerLabel}
           </Text>
         </View>
-        <View className="absolute bottom-0 left-0 right-0 px-2.5 pb-2.5">
-          <Text className="mb-0.5 text-sm font-bold text-white" numberOfLines={1}>
+        <View className="absolute bottom-0 left-0 right-0 px-2.5 pb-2">
+          <Text className={`${isWeb ? "text-sm" : "text-[13px]"} mb-0.5 font-bold text-white`} numberOfLines={1}>
             {item.title}
           </Text>
-          <Text className="text-xs text-zinc-400" numberOfLines={1}>
+          <Text className="text-[11px] text-zinc-300" numberOfLines={1}>
             {progressLabel}
           </Text>
-          <View className="mt-1 flex-row items-center gap-2">
-            <Text className="text-[10px] uppercase tracking-wide text-zinc-300">
+          <View className="mt-1 flex-row items-center gap-1.5">
+            <Text className="text-[9px] uppercase tracking-wide text-zinc-300" numberOfLines={1}>
               {metadataLabel}
             </Text>
             {item.isAutoTracked ? (
-              <Text className="rounded-sm border border-red-400/40 bg-red-500/20 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wide text-red-100">
+              <Text className="rounded-sm border border-red-400/40 bg-red-500/20 px-1 py-0.5 text-[8px] font-black uppercase tracking-wide text-red-100">
                 Auto
               </Text>
             ) : null}
             {isAutoPaused ? (
-              <Text className="rounded-sm border border-amber-300/30 bg-amber-400/15 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wide text-amber-100">
+              <Text className="rounded-sm border border-amber-300/30 bg-amber-400/15 px-1 py-0.5 text-[8px] font-black uppercase tracking-wide text-amber-100">
                 Snoozed
               </Text>
             ) : null}
           </View>
           {watchedPercent !== null ? (
-            <View className="mt-1.5 h-1 overflow-hidden bg-white/15">
+            <View className="mt-1.5 h-1 overflow-hidden rounded-full bg-white/15">
               <View className="h-full bg-red-500" style={{ width: `${watchedPercent}%` }} />
             </View>
           ) : null}
@@ -528,10 +528,10 @@ function WatchlistCard({ item, isWeb }: { item: WatchlistItem; isWeb: boolean })
 }
 
 function WatchlistCardSkeleton({ isWeb }: { isWeb: boolean }) {
-  const posterHeight = isWeb ? 280 : 240;
+  const posterHeight = isWeb ? 268 : 206;
 
   return (
-    <View className="overflow-hidden rounded-xl border-2 border-zinc-800 bg-zinc-900">
+    <View className="overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900">
       <View className="relative overflow-hidden" style={{ height: posterHeight }}>
         <LinearGradient
           colors={["#18181b", "#111113"]}
@@ -539,17 +539,17 @@ function WatchlistCardSkeleton({ isWeb }: { isWeb: boolean }) {
           end={{ x: 1, y: 1 }}
           style={{ position: "absolute", inset: 0 }}
         />
-        <View className="absolute right-2 top-2 rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5">
-          <View className="h-3 w-14 rounded-full bg-white/10" />
+        <View className="absolute right-2 top-2 rounded-md border border-white/10 bg-white/5 px-2 py-1">
+          <View className="h-2.5 w-12 rounded-full bg-white/10" />
         </View>
-        <View className="absolute bottom-0 left-0 right-0 px-2.5 pb-2.5">
-          <View className="h-4 w-3/4 rounded-full bg-white/15" />
-          <View className="mt-2 h-3 w-1/2 rounded-full bg-white/10" />
-          <View className="mt-2 flex-row items-center gap-2">
-            <View className="h-2.5 w-16 rounded-full bg-white/10" />
-            <View className="h-5 w-10 rounded-full bg-red-500/20" />
+        <View className="absolute bottom-0 left-0 right-0 px-2.5 pb-2">
+          <View className="h-3.5 w-3/4 rounded-full bg-white/15" />
+          <View className="mt-1.5 h-2.5 w-1/2 rounded-full bg-white/10" />
+          <View className="mt-1.5 flex-row items-center gap-2">
+            <View className="h-2 w-14 rounded-full bg-white/10" />
+            <View className="h-4 w-8 rounded-full bg-red-500/20" />
           </View>
-          <View className="mt-2 h-1 overflow-hidden rounded-full bg-white/10">
+          <View className="mt-1.5 h-1 overflow-hidden rounded-full bg-white/10">
             <View className="h-full w-2/5 rounded-full bg-red-500/40" />
           </View>
         </View>
@@ -2135,11 +2135,12 @@ export function HomeScreen() {
         eyebrow="Today"
         icon="sparkles-outline"
         rightLabel={`${watchlistCount} matched`}
-        className="mb-4"
+        className="mb-3"
+        compact={!isWeb}
       />
 
       <SegmentedControl
-        className="mb-3"
+        className="mb-2.5"
         options={[
           { value: "watchlist", label: "Watchlist" },
           { value: "upcoming", label: "Schedule" },
@@ -2149,7 +2150,7 @@ export function HomeScreen() {
       />
 
       <SegmentedControl
-        className="mb-3"
+        className="mb-2.5"
         options={[
           { value: "all", label: "All" },
           { value: "tv", label: "TV Shows" },
@@ -2489,11 +2490,12 @@ export function HomeScreen() {
                   eyebrow="Calendar"
                   icon="calendar-outline"
                   rightLabel={`${upcomingCount} episodes`}
-                  className="mb-4"
+                  className="mb-3"
+                  compact={!isWeb}
                 />
 
                 <SegmentedControl
-                  className="mb-3"
+                  className="mb-2.5"
                   options={[
                     { value: "watchlist", label: "Watchlist" },
                     { value: "upcoming", label: "Schedule" },
