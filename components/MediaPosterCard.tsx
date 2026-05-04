@@ -46,6 +46,20 @@ export function MediaPosterCard({
   const { width } = useWindowDimensions();
   const isCompact = Platform.OS !== "web" || width < 640;
   const isSmallPhone = width < 390;
+  const isFabricEnabled =
+    "NativeFabricUIManager" in globalThis || "__turboModuleProxy" in globalThis;
+  const missingPosterTitleFitProps = isFabricEnabled
+    ? {}
+    : {
+        adjustsFontSizeToFit: true,
+        minimumFontScale: 0.72,
+      };
+  const titleFitProps = isFabricEnabled
+    ? {}
+    : {
+        adjustsFontSizeToFit: true,
+        minimumFontScale: 0.64,
+      };
 
   return (
     <Link href={href} asChild>
@@ -73,8 +87,9 @@ export function MediaPosterCard({
               <Text
                 className="text-center text-sm font-semibold text-text-primary"
                 numberOfLines={3}
-                adjustsFontSizeToFit
-                minimumFontScale={0.72}
+                ellipsizeMode="tail"
+                style={isFabricEnabled ? { fontSize: 14, lineHeight: 18 } : undefined}
+                {...missingPosterTitleFitProps}
               >
                 {show.title}
               </Text>
@@ -116,8 +131,9 @@ export function MediaPosterCard({
           <Text
             className={`${isSmallPhone ? "text-[12px]" : "text-sm"} font-semibold leading-4 text-text-primary`}
             numberOfLines={1}
-            adjustsFontSizeToFit
-            minimumFontScale={0.64}
+            ellipsizeMode="tail"
+            style={isFabricEnabled ? { fontSize: isSmallPhone ? 12 : 14, lineHeight: 16 } : undefined}
+            {...titleFitProps}
           >
             {show.title}
           </Text>

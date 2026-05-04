@@ -5,6 +5,7 @@ import {
   Text,
   View,
   useWindowDimensions,
+  type LayoutChangeEvent,
 } from "react-native";
 import { FlashList } from "@shopify/flash-list";
 import { useQuery } from "convex/react";
@@ -322,8 +323,14 @@ export function RecommendationsScreen() {
   const [activeTab, setActiveTab] = useState<RecTab>("all");
   const { width } = useWindowDimensions();
   const isWeb = Platform.OS === "web";
-  const isCompactLayout = width < 640;
-  const columns = getGridColumnCount(width, isWeb);
+  const [gridWidth, setGridWidth] = useState(0);
+  const effectiveWidth = gridWidth || Math.max(width - 40, 0);
+  const isCompactLayout = effectiveWidth < 640;
+  const columns = getGridColumnCount(effectiveWidth, isWeb);
+
+  const onGridLayout = useCallback((event: LayoutChangeEvent) => {
+    setGridWidth(event.nativeEvent.layout.width);
+  }, []);
 
   const [recommendations, setRecommendations] = useState<NormalizedShow[]>([]);
   const [tvRecommendations, setTvRecommendations] = useState<NormalizedShow[]>([]);
@@ -837,7 +844,7 @@ export function RecommendationsScreen() {
 
   return (
     <ScreenWrapper>
-      <View className="flex-1">
+      <View className="flex-1" onLayout={onGridLayout}>
         <FlashList
           data={recommendations}
           key={`rec-grid-${columns}`}

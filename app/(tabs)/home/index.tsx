@@ -418,12 +418,26 @@ function getEpisodeCodeLabel(episode: UpcomingEpisode["episode"]) {
 function WatchlistCard({
   item,
   isCompact,
+  isSmallPhone,
 }: {
   item: WatchlistItem;
   isCompact: boolean;
+  isSmallPhone: boolean;
 }) {
-  const { width } = useWindowDimensions();
-  const isSmallPhone = width < 390;
+  const isFabricEnabled =
+    "NativeFabricUIManager" in globalThis || "__turboModuleProxy" in globalThis;
+  const missingPosterTitleFitProps = isFabricEnabled
+    ? {}
+    : {
+        adjustsFontSizeToFit: true,
+        minimumFontScale: 0.72,
+      };
+  const titleFitProps = isFabricEnabled
+    ? {}
+    : {
+        adjustsFontSizeToFit: true,
+        minimumFontScale: 0.62,
+      };
   const routeId = getWatchlistRouteId(item);
   const posterHeight = isCompact ? 206 : 268;
   const safeWatchedEpisodes =
@@ -462,8 +476,9 @@ function WatchlistCard({
             <Text
               className="text-center text-sm font-semibold text-zinc-400"
               numberOfLines={3}
-              adjustsFontSizeToFit
-              minimumFontScale={0.72}
+              ellipsizeMode="tail"
+              style={isFabricEnabled ? { fontSize: 14, lineHeight: 18 } : undefined}
+              {...missingPosterTitleFitProps}
             >
               {item.title}
             </Text>
@@ -490,8 +505,13 @@ function WatchlistCard({
           <Text
             className={`${isSmallPhone ? "text-[11px]" : isCompact ? "text-[13px]" : "text-sm"} mb-0.5 font-bold text-white`}
             numberOfLines={1}
-            adjustsFontSizeToFit
-            minimumFontScale={0.62}
+            ellipsizeMode="tail"
+            style={
+              isFabricEnabled
+                ? { fontSize: isSmallPhone ? 11 : isCompact ? 13 : 14, lineHeight: 16 }
+                : undefined
+            }
+            {...titleFitProps}
           >
             {item.title}
           </Text>
@@ -1786,6 +1806,7 @@ export function HomeScreen() {
 
   const columns = getColumnCount(effectiveWidth, isWeb);
   const isCompactHomeLayout = effectiveWidth < 640;
+  const isSmallPhone = width < 390;
   const watchlistPageSize = Math.max(columns * 3, 6);
   const secondarySectionPageSize = Math.max(columns * 2, 6);
   const isWideCalendar = usesMonthCalendarLayout && effectiveWidth >= 1180;
@@ -2127,11 +2148,15 @@ export function HomeScreen() {
             paddingRight: columnIndex === columns - 1 ? 0 : halfGap,
           }}
         >
-          <WatchlistCard item={item} isCompact={isCompactHomeLayout} />
+          <WatchlistCard
+            item={item}
+            isCompact={isCompactHomeLayout}
+            isSmallPhone={isSmallPhone}
+          />
         </View>
       );
     },
-    [columns, isCompactHomeLayout]
+    [columns, isCompactHomeLayout, isSmallPhone]
   );
 
   const watchlistHeader = (
@@ -2226,7 +2251,11 @@ export function HomeScreen() {
               <View key={`auto-paused-row-${rowIndex}`} className="flex-row gap-3">
                 {row.map((item) => (
                   <View key={`auto-paused-${item.mediaType}-${item.id}`} style={{ flex: 1 / columns }}>
-                    <WatchlistCard item={item} isCompact={isCompactHomeLayout} />
+                    <WatchlistCard
+                      item={item}
+                      isCompact={isCompactHomeLayout}
+                      isSmallPhone={isSmallPhone}
+                    />
                   </View>
                 ))}
                 {row.length < columns
@@ -2302,7 +2331,11 @@ export function HomeScreen() {
               <View key={`not-started-row-${rowIndex}`} className="flex-row gap-3">
                 {row.map((item) => (
                   <View key={`not-started-${item.mediaType}-${item.id}`} style={{ flex: 1 / columns }}>
-                    <WatchlistCard item={item} isCompact={isCompactHomeLayout} />
+                    <WatchlistCard
+                      item={item}
+                      isCompact={isCompactHomeLayout}
+                      isSmallPhone={isSmallPhone}
+                    />
                   </View>
                 ))}
                 {row.length < columns
@@ -2427,7 +2460,11 @@ export function HomeScreen() {
                           key={`${item.mediaType}-${item.id}`}
                           style={{ flex: 1 / columns }}
                         >
-                          <WatchlistCard item={item} isCompact={isCompactHomeLayout} />
+                          <WatchlistCard
+                            item={item}
+                            isCompact={isCompactHomeLayout}
+                            isSmallPhone={isSmallPhone}
+                          />
                         </View>
                       ))}
                       {row.length < columns

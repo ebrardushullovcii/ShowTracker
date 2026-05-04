@@ -22,6 +22,14 @@ export function SegmentedControl<T extends string>({
 }: SegmentedControlProps<T>) {
   const { width } = useWindowDimensions();
   const isSmallPhone = width < 390;
+  const isFabricEnabled =
+    "NativeFabricUIManager" in globalThis || "__turboModuleProxy" in globalThis;
+  const labelFitProps = isFabricEnabled
+    ? {}
+    : {
+        adjustsFontSizeToFit: true,
+        minimumFontScale: 0.8,
+      };
 
   return (
     <View
@@ -49,8 +57,13 @@ export function SegmentedControl<T extends string>({
                   : "font-bold text-text-secondary"
               }`}
               numberOfLines={1}
-              adjustsFontSizeToFit
-              minimumFontScale={0.8}
+              ellipsizeMode="tail"
+              style={
+                isFabricEnabled
+                  ? { fontSize: compact && isSmallPhone ? 10 : 12, lineHeight: 16 }
+                  : undefined
+              }
+              {...labelFitProps}
             >
               {opt.label}
             </Text>

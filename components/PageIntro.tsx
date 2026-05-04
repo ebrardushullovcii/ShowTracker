@@ -3,7 +3,7 @@ import { Text, View } from "react-native";
 
 interface PageIntroProps {
   title: string;
-  subtitle: string;
+  subtitle?: string;
   eyebrow?: string;
   rightLabel?: string;
   icon?: keyof typeof Ionicons.glyphMap;
@@ -20,6 +20,15 @@ export function PageIntro({
   className,
   compact = false,
 }: PageIntroProps) {
+  const isFabricEnabled =
+    "NativeFabricUIManager" in globalThis || "__turboModuleProxy" in globalThis;
+  const titleFitProps = isFabricEnabled
+    ? {}
+    : {
+        adjustsFontSizeToFit: true,
+        minimumFontScale: 0.82,
+      };
+
   return (
     <View
       className={`relative overflow-hidden rounded-xl border border-border-default bg-bg-surface ${className ?? ""}`.trim()}
@@ -45,12 +54,13 @@ export function PageIntro({
             <Text
               className={`font-mono ${compact ? "text-[23px]" : "text-[30px]"} font-black text-text-primary`}
               numberOfLines={1}
-              adjustsFontSizeToFit
-              minimumFontScale={0.82}
+              ellipsizeMode="tail"
+              style={isFabricEnabled ? { fontSize: compact ? 23 : 30, lineHeight: compact ? 28 : 36 } : undefined}
+              {...titleFitProps}
             >
               {title}
             </Text>
-            {!compact ? (
+            {!compact && subtitle ? (
               <Text className="mt-1 text-sm text-text-secondary">{subtitle}</Text>
             ) : null}
           </View>

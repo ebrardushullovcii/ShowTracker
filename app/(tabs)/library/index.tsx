@@ -149,12 +149,26 @@ function getHomeColumnCount(width: number, isWeb: boolean) {
 function LibraryCard({
   item,
   isCompact,
+  isSmallPhone,
 }: {
   item: LibraryDashboardItem;
   isCompact: boolean;
+  isSmallPhone: boolean;
 }) {
-  const { width } = useWindowDimensions();
-  const isSmallPhone = width < 390;
+  const isFabricEnabled =
+    "NativeFabricUIManager" in globalThis || "__turboModuleProxy" in globalThis;
+  const missingPosterTitleFitProps = isFabricEnabled
+    ? {}
+    : {
+        adjustsFontSizeToFit: true,
+        minimumFontScale: 0.72,
+      };
+  const titleFitProps = isFabricEnabled
+    ? {}
+    : {
+        adjustsFontSizeToFit: true,
+        minimumFontScale: 0.62,
+      };
   const routeId = getRouteId(item);
   const isMovie = item.mediaType === "movie";
   const rawPercent =
@@ -177,8 +191,9 @@ function LibraryCard({
             <Text
               className="text-center text-sm font-semibold text-zinc-400"
               numberOfLines={3}
-              adjustsFontSizeToFit
-              minimumFontScale={0.72}
+              ellipsizeMode="tail"
+              style={isFabricEnabled ? { fontSize: 14, lineHeight: 18 } : undefined}
+              {...missingPosterTitleFitProps}
             >
               {item.title}
             </Text>
@@ -202,8 +217,9 @@ function LibraryCard({
           <Text
             className={`${isSmallPhone ? "text-[11px]" : "text-sm"} mb-0.5 font-bold leading-4 text-white`}
             numberOfLines={1}
-            adjustsFontSizeToFit
-            minimumFontScale={0.62}
+            ellipsizeMode="tail"
+            style={isFabricEnabled ? { fontSize: isSmallPhone ? 11 : 14, lineHeight: 16 } : undefined}
+            {...titleFitProps}
           >
             {item.title}
           </Text>
@@ -428,6 +444,7 @@ export default function LibraryScreen() {
   const effectiveWidth = gridWidth || width;
   const columns = getHomeColumnCount(effectiveWidth, isWeb);
   const isCompactLayout = effectiveWidth < 640;
+  const isSmallPhone = width < 390;
   const pageSize = Math.max(columns * 3, 6);
   const hasMore = visibleCount < activeItems.length;
 
@@ -505,11 +522,15 @@ export default function LibraryScreen() {
             paddingRight: columnIndex === columns - 1 ? 0 : halfGap,
           }}
         >
-          <LibraryCard item={item} isCompact={isCompactLayout} />
+          <LibraryCard
+            item={item}
+            isCompact={isCompactLayout}
+            isSmallPhone={isSmallPhone}
+          />
         </View>
       );
     },
-    [columns, isCompactLayout]
+    [columns, isCompactLayout, isSmallPhone]
   );
 
   const headerText =
