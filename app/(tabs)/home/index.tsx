@@ -1445,7 +1445,7 @@ export function HomeScreen() {
     value: activeTab,
     values: ["watchlist", "upcoming"] as const,
     onValueChange: setHomeMode,
-    enabled: !isWeb,
+    enabled: !isWeb || width < 768,
   });
   const [calendarAnchorDate, setCalendarAnchorDate] = useState(() => todayDate);
   const [selectedDateKey, setSelectedDateKey] = useState(todayKey);
@@ -2201,7 +2201,7 @@ export function HomeScreen() {
 
       <FilterBar
         className="mb-2.5"
-        leadingLabel="Media"
+        align="center"
         options={homeMediaFilterOptions}
         value={mediaFilter}
         onValueChange={(value: HomeMediaFilter) => setMediaFilter(value)}
@@ -2567,7 +2567,7 @@ export function HomeScreen() {
 
                 <FilterBar
                   className="mb-2.5"
-                  leadingLabel="Media"
+                  align="center"
                   options={homeMediaFilterOptions}
                   value={mediaFilter}
                   onValueChange={(value: HomeMediaFilter) => setMediaFilter(value)}

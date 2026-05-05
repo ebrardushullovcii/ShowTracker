@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { PanResponder, Platform } from "react-native";
+import { PanResponder } from "react-native";
 
 type UseHorizontalSectionSwipeOptions<T extends string> = {
   value: T;
@@ -17,7 +17,7 @@ export function useHorizontalSectionSwipe<T extends string>({
   onValueChange,
   enabled = true,
 }: UseHorizontalSectionSwipeOptions<T>) {
-  const isEnabled = enabled && Platform.OS !== "web" && values.length > 1;
+  const isEnabled = enabled && values.length > 1;
 
   return useMemo(() => {
     if (!isEnabled) {

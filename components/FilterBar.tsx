@@ -14,6 +14,7 @@ type FilterBarProps<T extends string> = {
   className?: string;
   contentClassName?: string;
   leadingLabel?: string;
+  align?: "start" | "center";
 };
 
 type DropdownFilterChipProps = {
@@ -36,13 +37,19 @@ export function FilterBar<T extends string>({
   className,
   contentClassName,
   leadingLabel,
+  align = "start",
 }: FilterBarProps<T>) {
   return (
     <View className={className}>
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ gap: 8, paddingRight: 6 }}
+        contentContainerStyle={{
+          gap: 8,
+          flexGrow: 1,
+          justifyContent: align === "center" ? "center" : "flex-start",
+          paddingRight: align === "center" ? 0 : 6,
+        }}
       >
         <View className={`flex-row items-center gap-2 ${contentClassName ?? ""}`.trim()}>
           {leadingLabel ? (
