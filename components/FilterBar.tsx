@@ -53,7 +53,7 @@ export function FilterBar<T extends string>({
       >
         <View className={`flex-row items-center gap-2 ${contentClassName ?? ""}`.trim()}>
           {leadingLabel ? (
-            <Text className="mr-1 text-[10px] font-black uppercase tracking-wide text-text-tertiary">
+            <Text className="mr-1 text-[10px] font-black uppercase tracking-wide text-text-muted">
               {leadingLabel}
             </Text>
           ) : null}
@@ -84,13 +84,15 @@ export function FilterBar<T extends string>({
                 </Text>
                 {typeof option.count === "number" ? (
                   <View
-                    className={`min-w-5 items-center rounded-full px-1.5 py-0.5 ${
-                      isActive ? "bg-primary/25" : "bg-bg-base"
+                    className={`min-w-5 items-center rounded-full border px-1.5 py-0.5 ${
+                      isActive
+                        ? "border-primary/20 bg-primary/25"
+                        : "border-border-bright bg-bg-elevated"
                     }`}
                   >
                     <Text
                       className={`text-[10px] font-black ${
-                        isActive ? "text-primary" : "text-text-tertiary"
+                        isActive ? "text-primary" : "text-text-secondary"
                       }`}
                     >
                       {option.count}
