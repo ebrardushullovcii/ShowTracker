@@ -751,6 +751,7 @@ export function DiscoverScreen() {
           }}
           className="mb-3"
           leadingLabel="Media"
+          compact={isCompactLayout}
         />
 
         {/* Filter Buttons */}

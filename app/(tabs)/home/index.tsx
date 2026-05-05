@@ -2226,6 +2226,7 @@ export function HomeScreen() {
         options={homeMediaFilterOptions}
         value={mediaFilter}
         onValueChange={(value: HomeMediaFilter) => setMediaFilter(value)}
+        compact={isCompactHomeLayout}
       />
 
       {!isWatchlistVisualLoading &&
@@ -2592,6 +2593,7 @@ export function HomeScreen() {
                   options={homeMediaFilterOptions}
                   value={mediaFilter}
                   onValueChange={(value: HomeMediaFilter) => setMediaFilter(value)}
+                  compact={isCompactHomeLayout}
                 />
 
               </View>

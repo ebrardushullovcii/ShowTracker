@@ -620,6 +620,7 @@ export default function LibraryScreen() {
                   onValueChange={setActiveTab}
                   className="mb-3"
                   leadingLabel="Media"
+                  compact={isCompactLayout}
                 />
 
                 <SearchInput

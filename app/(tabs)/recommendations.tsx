@@ -874,6 +874,7 @@ export function RecommendationsScreen() {
                 onValueChange={setActiveTab}
                 className="mb-4"
                 align="center"
+                compact={isCompactLayout}
               />
 
               {isLoading && (

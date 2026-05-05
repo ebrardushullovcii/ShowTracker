@@ -15,6 +15,7 @@ type FilterBarProps<T extends string> = {
   contentClassName?: string;
   leadingLabel?: string;
   align?: "start" | "center";
+  compact?: boolean;
 };
 
 type DropdownFilterChipProps = {
@@ -38,6 +39,7 @@ export function FilterBar<T extends string>({
   contentClassName,
   leadingLabel,
   align = "start",
+  compact = false,
 }: FilterBarProps<T>) {
   return (
     <View className={className}>
@@ -66,7 +68,7 @@ export function FilterBar<T extends string>({
                 onPress={() => onValueChange?.(option.value)}
                 accessibilityRole="button"
                 accessibilityState={{ selected: isActive }}
-                className={`min-h-9 flex-row items-center gap-1.5 rounded-full border px-3 py-2 ${
+                className={`${compact ? "min-h-8 px-2.5 py-1.5" : "min-h-9 px-3 py-2"} flex-row items-center gap-1.5 rounded-full border ${
                   isActive
                     ? "border-primary/70 bg-primary/15"
                     : "border-border-default bg-bg-surface"
@@ -76,7 +78,7 @@ export function FilterBar<T extends string>({
                 }
               >
                 <Text
-                  className={`text-[11px] font-black uppercase tracking-wide ${
+                  className={`${compact ? "text-[10px]" : "text-[11px]"} font-black uppercase tracking-wide ${
                     isActive ? "text-text-primary" : "text-text-secondary"
                   }`}
                 >
