@@ -3607,6 +3607,8 @@ export function ShowDetailScreen() {
           firstAired={show.firstAired}
           rating={show.rating}
           isDesktop={isDesktop}
+          showBackButton
+          backFallbackHref="/home"
         />
 
         {/* Main Content */}
