@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ActivityIndicator, Pressable, Text, View } from "react-native";
+import { ActivityIndicator, Modal, Pressable, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Badge } from "@/components/Badge";
 
@@ -121,48 +121,56 @@ export function ShowActionBar({
         </Pressable>
       </View>
 
-      {isMoreVisible ? (
-        <View className="absolute right-0 top-12 w-52 overflow-hidden rounded-lg border border-border-bright bg-bg-base shadow-2xl">
-          <View className="border-b border-border-default">
-            <MenuAction
-              label={isTracked ? "Remove from Library" : "Save to Library"}
-              icon={isTracked ? "remove-circle-outline" : "add-circle-outline"}
-              onPress={() => {
-                closeMore();
-                onToggleWatchlist();
-              }}
-              disabled={isBusy}
-              destructive={isTracked}
-            />
-          </View>
+      <Modal
+        visible={isMoreVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={closeMore}
+      >
+        <View className="flex-1 items-end px-4 pt-16">
+          <Pressable className="absolute inset-0" focusable={false} onPress={closeMore} />
+          <View className="w-52 overflow-hidden rounded-lg border border-border-bright bg-bg-base shadow-2xl">
+            <View className="border-b border-border-default">
+              <MenuAction
+                label={isTracked ? "Remove from Library" : "Save to Library"}
+                icon={isTracked ? "remove-circle-outline" : "add-circle-outline"}
+                onPress={() => {
+                  closeMore();
+                  onToggleWatchlist();
+                }}
+                disabled={isBusy}
+                destructive={isTracked}
+              />
+            </View>
 
-          <View className="border-b border-border-default">
-            <MenuAction
-              label={isFavorite ? "Favorited" : "Add Favorite"}
-              icon={isFavorite ? "heart" : "heart-outline"}
-              onPress={() => {
-                closeMore();
-                onToggleFavorite();
-              }}
-              disabled={isBusy || isTogglingFavorite}
-              active={isFavorite}
-              loading={isTogglingFavorite}
-            />
-          </View>
+            <View className="border-b border-border-default">
+              <MenuAction
+                label={isFavorite ? "Favorited" : "Add Favorite"}
+                icon={isFavorite ? "heart" : "heart-outline"}
+                onPress={() => {
+                  closeMore();
+                  onToggleFavorite();
+                }}
+                disabled={isBusy || isTogglingFavorite}
+                active={isFavorite}
+                loading={isTogglingFavorite}
+              />
+            </View>
 
-          {canAddToList ? (
-            <MenuAction
-              label="Add to List"
-              icon="bookmark-outline"
-              onPress={() => {
-                closeMore();
-                onAddToList();
-              }}
-              disabled={isBusy}
-            />
-          ) : null}
+            {canAddToList ? (
+              <MenuAction
+                label="Add to List"
+                icon="bookmark-outline"
+                onPress={() => {
+                  closeMore();
+                  onAddToList();
+                }}
+                disabled={isBusy}
+              />
+            ) : null}
+          </View>
         </View>
-      ) : null}
+      </Modal>
     </View>
   );
 }
