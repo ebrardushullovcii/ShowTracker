@@ -1,4 +1,4 @@
-import { Platform, Pressable, Text, View } from "react-native";
+import { Platform, Pressable, Text, View, useWindowDimensions } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import ReanimatedSwipeable, {
   type SwipeableMethods,
@@ -30,6 +30,18 @@ type SwipeableEpisodeCardProps = {
 };
 
 const ACTION_WIDTH = 96;
+
+function hasWebTouchInput() {
+  if (Platform.OS !== "web") {
+    return false;
+  }
+
+  if (typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches) {
+    return true;
+  }
+
+  return typeof navigator !== "undefined" && navigator.maxTouchPoints > 0;
+}
 
 function SwipeAction({
   label,
@@ -73,8 +85,10 @@ export function SwipeableEpisodeCard({
   watchCount,
   ...episodeProps
 }: SwipeableEpisodeCardProps) {
+  const { width } = useWindowDimensions();
   const canToggle = availability.isReleased || watched;
-  const canSwipe = Platform.OS !== "web" && canToggle && !isUpdating;
+  const isMobileWebTouch = Platform.OS === "web" && width < 1024 && hasWebTouchInput();
+  const canSwipe = (Platform.OS !== "web" || isMobileWebTouch) && canToggle && !isUpdating;
 
   const card = (
     <EpisodeCard

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { ActivityIndicator, Modal, Pressable, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Badge } from "@/components/Badge";
@@ -78,8 +78,16 @@ export function ShowActionBar({
   onAddToList,
 }: ShowActionBarProps) {
   const [isMoreVisible, setIsMoreVisible] = useState(false);
+  const [moreButtonFrame, setMoreButtonFrame] = useState({ x: 0, y: 0, width: 42, height: 42 });
+  const moreButtonRef = useRef<View>(null);
 
   const closeMore = () => setIsMoreVisible(false);
+  const openMore = () => {
+    moreButtonRef.current?.measureInWindow((x, y, width, height) => {
+      setMoreButtonFrame({ x, y, width, height });
+      setIsMoreVisible(true);
+    });
+  };
 
   return (
     <View className="relative z-30">
@@ -103,7 +111,15 @@ export function ShowActionBar({
         </Pressable>
 
         <Pressable
-          onPress={() => setIsMoreVisible((visible) => !visible)}
+          ref={moreButtonRef}
+          onPress={() => {
+            if (isMoreVisible) {
+              closeMore();
+              return;
+            }
+
+            openMore();
+          }}
           disabled={isBusy}
           accessibilityRole="button"
           accessibilityLabel="More show actions"
@@ -127,9 +143,15 @@ export function ShowActionBar({
         animationType="fade"
         onRequestClose={closeMore}
       >
-        <View className="flex-1 items-end px-4 pt-16">
+        <View className="flex-1">
           <Pressable className="absolute inset-0" focusable={false} onPress={closeMore} />
-          <View className="w-52 overflow-hidden rounded-lg border border-border-bright bg-bg-base shadow-2xl">
+          <View
+            className="absolute w-52 overflow-hidden rounded-lg border border-border-bright bg-bg-base shadow-2xl"
+            style={{
+              left: Math.max(16, moreButtonFrame.x + moreButtonFrame.width - 208),
+              top: moreButtonFrame.y + moreButtonFrame.height + 4,
+            }}
+          >
             <View className="border-b border-border-default">
               <MenuAction
                 label={isTracked ? "Remove from Library" : "Save to Library"}
