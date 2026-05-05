@@ -17,11 +17,14 @@ import { Link, useLocalSearchParams } from "expo-router";
 import { useQuery } from "convex/react";
 import { FlashList } from "@shopify/flash-list";
 import { api } from "@/convex/_generated/api";
-import { FilterChipGroup } from "@/components/FilterChipGroup";
+import {
+  ClearFilterChip,
+  DropdownFilterChip,
+  FilterBar,
+} from "@/components/FilterBar";
 import { PageIntro } from "@/components/PageIntro";
 import { SearchInput } from "@/components/SearchInput";
 import { ScreenWrapper } from "@/components/ScreenWrapper";
-import { SegmentedControl } from "@/components/SegmentedControl";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import {
   applyTrackingFilters,
@@ -583,12 +586,12 @@ export default function LibraryScreen() {
                   compact={isCompactLayout}
                 />
 
-                <SegmentedControl
+                <FilterBar
                   options={tabOptions}
                   value={activeTab}
                   onValueChange={setActiveTab}
                   className="mb-3"
-                  compact={isCompactLayout}
+                  leadingLabel="Media"
                 />
 
                 <SearchInput
@@ -598,7 +601,7 @@ export default function LibraryScreen() {
                   className="mb-3"
                 />
 
-                <FilterChipGroup
+                <FilterBar
                   className="mb-3"
                   options={statusOptionsWithCounts}
                   value={statusFilter}
@@ -610,61 +613,33 @@ export default function LibraryScreen() {
                   <View className="flex-row flex-wrap gap-2">
                     {/* Genre Button */}
                     {availableGenres.length > 0 && (
-                      <Pressable
+                      <DropdownFilterChip
                         onPress={() => setOpenDropdown(openDropdown === "genres" ? null : "genres")}
-                        className={`flex-row items-center gap-2 rounded-full border px-4 py-2 ${
-                          selectedGenres.length > 0
-                            ? "border-primary bg-primary"
-                            : "border-border-default bg-bg-surface"
-                        }`}
-                      >
-                        <Text className={`text-sm font-semibold ${selectedGenres.length > 0 ? "text-white" : "text-text-secondary"}`}>
-                          {selectedGenres.length > 0 ? `${selectedGenres.length} Genre${selectedGenres.length > 1 ? "s" : ""}` : "Genre"}
-                        </Text>
-                        <Text className={selectedGenres.length > 0 ? "text-white" : "text-text-secondary"}>
-                          {openDropdown === "genres" ? "▲" : "▼"}
-                        </Text>
-                      </Pressable>
+                        active={selectedGenres.length > 0}
+                        open={openDropdown === "genres"}
+                        label={selectedGenres.length > 0 ? `${selectedGenres.length} Genre${selectedGenres.length > 1 ? "s" : ""}` : "Genre"}
+                      />
                     )}
 
                     {/* Year Button */}
-                    <Pressable
+                    <DropdownFilterChip
                       onPress={() => setOpenDropdown(openDropdown === "year" ? null : "year")}
-                      className={`flex-row items-center gap-2 rounded-full border px-4 py-2 ${
-                        selectedYear ? "border-primary bg-primary" : "border-border-default bg-bg-surface"
-                      }`}
-                    >
-                      <Text className={`text-sm font-semibold ${selectedYear ? "text-white" : "text-text-secondary"}`}>
-                        {selectedYear || "Year"}
-                      </Text>
-                      <Text className={selectedYear ? "text-white" : "text-text-secondary"}>
-                        {openDropdown === "year" ? "▲" : "▼"}
-                      </Text>
-                    </Pressable>
+                      active={Boolean(selectedYear)}
+                      open={openDropdown === "year"}
+                      label={selectedYear || "Year"}
+                    />
 
                     {/* Rating Button */}
-                    <Pressable
+                    <DropdownFilterChip
                       onPress={() => setOpenDropdown(openDropdown === "rating" ? null : "rating")}
-                      className={`flex-row items-center gap-2 rounded-full border px-4 py-2 ${
-                        selectedRating ? "border-primary bg-primary" : "border-border-default bg-bg-surface"
-                      }`}
-                    >
-                      <Text className={`text-sm font-semibold ${selectedRating ? "text-white" : "text-text-secondary"}`}>
-                        {selectedRating ? `${selectedRating}+ ⭐` : "Rating"}
-                      </Text>
-                      <Text className={selectedRating ? "text-white" : "text-text-secondary"}>
-                        {openDropdown === "rating" ? "▲" : "▼"}
-                      </Text>
-                    </Pressable>
+                      active={Boolean(selectedRating)}
+                      open={openDropdown === "rating"}
+                      label={selectedRating ? `${selectedRating}+` : "Rating"}
+                    />
 
                     {/* Clear Button */}
                     {hasActiveFilters && (
-                      <Pressable
-                        onPress={clearFilters}
-                        className="rounded-full border border-border-default bg-bg-surface px-4 py-2"
-                      >
-                        <Text className="text-sm font-semibold text-text-secondary">Clear</Text>
-                      </Pressable>
+                      <ClearFilterChip onPress={clearFilters} />
                     )}
                   </View>
 

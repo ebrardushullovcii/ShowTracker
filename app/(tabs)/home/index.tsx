@@ -16,9 +16,11 @@ import { Link } from "expo-router";
 import { useAction, useQuery } from "convex/react";
 import { FlashList, type ListRenderItem } from "@shopify/flash-list";
 import { api } from "@/convex/_generated/api";
+import { FilterBar } from "@/components/FilterBar";
+import { HomeModeSwitch } from "@/components/HomeModeSwitch";
 import { PageIntro } from "@/components/PageIntro";
 import { ScreenWrapper } from "@/components/ScreenWrapper";
-import { SegmentedControl } from "@/components/SegmentedControl";
+import { useHorizontalSectionSwipe } from "@/hooks/use-horizontal-section-swipe";
 import { getTmdbShowDetails, type TmdbShowDetails } from "@/lib/api/tmdb";
 import type { MediaType } from "@/lib/api/types";
 import { toHttpsImageUrl } from "@/lib/image-url";
@@ -69,6 +71,15 @@ const GRID_GAP = 12;
 const INITIAL_UPCOMING_HYDRATION_TIMEOUT_MS = 8000;
 const TMDB_AIRED_LOOKUP_BATCH_SIZE = 8;
 const WATCHLIST_FUTURE_LOOKAHEAD_DAYS = 365;
+const homeModeOptions = [
+  { value: "watchlist" as const, label: "Watchlist" },
+  { value: "upcoming" as const, label: "Schedule" },
+];
+const homeMediaFilterOptions = [
+  { value: "all" as const, label: "All" },
+  { value: "tv" as const, label: "TV Shows" },
+  { value: "anime" as const, label: "Anime" },
+];
 
 function estimateAiredEpisodesFromTmdb(details: TmdbShowDetails) {
   const now = new Date();
@@ -1427,6 +1438,15 @@ export function HomeScreen() {
 
   const todayDate = useMemo(() => new Date(), []);
   const todayKey = useMemo(() => formatDateForApi(todayDate), [todayDate]);
+  const setHomeMode = useCallback((value: HomeTab) => {
+    setActiveTab(value);
+  }, []);
+  const homeSwipeHandlers = useHorizontalSectionSwipe({
+    value: activeTab,
+    values: ["watchlist", "upcoming"] as const,
+    onValueChange: setHomeMode,
+    enabled: !isWeb,
+  });
   const [calendarAnchorDate, setCalendarAnchorDate] = useState(() => todayDate);
   const [selectedDateKey, setSelectedDateKey] = useState(todayKey);
   const watchlistFutureStartDate = todayKey;
@@ -2171,27 +2191,20 @@ export function HomeScreen() {
         compact={isCompactHomeLayout}
       />
 
-      <SegmentedControl
+      <HomeModeSwitch
         className="mb-2.5"
-        options={[
-          { value: "watchlist", label: "Watchlist" },
-          { value: "upcoming", label: "Schedule" },
-        ]}
+        options={homeModeOptions}
         value={activeTab}
-        onValueChange={(value: HomeTab) => setActiveTab(value)}
+        onValueChange={setHomeMode}
         compact={isCompactHomeLayout}
       />
 
-      <SegmentedControl
+      <FilterBar
         className="mb-2.5"
-        options={[
-          { value: "all", label: "All" },
-          { value: "tv", label: "TV Shows" },
-          { value: "anime", label: "Anime" },
-        ]}
+        leadingLabel="Media"
+        options={homeMediaFilterOptions}
         value={mediaFilter}
         onValueChange={(value: HomeMediaFilter) => setMediaFilter(value)}
-        compact={isCompactHomeLayout}
       />
 
       {!isWatchlistVisualLoading &&
@@ -2413,7 +2426,11 @@ export function HomeScreen() {
 
   return (
     <ScreenWrapper>
-      <View className="flex-1" onLayout={(e) => setGridWidth(e.nativeEvent.layout.width)}>
+      <View
+        className="flex-1"
+        onLayout={(e) => setGridWidth(e.nativeEvent.layout.width)}
+        {...homeSwipeHandlers}
+      >
         {gridWidth > 0 ? (
           activeTab === "watchlist" ? (
             shouldRenderFullWatchlistSkeleton ? (
@@ -2540,26 +2557,20 @@ export function HomeScreen() {
                   compact={isCompactHomeLayout}
                 />
 
-                <SegmentedControl
+                <HomeModeSwitch
                   className="mb-2.5"
-                  options={[
-                    { value: "watchlist", label: "Watchlist" },
-                    { value: "upcoming", label: "Schedule" },
-                  ]}
+                  options={homeModeOptions}
                   value={activeTab}
-                  onValueChange={(value: HomeTab) => setActiveTab(value)}
+                  onValueChange={setHomeMode}
                   compact={isCompactHomeLayout}
                 />
 
-                <SegmentedControl
-                  options={[
-                    { value: "all", label: "All" },
-                    { value: "tv", label: "TV Shows" },
-                    { value: "anime", label: "Anime" },
-                  ]}
+                <FilterBar
+                  className="mb-2.5"
+                  leadingLabel="Media"
+                  options={homeMediaFilterOptions}
                   value={mediaFilter}
                   onValueChange={(value: HomeMediaFilter) => setMediaFilter(value)}
-                  compact={isCompactHomeLayout}
                 />
 
               </View>
