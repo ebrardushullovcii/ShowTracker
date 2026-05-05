@@ -1,7 +1,7 @@
 import { Pressable, View, Text, ActivityIndicator } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import type { NormalizedEpisode } from "@/lib/api/types";
-import { EpisodeCard } from "./EpisodeCard";
+import { SwipeableEpisodeCard } from "@/components/SwipeableEpisodeCard";
 
 interface EpisodeAvailability {
   isReleased: boolean;
@@ -27,6 +27,10 @@ interface SeasonAccordionProps {
   onToggle: () => void;
   onMarkSeason: () => void;
   onToggleEpisode: (episode: NormalizedEpisode) => void;
+  onEpisodeSwipeAction?: (
+    episode: NormalizedEpisode,
+    action: "watch" | "unwatch" | "rewatch"
+  ) => void;
   episodeWatchCounts?: Record<string, number>;
 }
 
@@ -47,6 +51,7 @@ export function SeasonAccordion({
   onToggle,
   onMarkSeason,
   onToggleEpisode,
+  onEpisodeSwipeAction,
   episodeWatchCounts,
 }: SeasonAccordionProps) {
   // Check if all episodes are watched
@@ -192,7 +197,7 @@ export function SeasonAccordion({
                   const watchCount = episodeWatchCounts?.[key];
 
                   return (
-                    <EpisodeCard
+                    <SwipeableEpisodeCard
                       key={episode.id}
                       id={episode.id}
                       episodeNumber={episode.episodeNumber}
@@ -205,6 +210,7 @@ export function SeasonAccordion({
                       isUpdating={isUpdating}
                       availability={availability}
                       onToggle={() => onToggleEpisode(episode)}
+                      onSwipeAction={(action) => onEpisodeSwipeAction?.(episode, action)}
                       watchCount={watchCount}
                     />
                   );

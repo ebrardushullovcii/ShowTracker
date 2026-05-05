@@ -2791,6 +2791,23 @@ export function ShowDetailScreen() {
     await runEpisodeToggle(episode, "rewatch");
   };
 
+  const handleEpisodeSwipeAction = async (
+    episode: NormalizedEpisode,
+    action: "watch" | "unwatch" | "rewatch"
+  ) => {
+    if (action === "watch") {
+      await handleToggleEpisodeWatched(episode);
+      return;
+    }
+
+    if (action === "rewatch") {
+      await handleRewatchEpisode(episode);
+      return;
+    }
+
+    await runEpisodeToggle(episode, "toggle");
+  };
+
   const handleRewatchSeason = async (
     season: NormalizedSeason,
     releasedEpisodesOverride?: NormalizedEpisode[]
@@ -4033,6 +4050,9 @@ export function ShowDetailScreen() {
                       onToggle={() => toggleSeason(season.seasonNumber)}
                       onMarkSeason={() => handleMarkSeasonWatched(season)}
                       onToggleEpisode={handleToggleEpisodeWatched}
+                      onEpisodeSwipeAction={(episode, action) => {
+                        void handleEpisodeSwipeAction(episode, action);
+                      }}
                     />
                   );
                 })}
