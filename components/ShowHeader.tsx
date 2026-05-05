@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { LinearGradient } from "expo-linear-gradient";
 import { Image, View, Text } from "react-native";
 import type { Href } from "expo-router";
@@ -15,6 +16,7 @@ interface ShowHeaderProps {
   isDesktop: boolean;
   showBackButton?: boolean;
   backFallbackHref?: Href;
+  actionSlot?: ReactNode;
 }
 
 function mediaTypeLabel(type: "tv" | "movie" | "anime"): string {
@@ -38,6 +40,7 @@ export function ShowHeader({
   isDesktop,
   showBackButton = false,
   backFallbackHref = "/home",
+  actionSlot,
 }: ShowHeaderProps) {
   const heroHeight = isDesktop ? 420 : 300;
 
@@ -87,6 +90,12 @@ export function ShowHeader({
       {showBackButton ? (
         <View className={`absolute left-4 ${isDesktop ? "top-5" : "top-4"} z-10`}>
           <AppBackButton fallbackHref={backFallbackHref} />
+        </View>
+      ) : null}
+
+      {actionSlot ? (
+        <View className={`absolute right-4 ${isDesktop ? "top-5" : "top-4"} z-20`}>
+          {actionSlot}
         </View>
       ) : null}
 
