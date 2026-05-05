@@ -21,6 +21,7 @@ import { HomeModeSwitch } from "@/components/HomeModeSwitch";
 import { PageIntro } from "@/components/PageIntro";
 import { ScreenWrapper } from "@/components/ScreenWrapper";
 import { useHorizontalSectionSwipe } from "@/hooks/use-horizontal-section-swipe";
+import { useStableDisplayPair } from "@/hooks/use-stable-display-value";
 import { getTmdbShowDetails, type TmdbShowDetails } from "@/lib/api/tmdb";
 import type { MediaType } from "@/lib/api/types";
 import { toHttpsImageUrl } from "@/lib/image-url";
@@ -1933,6 +1934,26 @@ export function HomeScreen() {
   const watchlistCount = isWatchlistVisualLoading
     ? watchlistItems.length
     : filteredWatchlist.length + pausedSectionWatchlist.length + notStartedSectionWatchlist.length;
+  const activeHomeHeaderPair = useStableDisplayPair(
+    {
+      label: activeTab === "watchlist" ? "matched" : "episodes",
+      value: String(activeTab === "watchlist" ? watchlistCount : upcomingCount),
+      contextKey:
+        activeTab === "watchlist"
+          ? `watchlist:${watchlistSettleContextKey}:${mediaFilter}:${pausedSectionMode}`
+          : `upcoming:${selectedDateKey}:${currentMonthDate.toISOString()}`,
+    },
+    {
+      isLoading:
+        activeTab === "watchlist"
+          ? isWatchlistVisualLoading
+          : isUpcomingContentLoading,
+      shouldHold: (pair) => pair.value === "0",
+    }
+  );
+  const homeHeaderRightLabel = activeHomeHeaderPair
+    ? `${activeHomeHeaderPair.value} ${activeHomeHeaderPair.label}`
+    : undefined;
 
   useEffect(() => {
     if (activeTab !== "upcoming" || !usesMonthCalendarLayout) {
@@ -2186,7 +2207,7 @@ export function HomeScreen() {
         subtitle={headerText.subtitle}
         eyebrow="Today"
         icon="sparkles-outline"
-        rightLabel={`${watchlistCount} matched`}
+        rightLabel={homeHeaderRightLabel}
         className="mb-3"
         compact={isCompactHomeLayout}
       />
@@ -2552,7 +2573,7 @@ export function HomeScreen() {
                   subtitle={headerText.subtitle}
                   eyebrow="Calendar"
                   icon="calendar-outline"
-                  rightLabel={`${upcomingCount} episodes`}
+                  rightLabel={homeHeaderRightLabel}
                   className="mb-3"
                   compact={isCompactHomeLayout}
                 />

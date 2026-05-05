@@ -27,6 +27,10 @@ import { SearchInput } from "@/components/SearchInput";
 import { ScreenWrapper } from "@/components/ScreenWrapper";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import {
+  useStableCount,
+  useStableDisplayValue,
+} from "@/hooks/use-stable-display-value";
+import {
   applyTrackingFilters,
   matchesStatusFilter,
   type TrackingStatusFilter,
@@ -384,8 +388,9 @@ export default function LibraryScreen() {
     selectedGenres.length > 0 ||
     selectedYear !== "" ||
     selectedRating !== "";
+  const isLoading = libraryItems === undefined;
 
-  const statusOptionsWithCounts = useMemo(() => {
+  const rawStatusOptionsWithCounts = useMemo(() => {
     // Use backend counts when available to avoid iterating all items client-side.
     if (libraryCounts) {
       const relevantTypes: string[] =
@@ -436,6 +441,18 @@ export default function LibraryScreen() {
       count: mediaItems.filter((item) => matchesStatusFilter(item, option.value)).length,
     }));
   }, [activeTab, libraryCounts, mediaItems, statusOptions]);
+  const statusOptionsContextKey = `library-status:${activeTab}`;
+  const stableStatusOptionsWithCounts = useStableDisplayValue(
+    rawStatusOptionsWithCounts,
+    {
+      contextKey: statusOptionsContextKey,
+      isLoading: isLoading || libraryCounts === undefined,
+      shouldHold: (options) => options.some((option) => option.count === 0),
+    }
+  );
+  const statusOptionsWithCounts =
+    stableStatusOptionsWithCounts ??
+    (isLoading || libraryCounts === undefined ? statusOptions : rawStatusOptionsWithCounts);
 
   useEffect(() => {
     if (!statusOptionsWithCounts.some((option) => option.value === statusFilter)) {
@@ -443,7 +460,18 @@ export default function LibraryScreen() {
     }
   }, [statusFilter, statusOptionsWithCounts]);
 
-  const isLoading = libraryItems === undefined;
+  const activeItemsCountContextKey = [
+    "library-active",
+    activeTab,
+    statusFilter,
+    debouncedSearchQuery.trim().toLowerCase(),
+    selectedGenres.join(","),
+    selectedYear,
+    selectedRating,
+  ].join(":");
+  const stableActiveItemsCount =
+    useStableCount(activeItems.length, activeItemsCountContextKey, isLoading) ??
+    activeItems.length;
   const effectiveWidth = gridWidth || width;
   const columns = getHomeColumnCount(effectiveWidth, isWeb);
   const isCompactLayout = effectiveWidth < 640;
@@ -581,7 +609,7 @@ export default function LibraryScreen() {
                         ? "planet-outline"
                         : "tv-outline"
                   }
-                  rightLabel={`${activeItems.length} matched`}
+                  rightLabel={`${stableActiveItemsCount} matched`}
                   className="mb-4"
                   compact={isCompactLayout}
                 />

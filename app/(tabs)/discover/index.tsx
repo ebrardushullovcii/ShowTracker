@@ -25,6 +25,7 @@ import { MediaPosterCard } from "@/components/MediaPosterCard";
 import { PageIntro } from "@/components/PageIntro";
 import { ScreenWrapper } from "@/components/ScreenWrapper";
 import { DESKTOP_SIDEBAR_BREAKPOINT } from "@/constants/navigation";
+import { useStableCount } from "@/hooks/use-stable-display-value";
 import { getTrendingAniList, searchAniList } from "@/lib/api/anilist";
 import { discoverTmdb, getTrendingTmdb, type TmdbFilterParams } from "@/lib/api/tmdb";
 import type { NormalizedShow } from "@/lib/api/types";
@@ -618,6 +619,18 @@ export function DiscoverScreen() {
   ]);
 
   const heroShow = activeState.items[0] ?? null;
+  const discoverCountContextKey = [
+    "discover",
+    activeTab,
+    selectedGenres.join(","),
+    selectedYear,
+    selectedRating,
+  ].join(":");
+  const stableDiscoverCount = useStableCount(
+    activeState.items.length,
+    discoverCountContextKey,
+    activeState.isLoading
+  );
 
   const renderItem = useCallback(
     ({ item, index }: { item: NormalizedShow; index: number }) => (
@@ -685,7 +698,9 @@ export function DiscoverScreen() {
           eyebrow={hasActiveFilters ? "Filtered" : "Fresh picks"}
           icon="compass-outline"
           rightLabel={
-            activeState.items.length > 0 ? `${activeState.items.length} live` : undefined
+            typeof stableDiscoverCount === "number" && stableDiscoverCount > 0
+              ? `${stableDiscoverCount} live`
+              : undefined
           }
           className="mb-4"
           compact={isCompactLayout}
@@ -894,7 +909,8 @@ export function DiscoverScreen() {
           </View>
         )}
 
-        {activeState.items.length > 0 ? (
+        {(activeState.items.length > 0 ||
+          (typeof stableDiscoverCount === "number" && stableDiscoverCount > 0)) ? (
           <SectionHeader
             title={hasActiveFilters ? "Filtered Results" : `Trending ${
               activeTab === "anime"
@@ -905,7 +921,7 @@ export function DiscoverScreen() {
                     ? "TV Shows"
                     : "Content"
             }`}
-            count={activeState.items.length}
+            count={stableDiscoverCount ?? activeState.items.length}
           />
         ) : null}
       </View>
@@ -923,6 +939,7 @@ export function DiscoverScreen() {
       genreOptions,
       yearOptions,
       ratingOptions,
+      stableDiscoverCount,
       isCompactLayout,
     ]
   );
