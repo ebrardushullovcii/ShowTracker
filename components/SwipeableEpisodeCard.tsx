@@ -1,4 +1,5 @@
-import { Platform, Pressable, Text, View, useWindowDimensions } from "react-native";
+import { useMemo, useRef, useState } from "react";
+import { PanResponder, Platform, Pressable, Text, View, useWindowDimensions } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import ReanimatedSwipeable, {
   type SwipeableMethods,
@@ -30,6 +31,13 @@ type SwipeableEpisodeCardProps = {
 };
 
 const ACTION_WIDTH = 96;
+const WEB_SWIPE_OPEN_THRESHOLD = ACTION_WIDTH * 0.45;
+
+function clampWebSwipeOffset(value: number, canOpenLeft: boolean) {
+  const min = -ACTION_WIDTH;
+  const max = canOpenLeft ? ACTION_WIDTH : 0;
+  return Math.max(min, Math.min(max, value));
+}
 
 function hasWebTouchInput() {
   if (Platform.OS !== "web") {
@@ -48,11 +56,13 @@ function SwipeAction({
   icon,
   tone,
   onPress,
+  activateOnPressIn = false,
 }: {
   label: string;
   icon: keyof typeof Ionicons.glyphMap;
   tone: "success" | "warning";
   onPress: () => void;
+  activateOnPressIn?: boolean;
 }) {
   const color = tone === "success" ? "#34d399" : "#fbbf24";
   const backgroundClassName =
@@ -62,7 +72,8 @@ function SwipeAction({
 
   return (
     <Pressable
-      onPress={onPress}
+      onPress={activateOnPressIn ? undefined : onPress}
+      onPressIn={activateOnPressIn ? onPress : undefined}
       accessibilityRole="button"
       accessibilityLabel={label}
       className={`mx-1 h-full items-center justify-center rounded-xl border active:scale-95 ${backgroundClassName}`}
@@ -86,9 +97,59 @@ export function SwipeableEpisodeCard({
   ...episodeProps
 }: SwipeableEpisodeCardProps) {
   const { width } = useWindowDimensions();
+  const webOpenOffsetRef = useRef(0);
+  const webDragStartOffsetRef = useRef(0);
+  const [webOffset, setWebOffsetState] = useState(0);
   const canToggle = availability.isReleased || watched;
   const isMobileWebTouch = Platform.OS === "web" && width < 1024 && hasWebTouchInput();
   const canSwipe = (Platform.OS !== "web" || isMobileWebTouch) && canToggle && !isUpdating;
+
+  const setWebOffset = (nextOffset: number) => {
+    webOpenOffsetRef.current = nextOffset;
+    setWebOffsetState(nextOffset);
+  };
+
+  const webPanHandlers = useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponder: (_, gestureState) => {
+          if (!isMobileWebTouch) {
+            return false;
+          }
+
+          const absDx = Math.abs(gestureState.dx);
+          const absDy = Math.abs(gestureState.dy);
+          return absDx > 12 && absDx > absDy * 1.25;
+        },
+        onPanResponderGrant: () => {
+          webDragStartOffsetRef.current = webOpenOffsetRef.current;
+        },
+        onPanResponderMove: (_, gestureState) => {
+          const nextOffset = clampWebSwipeOffset(
+            webDragStartOffsetRef.current + gestureState.dx,
+            watched
+          );
+          setWebOffset(nextOffset);
+        },
+        onPanResponderRelease: () => {
+          if (webOpenOffsetRef.current > WEB_SWIPE_OPEN_THRESHOLD && watched) {
+            setWebOffset(ACTION_WIDTH);
+            return;
+          }
+
+          if (webOpenOffsetRef.current < -WEB_SWIPE_OPEN_THRESHOLD) {
+            setWebOffset(-ACTION_WIDTH);
+            return;
+          }
+
+          setWebOffset(0);
+        },
+        onPanResponderTerminate: () => {
+          setWebOffset(0);
+        },
+      }).panHandlers,
+    [isMobileWebTouch, watched]
+  );
 
   const card = (
     <EpisodeCard
@@ -120,6 +181,48 @@ export function SwipeableEpisodeCard({
     onToggle();
   };
 
+  const handleWebActionPress = (action: "watch" | "unwatch" | "rewatch") => {
+    setWebOffset(0);
+    if (onSwipeAction) {
+      onSwipeAction(action);
+      return;
+    }
+    onToggle();
+  };
+
+  if (isMobileWebTouch) {
+    return (
+      <View className="relative overflow-hidden rounded-xl">
+        {watched ? (
+          <View className="absolute inset-y-0 left-0 flex-row items-stretch justify-start">
+            <SwipeAction
+              label="Unwatch"
+              icon="remove-circle"
+              tone="warning"
+              onPress={() => handleWebActionPress("unwatch")}
+            />
+          </View>
+        ) : null}
+
+        <View className="absolute inset-y-0 right-0 flex-row items-stretch justify-end">
+          <SwipeAction
+            label={rightActionLabel}
+            icon={watched ? "refresh-circle" : "checkmark-circle"}
+            tone="success"
+            onPress={() => handleWebActionPress(rightAction)}
+          />
+        </View>
+
+        <View
+          {...webPanHandlers}
+          style={{ transform: [{ translateX: webOffset }] }}
+        >
+          {card}
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View className="overflow-hidden rounded-xl">
       <ReanimatedSwipeable
@@ -139,6 +242,7 @@ export function SwipeableEpisodeCard({
                     icon="remove-circle"
                     tone="warning"
                     onPress={() => handleActionPress(swipeable, "unwatch")}
+                    activateOnPressIn={isMobileWebTouch}
                   />
                 </View>
               )
@@ -151,6 +255,7 @@ export function SwipeableEpisodeCard({
               icon={watched ? "refresh-circle" : "checkmark-circle"}
               tone="success"
               onPress={() => handleActionPress(swipeable, rightAction)}
+              activateOnPressIn={isMobileWebTouch}
             />
           </View>
         )}
