@@ -610,7 +610,7 @@ export default function LibraryScreen() {
 
                 {/* Filter Buttons */}
                 <View className="mb-3">
-                  <View className="flex-row flex-wrap gap-2">
+                  <View className="flex-row flex-wrap justify-center gap-2">
                     {/* Genre Button */}
                     {availableGenres.length > 0 && (
                       <DropdownFilterChip
