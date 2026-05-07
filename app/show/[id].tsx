@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -17,6 +17,7 @@ import { api } from "@/convex/_generated/api";
 import { ScreenWrapper } from "@/components/ScreenWrapper";
 import { Badge } from "@/components/Badge";
 import { ProgressBar } from "@/components/ProgressBar";
+import { OverlayDetailFrame } from "@/components/OverlayDetailFrame";
 import { ShowHeader } from "@/components/ShowHeader";
 import { ShowActionBar } from "@/components/ShowActionBar";
 import { SeasonAccordion } from "@/components/SeasonAccordion";
@@ -804,6 +805,20 @@ export function ShowDetailScreen() {
   const { width } = useWindowDimensions();
   const { isAuthenticated } = useConvexAuth();
   const isDesktop = Platform.OS === "web" && width >= 1024;
+  const isOverlayDetailRoute = router.canDismiss();
+  const closeOverlayDetailRoute = useCallback(() => {
+    if (router.canDismiss()) {
+      router.dismiss();
+      return;
+    }
+
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+
+    router.replace("/home");
+  }, [router]);
 
   const [show, setShow] = useState<NormalizedShow | null>(null);
   const [seasons, setSeasons] = useState<NormalizedSeason[]>([]);
@@ -3603,8 +3618,20 @@ export function ShowDetailScreen() {
     cleanRichText(show?.overview) || "No overview available yet.";
   const showPosterUrl = toHttpsImageUrl(show?.posterUrl);
 
-  if (isLoading) {
+  const wrapShowDetail = (content: ReactElement) => {
+    if (!isOverlayDetailRoute) {
+      return content;
+    }
+
     return (
+      <OverlayDetailFrame onClose={closeOverlayDetailRoute}>
+        {content}
+      </OverlayDetailFrame>
+    );
+  };
+
+  if (isLoading) {
+    return wrapShowDetail(
       <ScreenWrapper contentClassName="px-0 py-0">
         <View className="flex-1 items-center justify-center">
           <ActivityIndicator size="large" color="#ef4444" />
@@ -3615,7 +3642,7 @@ export function ShowDetailScreen() {
   }
 
   if (error) {
-    return (
+    return wrapShowDetail(
       <ScreenWrapper contentClassName="px-4 py-6">
         <View className="rounded-xl border-2 border-primary/30 bg-primary/10 p-6">
           <Text className="text-lg font-semibold text-primary">Error</Text>
@@ -3626,7 +3653,7 @@ export function ShowDetailScreen() {
   }
 
   if (!show) {
-    return (
+    return wrapShowDetail(
       <ScreenWrapper contentClassName="px-4 py-6">
         <View className="items-center py-12">
           <Text className="text-text-secondary">Show not found.</Text>
@@ -3635,7 +3662,7 @@ export function ShowDetailScreen() {
     );
   }
 
-  return (
+  return wrapShowDetail(
     <ScreenWrapper contentClassName="px-0 py-0">
       <ScrollView
         className="flex-1"
@@ -3652,6 +3679,7 @@ export function ShowDetailScreen() {
           rating={show.rating}
           isDesktop={isDesktop}
           showBackButton
+          backButtonVariant={isOverlayDetailRoute ? "close" : "back"}
           backFallbackHref="/home"
           actionSlot={
             canTrackShow ? (
