@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ComponentProps,
+  type ReactElement,
+} from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -3618,6 +3626,9 @@ export function ShowDetailScreen() {
     cleanRichText(show?.overview) || "No overview available yet.";
   const showPosterUrl = toHttpsImageUrl(show?.posterUrl);
 
+  const detailScreenEdges: ComponentProps<typeof ScreenWrapper>["edges"] =
+    isOverlayDetailRoute ? [] : ["top"];
+
   const wrapShowDetail = (content: ReactElement) => {
     if (!isOverlayDetailRoute) {
       return content;
@@ -3632,7 +3643,7 @@ export function ShowDetailScreen() {
 
   if (isLoading) {
     return wrapShowDetail(
-      <ScreenWrapper contentClassName="px-0 py-0">
+      <ScreenWrapper contentClassName="px-0 py-0" edges={detailScreenEdges}>
         <View className="flex-1 items-center justify-center">
           <ActivityIndicator size="large" color="#ef4444" />
           <Text className="mt-4 text-sm text-text-secondary">Loading show details...</Text>
@@ -3643,7 +3654,7 @@ export function ShowDetailScreen() {
 
   if (error) {
     return wrapShowDetail(
-      <ScreenWrapper contentClassName="px-4 py-6">
+      <ScreenWrapper contentClassName="px-4 py-6" edges={detailScreenEdges}>
         <View className="rounded-xl border-2 border-primary/30 bg-primary/10 p-6">
           <Text className="text-lg font-semibold text-primary">Error</Text>
           <Text className="mt-2 text-sm text-text-secondary">{error}</Text>
@@ -3654,7 +3665,7 @@ export function ShowDetailScreen() {
 
   if (!show) {
     return wrapShowDetail(
-      <ScreenWrapper contentClassName="px-4 py-6">
+      <ScreenWrapper contentClassName="px-4 py-6" edges={detailScreenEdges}>
         <View className="items-center py-12">
           <Text className="text-text-secondary">Show not found.</Text>
         </View>
@@ -3663,7 +3674,7 @@ export function ShowDetailScreen() {
   }
 
   return wrapShowDetail(
-    <ScreenWrapper contentClassName="px-0 py-0">
+    <ScreenWrapper contentClassName="px-0 py-0" edges={detailScreenEdges}>
       <ScrollView
         className="flex-1"
         showsVerticalScrollIndicator={true}
@@ -3678,7 +3689,7 @@ export function ShowDetailScreen() {
           firstAired={show.firstAired}
           rating={show.rating}
           isDesktop={isDesktop}
-          showBackButton
+          showBackButton={!isOverlayDetailRoute || isDesktop}
           backButtonVariant={isOverlayDetailRoute ? "close" : "back"}
           backFallbackHref="/home"
           actionSlot={

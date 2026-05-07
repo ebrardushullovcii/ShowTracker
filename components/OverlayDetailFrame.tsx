@@ -1,5 +1,6 @@
 import type { PropsWithChildren } from "react";
 import { Platform, Pressable, View, useWindowDimensions } from "react-native";
+import { HeaderIconButton } from "@/components/HeaderIconButton";
 import { DESKTOP_SIDEBAR_BREAKPOINT } from "@/constants/navigation";
 
 type OverlayDetailFrameProps = PropsWithChildren<{
@@ -25,7 +26,7 @@ export function OverlayDetailFrame({ children, onClose }: OverlayDetailFrameProp
         className={
           isDesktop
             ? "ml-auto h-full w-full max-w-5xl overflow-hidden border-l-2 border-border-bright bg-bg-base shadow-2xl"
-            : "mt-8 flex-1 overflow-hidden rounded-t-[28px] border-x-2 border-t-2 border-border-bright bg-bg-base shadow-2xl"
+            : "flex-1 overflow-hidden border-x-2 border-t-2 border-border-bright bg-bg-base shadow-2xl"
         }
         style={
           isDesktop
@@ -33,7 +34,20 @@ export function OverlayDetailFrame({ children, onClose }: OverlayDetailFrameProp
             : { shadowColor: "#000", shadowOpacity: 0.35, shadowRadius: 28 }
         }
       >
-        {children}
+        {isDesktop ? (
+          children
+        ) : (
+          <>
+            <View className="z-30 h-14 justify-center border-b border-border-default bg-bg-base/95 px-3">
+              <HeaderIconButton
+                icon="close"
+                accessibilityLabel="Close show details"
+                onPress={onClose}
+              />
+            </View>
+            <View className="flex-1 overflow-hidden">{children}</View>
+          </>
+        )}
       </View>
     </View>
   );
