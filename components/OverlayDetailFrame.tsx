@@ -26,7 +26,7 @@ export function OverlayDetailFrame({ children, onClose }: OverlayDetailFrameProp
         className={
           isDesktop
             ? "ml-auto h-full w-full max-w-5xl overflow-hidden border-l-2 border-border-bright bg-bg-base shadow-2xl"
-            : "flex-1 overflow-hidden border-x-2 border-t-2 border-border-bright bg-bg-base shadow-2xl"
+            : "flex-1 overflow-hidden rounded-t-[22px] border-t-2 border-border-bright bg-bg-base shadow-2xl"
         }
         style={
           isDesktop
