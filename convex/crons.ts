@@ -9,25 +9,26 @@ import { internal } from "@/convex/_generated/api";
 
 const crons = cronJobs();
 
-// Run daily at 2 AM to auto-pause inactive shows
+// Run daily shortly after metadata refresh to auto-pause inactive shows
 // Cron syntax: minute hour day month dayOfWeek
-// "0 2 * * *" = Every day at 2:00 AM UTC
+// "15 2 * * *" = Every day at 2:15 AM UTC
 crons.cron(
   "autoPauseInactiveShows",
-  "0 2 * * *",
+  "15 2 * * *",
   internal.shows.autoPauseInactiveShows
+);
+
+// Run daily at 2 AM UTC. This refreshes completed TV/anime titles so old
+// completed shows can resurface when providers release new episodes.
+crons.cron(
+  "refreshCompletedShowsForNewEpisodes",
+  "0 2 * * *",
+  internal.shows.refreshCompletedShowsForNewEpisodes
 );
 
 // Manual repair only: dailyReconcileProjections is intentionally not scheduled.
 // It performs a full aggregate/projection rebuild and is too expensive for
 // routine production use. Run it manually after migrations or data repair.
-
-// TODO: Implement new season detection when notifications are added
-// crons.weekly(
-//   "checkForNewSeasons",
-//   { day: "sunday", hourUTC: 10, minuteUTC: 0 },
-//   internal.shows.checkForNewSeasons
-// );
 
 // TODO: Implement dropped show reminders when notifications are added
 // crons.weekly(

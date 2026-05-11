@@ -33,6 +33,9 @@ const RELATION_SYNC_BATCH_LIMIT = 6;
 const RELATION_SYNC_MAX_GRAPH_NODES = 30;
 const IMPORT_TRACKED_SHOWS_MAX_ITEMS = 20;
 const HOME_FEED_MAX_RESULTS = 40;
+const TARGETED_TRACKING_REPAIR_PAGE_SIZE = 20;
+const TARGETED_TRACKING_REPAIR_PAGE_SIZE_MAX = 30;
+const COMPLETED_SHOW_METADATA_REFRESH_PAGE_SIZE = 256;
 const RELATION_INCLUDE_TYPES = new Set(["PREQUEL", "SEQUEL"]);
 
 const showInput = {
@@ -325,6 +328,228 @@ export const runRefreshProjectionsForShow = internalAction({
     }
 
     return { totalUpdated, rounds };
+  },
+});
+
+export const resumeCompletedUserShowsForNewReleasedEpisodes = internalMutation({
+  args: {
+    showId: v.id("shows"),
+    releasedEpisodeCount: v.union(v.number(), v.null()),
+    cursor: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const page = await ctx.db
+      .query("userShows")
+      .withIndex("by_showId", (q) => q.eq("showId", args.showId))
+      .paginate({
+        numItems: COMPLETED_SHOW_RESUME_BATCH_SIZE,
+        cursor: args.cursor ?? null,
+      });
+
+    let scanned = 0;
+    let resumed = 0;
+    let skippedFutureOnly = 0;
+    let skippedUnchanged = 0;
+    const now = Date.now();
+    const releasedEpisodeCount =
+      typeof args.releasedEpisodeCount === "number"
+        ? Math.max(0, Math.floor(args.releasedEpisodeCount))
+        : null;
+
+    for (const userShow of page.page) {
+      scanned += 1;
+      if (userShow.status !== "completed") {
+        continue;
+      }
+
+      if (releasedEpisodeCount === null) {
+        skippedFutureOnly += 1;
+        continue;
+      }
+
+      if (!shouldResumeForNewContent(userShow, releasedEpisodeCount)) {
+        skippedUnchanged += 1;
+        continue;
+      }
+
+      const watchedEpisodesCount = Math.max(
+        0,
+        Math.floor(userShow.watchedEpisodesCount ?? 0)
+      );
+      const nextStatus: UserShowStatus =
+        watchedEpisodesCount > 0 ? "watching" : "plan_to_watch";
+
+      await ctx.db.patch(userShow._id, {
+        status: nextStatus,
+        completedAt: undefined,
+        autoPausedAt: undefined,
+        statusChangedAt: now,
+      });
+      await upsertFeedProjectionForUserShow(ctx, userShow._id);
+      resumed += 1;
+    }
+
+    return {
+      scanned,
+      resumed,
+      skippedFutureOnly,
+      skippedUnchanged,
+      nextCursor: page.continueCursor,
+      isDone: page.isDone,
+    };
+  },
+});
+
+export const runResumeCompletedUserShowsForNewReleasedEpisodes = internalAction({
+  args: {
+    showId: v.id("shows"),
+    releasedEpisodeCount: v.union(v.number(), v.null()),
+  },
+  handler: async (ctx, args) => {
+    let cursor: string | undefined;
+    let isDone = false;
+    let scanned = 0;
+    let resumed = 0;
+    let skippedFutureOnly = 0;
+    let skippedUnchanged = 0;
+    let rounds = 0;
+
+    while (!isDone) {
+      const batch: {
+        scanned: number;
+        resumed: number;
+        skippedFutureOnly: number;
+        skippedUnchanged: number;
+        nextCursor: string | null;
+        isDone: boolean;
+      } = await ctx.runMutation(
+        internal.shows.resumeCompletedUserShowsForNewReleasedEpisodes,
+        {
+          showId: args.showId,
+          releasedEpisodeCount: args.releasedEpisodeCount,
+          cursor,
+        }
+      );
+
+      scanned += batch.scanned;
+      resumed += batch.resumed;
+      skippedFutureOnly += batch.skippedFutureOnly;
+      skippedUnchanged += batch.skippedUnchanged;
+      cursor = batch.nextCursor ?? undefined;
+      isDone = batch.isDone;
+      rounds += 1;
+    }
+
+    return { scanned, resumed, skippedFutureOnly, skippedUnchanged, rounds };
+  },
+});
+
+export const getCompletedUserShowsForMetadataRefresh = internalQuery({
+  args: {
+    cursor: v.optional(v.string()),
+    pageSize: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const safePageSize = Math.max(
+      1,
+      Math.min(args.pageSize ?? COMPLETED_SHOW_METADATA_REFRESH_PAGE_SIZE, 100)
+    );
+    const page = await ctx.db
+      .query("userShows")
+      .withIndex("by_status_last_watched", (q) => q.eq("status", "completed"))
+      .paginate({
+        numItems: safePageSize,
+        cursor: args.cursor ?? null,
+      });
+
+    return {
+      scanned: page.page.length,
+      showIds: page.page.map((userShow) => userShow.showId),
+      nextCursor: page.continueCursor,
+      isDone: page.isDone,
+    };
+  },
+});
+
+export const refreshCompletedShowsForNewEpisodes = internalAction({
+  args: {},
+  handler: async (ctx): Promise<{
+    scannedUserShows: number;
+    candidateShows: number;
+    attemptedRefreshes: number;
+    refreshedShows: number;
+    resumedUserShows: number;
+    skippedFresh: number;
+    skippedUnsupported: number;
+  }> => {
+    let cursor: string | undefined;
+    let isDone = false;
+    let scannedUserShows = 0;
+    const candidateShowIds: Id<"shows">[] = [];
+    const seenShowIds = new Set<string>();
+
+    while (!isDone) {
+      const page: {
+        scanned: number;
+        showIds: Array<Id<"shows">>;
+        nextCursor: string | null;
+        isDone: boolean;
+      } = await ctx.runQuery(internal.shows.getCompletedUserShowsForMetadataRefresh, {
+        cursor,
+        pageSize: COMPLETED_SHOW_METADATA_REFRESH_PAGE_SIZE,
+      });
+
+      scannedUserShows += page.scanned;
+      for (const showId of page.showIds) {
+        const showIdKey = String(showId);
+        if (seenShowIds.has(showIdKey)) {
+          continue;
+        }
+        seenShowIds.add(showIdKey);
+        candidateShowIds.push(showId);
+      }
+
+      cursor = page.nextCursor ?? undefined;
+      isDone = page.isDone;
+    }
+
+    let attemptedRefreshes = 0;
+    let refreshedShows = 0;
+    let resumedUserShows = 0;
+    let skippedFresh = 0;
+    let skippedUnsupported = 0;
+
+    for (const showId of candidateShowIds) {
+      const show = await ctx.runQuery(internal.shows.getShowById, { showId });
+      if (!show || show.mediaType === "movie") {
+        skippedUnsupported += 1;
+        continue;
+      }
+
+      const result = await refreshShowMetadataAndRepairTracking(ctx, showId, {
+        skipBroadAggregateRepair: true,
+      });
+      attemptedRefreshes += 1;
+
+      if (result.refreshed) {
+        refreshedShows += 1;
+        resumedUserShows += result.resumedUserShows;
+      } else if (result.reason === "throttled") {
+        skippedFresh += 1;
+      } else if (result.reason === "unsupported_show_source") {
+        skippedUnsupported += 1;
+      }
+    }
+
+    return {
+      scannedUserShows,
+      candidateShows: candidateShowIds.length,
+      attemptedRefreshes,
+      refreshedShows,
+      resumedUserShows,
+      skippedFresh,
+      skippedUnsupported,
+    };
   },
 });
 
@@ -1223,6 +1448,8 @@ const TERMINAL_SHOW_LIFECYCLE_STATUSES = new Set([
   "cancelled",
 ]);
 
+const COMPLETED_SHOW_RESUME_BATCH_SIZE = 512;
+
 function hasLookupArgs(args: {
   tmdbId?: number;
   tvdbId?: number;
@@ -1605,7 +1832,41 @@ async function refreshUserShowTrackingAggregates(
   return {
     ...aggregates,
     status: nextStatus,
+    userShowId: userShow._id,
+    patched: true,
+    projectionUpdated: true,
   };
+}
+
+function getReleasedEpisodeCountForResume(show: NormalizedShow) {
+  const releasedEpisodes = normalizePositiveEpisodeCount(show.releasedEpisodes);
+  if (typeof releasedEpisodes === "number") {
+    return releasedEpisodes;
+  }
+
+  if (show.mediaType === "movie") {
+    return normalizePositiveEpisodeCount(show.totalEpisodes);
+  }
+
+  if (isTerminalLifecycleStatus(show.status)) {
+    return normalizePositiveEpisodeCount(show.totalEpisodes);
+  }
+
+  return null;
+}
+
+function shouldResumeForNewContent(
+  userShow: Pick<Doc<"userShows">, "status" | "watchedEpisodesCount">,
+  releasedEpisodeCount: number | null
+): boolean {
+  if (userShow.status !== "completed") {
+    return false;
+  }
+  if (typeof releasedEpisodeCount !== "number") {
+    return false;
+  }
+  const watchedEpisodesCount = Math.max(0, Math.floor(userShow.watchedEpisodesCount ?? 0));
+  return watchedEpisodesCount < releasedEpisodeCount;
 }
 
 function normalizePositiveEpisodeCount(value?: number | null) {
@@ -2893,19 +3154,23 @@ async function refreshShowMetadataAndRepairTracking(
   showId: Id<"shows">,
   options?: {
     repairUserId?: Id<"users">;
+    skipBroadAggregateRepair?: boolean;
   }
 ): Promise<
   | {
       refreshed: false;
       repairedUsers: number;
+      resumedUserShows: number;
       externalShowId: string | null;
       reason: "show_not_found" | "unsupported_show_source" | "not_tracked" | "throttled";
     }
   | {
       refreshed: true;
       repairedUsers: number;
+      resumedUserShows: number;
       externalShowId: string | null;
       totalEpisodes: number | null;
+      releasedEpisodes: number | null;
       totalSeasons: number | null;
       status: string | null;
       reason: "ok";
@@ -2916,6 +3181,7 @@ async function refreshShowMetadataAndRepairTracking(
     return {
       refreshed: false,
       repairedUsers: 0,
+      resumedUserShows: 0,
       externalShowId: null,
       reason: "show_not_found" as const,
     };
@@ -2930,6 +3196,7 @@ async function refreshShowMetadataAndRepairTracking(
     return {
       refreshed: false,
       repairedUsers: 0,
+      resumedUserShows: 0,
       externalShowId: getShowRouteId(show),
       reason: "throttled" as const,
     };
@@ -2940,32 +3207,39 @@ async function refreshShowMetadataAndRepairTracking(
     return {
       refreshed: false,
       repairedUsers: 0,
+      resumedUserShows: 0,
       externalShowId: getShowRouteId(show),
       reason: "unsupported_show_source" as const,
     };
   }
 
-  const userShows = await ctx.runQuery(internal.shows.findUserShowByShowId, {
-    showId,
-  });
-  const targetUserShows =
-    options?.repairUserId !== undefined
-      ? userShows.filter((userShow) => userShow.userId === options.repairUserId)
-      : userShows;
+  let targetUserShows: Array<Doc<"userShows">> = [];
+  const shouldLoadTargetUserShows =
+    options?.skipBroadAggregateRepair !== true || options?.repairUserId !== undefined;
+  if (shouldLoadTargetUserShows) {
+    const userShows = await ctx.runQuery(internal.shows.findUserShowByShowId, {
+      showId,
+    });
+    targetUserShows =
+      options?.repairUserId !== undefined
+        ? userShows.filter((userShow) => userShow.userId === options.repairUserId)
+        : userShows;
 
-  if (targetUserShows.length === 0) {
-    return {
-      refreshed: false,
-      repairedUsers: 0,
-      externalShowId: getShowRouteId({
-        mediaType: latest.mediaType,
-        tmdbId: latest.tmdbId,
-        anilistId: latest.anilistId,
-        malId: latest.malId,
-        tvmazeId: latest.tvmazeId,
-      }),
-      reason: "not_tracked" as const,
-    };
+    if (targetUserShows.length === 0) {
+      return {
+        refreshed: false,
+        repairedUsers: 0,
+        resumedUserShows: 0,
+        externalShowId: getShowRouteId({
+          mediaType: latest.mediaType,
+          tmdbId: latest.tmdbId,
+          anilistId: latest.anilistId,
+          malId: latest.malId,
+          tvmazeId: latest.tvmazeId,
+        }),
+        reason: "not_tracked" as const,
+      };
+    }
   }
 
   const refreshedShowId = await ctx.runMutation(internal.shows.upsertShowByInternalId, {
@@ -2975,8 +3249,10 @@ async function refreshShowMetadataAndRepairTracking(
     }),
   });
 
+  const releasedEpisodeCount = getReleasedEpisodeCountForResume(latest);
+
   const repairedUsers = new Set<string>();
-  if (options?.repairUserId === undefined) {
+  if (options?.repairUserId === undefined && options?.skipBroadAggregateRepair !== true) {
     for (const userShow of targetUserShows) {
       await ctx.runAction(internal.shows.rebuildUserShowTrackingAggregatesForUser, {
         userId: userShow.userId,
@@ -2984,6 +3260,14 @@ async function refreshShowMetadataAndRepairTracking(
       repairedUsers.add(String(userShow.userId));
     }
   }
+
+  const resumeSummary: {
+    resumed: number;
+  } = await ctx.runAction(internal.shows.runResumeCompletedUserShowsForNewReleasedEpisodes, {
+    showId: refreshedShowId,
+    releasedEpisodeCount,
+  });
+
   await ctx.runAction(internal.shows.runRefreshProjectionsForShow, {
     showId: refreshedShowId,
   });
@@ -2991,6 +3275,7 @@ async function refreshShowMetadataAndRepairTracking(
   return {
     refreshed: true,
     repairedUsers: repairedUsers.size,
+    resumedUserShows: resumeSummary.resumed,
     externalShowId: getShowRouteId({
       mediaType: latest.mediaType,
       tmdbId: latest.tmdbId,
@@ -2999,6 +3284,7 @@ async function refreshShowMetadataAndRepairTracking(
       tvmazeId: latest.tvmazeId,
     }),
     totalEpisodes: latest.totalEpisodes ?? null,
+    releasedEpisodes: releasedEpisodeCount,
     totalSeasons: latest.totalSeasons ?? null,
     status: latest.status ?? null,
     reason: "ok" as const,
@@ -3014,6 +3300,7 @@ export const refreshTrackedShowMetadata = action({
       return {
         refreshed: false,
         repairedUsers: 0,
+        resumedUserShows: 0,
         externalShowId: null,
         reason: "show_not_found" as const,
       };
@@ -3373,6 +3660,145 @@ export const getUserShowTracking = query({
       isFavorite: favoriteEntry !== null,
       relationRootAnilistId:
         userShow?.relationRootAnilistId ?? show.rootAnilistId ?? show.anilistId ?? null,
+    };
+  },
+});
+
+export const repairTrackingForShow = mutation({
+  args: showLookupInput,
+  handler: async (ctx, args): Promise<{
+    patched: boolean;
+    watchedEpisodesCount: number;
+    watchedTotalCount: number;
+    watchedRuntimeMinutes: number;
+    status: UserShowStatus | null;
+    projectionUpdated: boolean;
+    reason: "ok" | "show_not_found" | "not_tracked" | "invalid_lookup";
+  }> => {
+    const userId = await getCurrentUserId(ctx);
+    if (!hasLookupArgs(args)) {
+      return {
+        patched: false,
+        watchedEpisodesCount: 0,
+        watchedTotalCount: 0,
+        watchedRuntimeMinutes: 0,
+        status: null,
+        projectionUpdated: false,
+        reason: "invalid_lookup",
+      };
+    }
+
+    const show = await findShowByLookup(ctx, args);
+    if (!show) {
+      return {
+        patched: false,
+        watchedEpisodesCount: 0,
+        watchedTotalCount: 0,
+        watchedRuntimeMinutes: 0,
+        status: null,
+        projectionUpdated: false,
+        reason: "show_not_found",
+      };
+    }
+
+    const refreshed = await refreshUserShowTrackingAggregates(ctx, userId, show._id);
+    if (!refreshed) {
+      return {
+        patched: false,
+        watchedEpisodesCount: 0,
+        watchedTotalCount: 0,
+        watchedRuntimeMinutes: 0,
+        status: null,
+        projectionUpdated: false,
+        reason: "not_tracked",
+      };
+    }
+
+    console.info("Repaired tracking for one user/show", {
+      showId: show._id,
+      userShowId: refreshed.userShowId,
+      status: refreshed.status,
+      watchedEpisodesCount: refreshed.watchedEpisodesCount,
+    });
+
+    return {
+      patched: refreshed.patched,
+      watchedEpisodesCount: refreshed.watchedEpisodesCount,
+      watchedTotalCount: refreshed.watchedTotalCount,
+      watchedRuntimeMinutes: refreshed.watchedRuntimeMinutes,
+      status: refreshed.status,
+      projectionUpdated: refreshed.projectionUpdated,
+      reason: "ok",
+    };
+  },
+});
+
+export const repairMyShowsTrackingBatch = mutation({
+  args: {
+    continueCursor: v.optional(v.string()),
+    pageSize: v.optional(v.number()),
+  },
+  handler: async (ctx, args): Promise<{
+    scanned: number;
+    patched: number;
+    watchedEpisodesCount: number;
+    watchedTotalCount: number;
+    watchedRuntimeMinutes: number;
+    continueCursor: string | null;
+    isDone: boolean;
+  }> => {
+    const userId = await getCurrentUserId(ctx);
+    const pageSize = Math.max(
+      1,
+      Math.min(
+        args.pageSize ?? TARGETED_TRACKING_REPAIR_PAGE_SIZE,
+        TARGETED_TRACKING_REPAIR_PAGE_SIZE_MAX
+      )
+    );
+    const page = await ctx.db
+      .query("userShows")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .paginate({
+        numItems: pageSize,
+        cursor: args.continueCursor ?? null,
+      });
+
+    let patched = 0;
+    let watchedEpisodesCount = 0;
+    let watchedTotalCount = 0;
+    let watchedRuntimeMinutes = 0;
+
+    for (const userShow of page.page) {
+      const refreshed = await refreshUserShowTrackingAggregates(
+        ctx,
+        userId,
+        userShow.showId
+      );
+
+      if (!refreshed) {
+        continue;
+      }
+
+      patched += 1;
+      watchedEpisodesCount += refreshed.watchedEpisodesCount;
+      watchedTotalCount += refreshed.watchedTotalCount;
+      watchedRuntimeMinutes += refreshed.watchedRuntimeMinutes;
+    }
+
+    console.info("Repaired tracking batch for current user", {
+      scanned: page.page.length,
+      patched,
+      isDone: page.isDone,
+    });
+
+    return {
+      scanned: page.page.length,
+      patched,
+      watchedEpisodesCount,
+      watchedTotalCount,
+      watchedRuntimeMinutes,
+      continueCursor: page.isDone ? null : page.continueCursor,
+      isDone: page.isDone,
     };
   },
 });
@@ -6745,19 +7171,6 @@ function shouldAutoPause(
   
   const daysSinceLastWatch = (now - lastWatchedAt) / (1000 * 60 * 60 * 24);
   return daysSinceLastWatch >= INACTIVITY_THRESHOLD_DAYS;
-}
-
-/**
- * Check if completed show should be resumed due to new episodes
- */
-function shouldResumeForNewContent(
-  currentStatus: UserShowStatus,
-  completedAt: number | undefined,
-  hasNewEpisodes: boolean
-): boolean {
-  if (currentStatus !== "completed") return false;
-  if (!hasNewEpisodes) return false;
-  return true;
 }
 
 function isCaughtUpOnOngoingShow(
