@@ -3428,10 +3428,10 @@ async function refreshShowMetadataAndRepairTracking(
       };
     }
   } else if (options?.skipBroadAggregateRepair === true) {
-    const trackedUserShows = await ctx.runQuery(internal.shows.findUserShowByShowId, {
+    const hasTrackedUserShow = await ctx.runQuery(internal.shows.hasTrackedUserShowByShowId, {
       showId,
     });
-    if (trackedUserShows.length === 0) {
+    if (!hasTrackedUserShow) {
       return {
         refreshed: false,
         repairedUsers: 0,
@@ -3461,6 +3461,13 @@ async function refreshShowMetadataAndRepairTracking(
   });
 
   const releasedEpisodeCount = getReleasedEpisodeCountForResume(latest);
+  const previousReleasedEpisodeCount =
+    typeof show.releasedEpisodes === "number"
+      ? Math.max(0, Math.floor(show.releasedEpisodes))
+      : null;
+  const releasedEpisodeCountIncreased =
+    releasedEpisodeCount !== null &&
+    (previousReleasedEpisodeCount === null || releasedEpisodeCount > previousReleasedEpisodeCount);
 
   const repairedUsers = new Set<string>();
   if (options?.repairUserId === undefined && options?.skipBroadAggregateRepair !== true) {
@@ -3473,7 +3480,7 @@ async function refreshShowMetadataAndRepairTracking(
   }
 
   const resumeSummary: { resumed: number } =
-    releasedEpisodeCount !== null
+    releasedEpisodeCountIncreased
       ? await ctx.runAction(internal.shows.runResumeCompletedUserShowsForNewReleasedEpisodes, {
           showId: refreshedShowId,
           releasedEpisodeCount,
@@ -3800,6 +3807,19 @@ export const findUserShowByShowId = internalQuery({
       .query("userShows")
       .withIndex("by_showId", (q) => q.eq("showId", args.showId))
       .collect(),
+});
+
+export const hasTrackedUserShowByShowId = internalQuery({
+  args: {
+    showId: v.id("shows"),
+  },
+  handler: async (ctx, args) => {
+    const rows = await ctx.db
+      .query("userShows")
+      .withIndex("by_showId", (q) => q.eq("showId", args.showId))
+      .take(1);
+    return rows.length > 0;
+  },
 });
 
 export const findUserShowByUserAndShowId = internalQuery({
