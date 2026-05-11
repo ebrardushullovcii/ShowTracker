@@ -39,6 +39,7 @@ const COMPLETED_SHOW_METADATA_REFRESH_PAGE_SIZE = 100;
 const COMPLETED_SHOW_METADATA_REFRESH_MAX_SCANNED = 500;
 const COMPLETED_SHOW_METADATA_REFRESH_MAX_CANDIDATES = 25;
 const COMPLETED_SHOW_METADATA_REFRESH_CURSOR_KEY = "completed-show-refresh";
+const COMPLETED_SHOW_RESUME_MAX_ROUNDS = 10;
 const RELATION_INCLUDE_TYPES = new Set(["PREQUEL", "SEQUEL"]);
 
 const showInput = {
@@ -507,7 +508,7 @@ export const runResumeCompletedUserShowsForNewReleasedEpisodes = internalAction(
     let skippedUnchanged = 0;
     let rounds = 0;
 
-    while (!isDone) {
+    while (!isDone && rounds < COMPLETED_SHOW_RESUME_MAX_ROUNDS) {
       const batch: {
         scanned: number;
         resumed: number;
@@ -533,6 +534,14 @@ export const runResumeCompletedUserShowsForNewReleasedEpisodes = internalAction(
       cursor = batch.nextCursor ?? undefined;
       isDone = batch.isDone;
       rounds += 1;
+    }
+
+    if (!isDone) {
+      console.warn("Completed show resume stopped at round cap", {
+        showId: args.showId,
+        rounds,
+        scanned,
+      });
     }
 
     return { scanned, resumed, projectionsUpdated, skippedFutureOnly, skippedUnchanged, rounds };
@@ -574,11 +583,11 @@ export const getCompletedUserShowsForMetadataRefresh = internalQuery({
 export const getMaintenanceCursor = internalQuery({
   args: { key: v.string() },
   handler: async (ctx, args) => {
-    const row = await ctx.db
+    const rows = await ctx.db
       .query("maintenanceState")
       .withIndex("by_key", (q) => q.eq("key", args.key))
-      .unique();
-    return row?.cursor ?? null;
+      .collect();
+    return rows[0]?.cursor ?? null;
   },
 });
 
@@ -588,10 +597,11 @@ export const setMaintenanceCursor = internalMutation({
     cursor: v.union(v.string(), v.null()),
   },
   handler: async (ctx, args) => {
-    const existing = await ctx.db
+    const existingRows = await ctx.db
       .query("maintenanceState")
       .withIndex("by_key", (q) => q.eq("key", args.key))
-      .unique();
+      .collect();
+    const existing = existingRows[0];
     const patch = {
       cursor: args.cursor ?? undefined,
       updatedAt: Date.now(),
@@ -599,6 +609,9 @@ export const setMaintenanceCursor = internalMutation({
 
     if (existing) {
       await ctx.db.patch(existing._id, patch);
+      for (const duplicate of existingRows.slice(1)) {
+        await ctx.db.delete(duplicate._id);
+      }
       return existing._id;
     }
 
@@ -3487,7 +3500,7 @@ async function refreshShowMetadataAndRepairTracking(
         })
       : { resumed: 0 };
 
-  if (releasedEpisodeCount === null) {
+  if (!releasedEpisodeCountIncreased) {
     await ctx.runAction(internal.shows.runRefreshProjectionsForShow, {
       showId: refreshedShowId,
     });
