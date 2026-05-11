@@ -587,7 +587,12 @@ export const getMaintenanceCursor = internalQuery({
       .query("maintenanceState")
       .withIndex("by_key", (q) => q.eq("key", args.key))
       .collect();
-    return rows[0]?.cursor ?? null;
+    const latest = rows.reduce<Doc<"maintenanceState"> | null>(
+      (selected, row) =>
+        selected === null || row.updatedAt > selected.updatedAt ? row : selected,
+      null
+    );
+    return latest?.cursor ?? null;
   },
 });
 
@@ -601,7 +606,11 @@ export const setMaintenanceCursor = internalMutation({
       .query("maintenanceState")
       .withIndex("by_key", (q) => q.eq("key", args.key))
       .collect();
-    const existing = existingRows[0];
+    const existing = existingRows.reduce<Doc<"maintenanceState"> | null>(
+      (selected, row) =>
+        selected === null || row.updatedAt > selected.updatedAt ? row : selected,
+      null
+    );
     const patch = {
       cursor: args.cursor ?? undefined,
       updatedAt: Date.now(),
@@ -609,7 +618,10 @@ export const setMaintenanceCursor = internalMutation({
 
     if (existing) {
       await ctx.db.patch(existing._id, patch);
-      for (const duplicate of existingRows.slice(1)) {
+      for (const duplicate of existingRows) {
+        if (duplicate._id === existing._id) {
+          continue;
+        }
         await ctx.db.delete(duplicate._id);
       }
       return existing._id;
@@ -3500,11 +3512,9 @@ async function refreshShowMetadataAndRepairTracking(
         })
       : { resumed: 0 };
 
-  if (!releasedEpisodeCountIncreased) {
-    await ctx.runAction(internal.shows.runRefreshProjectionsForShow, {
-      showId: refreshedShowId,
-    });
-  }
+  await ctx.runAction(internal.shows.runRefreshProjectionsForShow, {
+    showId: refreshedShowId,
+  });
 
   return {
     refreshed: true,
