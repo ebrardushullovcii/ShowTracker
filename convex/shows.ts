@@ -35,7 +35,7 @@ const IMPORT_TRACKED_SHOWS_MAX_ITEMS = 20;
 const HOME_FEED_MAX_RESULTS = 40;
 const TARGETED_TRACKING_REPAIR_PAGE_SIZE = 20;
 const TARGETED_TRACKING_REPAIR_PAGE_SIZE_MAX = 30;
-const COMPLETED_SHOW_METADATA_REFRESH_PAGE_SIZE = 256;
+const COMPLETED_SHOW_METADATA_REFRESH_PAGE_SIZE = 100;
 const RELATION_INCLUDE_TYPES = new Set(["PREQUEL", "SEQUEL"]);
 
 const showInput = {
@@ -54,6 +54,7 @@ const showInput = {
   genres: v.optional(v.array(v.string())),
   status: v.optional(v.string()),
   totalEpisodes: v.optional(v.number()),
+  releasedEpisodes: v.optional(v.number()),
   totalSeasons: v.optional(v.number()),
   episodeRuntime: v.optional(v.number()),
   rating: v.optional(v.number()),
@@ -385,7 +386,6 @@ export const resumeCompletedUserShowsForNewReleasedEpisodes = internalMutation({
         autoPausedAt: undefined,
         statusChangedAt: now,
       });
-      await upsertFeedProjectionForUserShow(ctx, userShow._id);
       resumed += 1;
     }
 
@@ -406,6 +406,21 @@ export const runResumeCompletedUserShowsForNewReleasedEpisodes = internalAction(
     releasedEpisodeCount: v.union(v.number(), v.null()),
   },
   handler: async (ctx, args) => {
+    const releasedEpisodeCount =
+      typeof args.releasedEpisodeCount === "number"
+        ? Math.max(0, Math.floor(args.releasedEpisodeCount))
+        : null;
+
+    if (releasedEpisodeCount === null) {
+      return {
+        scanned: 0,
+        resumed: 0,
+        skippedFutureOnly: 0,
+        skippedUnchanged: 0,
+        rounds: 0,
+      };
+    }
+
     let cursor: string | undefined;
     let isDone = false;
     let scanned = 0;
@@ -426,7 +441,7 @@ export const runResumeCompletedUserShowsForNewReleasedEpisodes = internalAction(
         internal.shows.resumeCompletedUserShowsForNewReleasedEpisodes,
         {
           showId: args.showId,
-          releasedEpisodeCount: args.releasedEpisodeCount,
+          releasedEpisodeCount,
           cursor,
         }
       );
@@ -452,7 +467,10 @@ export const getCompletedUserShowsForMetadataRefresh = internalQuery({
   handler: async (ctx, args) => {
     const safePageSize = Math.max(
       1,
-      Math.min(args.pageSize ?? COMPLETED_SHOW_METADATA_REFRESH_PAGE_SIZE, 100)
+      Math.min(
+        args.pageSize ?? COMPLETED_SHOW_METADATA_REFRESH_PAGE_SIZE,
+        COMPLETED_SHOW_METADATA_REFRESH_PAGE_SIZE
+      )
     );
     const page = await ctx.db
       .query("userShows")
@@ -1573,6 +1591,7 @@ function buildShowPatch(
     malId: incoming.malId ?? existing?.malId,
     tvmazeId: incoming.tvmazeId ?? existing?.tvmazeId,
     imdbId: incoming.imdbId ?? existing?.imdbId,
+    releasedEpisodes: incoming.releasedEpisodes ?? existing?.releasedEpisodes,
     anilistFormat: incoming.anilistFormat ?? existing?.anilistFormat,
     animeSeason: incoming.animeSeason ?? existing?.animeSeason,
     animeSeasonYear: incoming.animeSeasonYear ?? existing?.animeSeasonYear,
@@ -1598,6 +1617,7 @@ type ShowPayload = {
   genres?: string[];
   status?: string;
   totalEpisodes?: number;
+  releasedEpisodes?: number;
   totalSeasons?: number;
   episodeRuntime?: number;
   rating?: number;
@@ -1835,17 +1855,19 @@ async function refreshUserShowTrackingAggregates(
     }
   }
 
-  await ctx.db.patch(userShow._id, patch);
-
-  // Keep feed projection in sync with the updated tracking aggregates.
-  await upsertFeedProjectionForUserShow(ctx, userShow._id);
+  const patched = hasUserShowAggregateChanges(userShow, nextStatus, aggregates);
+  if (patched) {
+    await ctx.db.patch(userShow._id, patch);
+    // Keep feed projection in sync with the updated tracking aggregates.
+    await upsertFeedProjectionForUserShow(ctx, userShow._id);
+  }
 
   return {
     ...aggregates,
     status: nextStatus,
     userShowId: userShow._id,
-    patched: true,
-    projectionUpdated: true,
+    patched,
+    projectionUpdated: patched,
   };
 }
 
@@ -1878,6 +1900,20 @@ function shouldResumeForNewContent(
   }
   const watchedEpisodesCount = Math.max(0, Math.floor(userShow.watchedEpisodesCount ?? 0));
   return watchedEpisodesCount < releasedEpisodeCount;
+}
+
+function hasUserShowAggregateChanges(
+  userShow: Doc<"userShows">,
+  nextStatus: UserShowStatus,
+  aggregates: UserShowTrackingAggregates
+) {
+  return (
+    (userShow.watchedEpisodesCount ?? 0) !== aggregates.watchedEpisodesCount ||
+    (userShow.watchedTotalCount ?? 0) !== aggregates.watchedTotalCount ||
+    (userShow.watchedRuntimeMinutes ?? 0) !== aggregates.watchedRuntimeMinutes ||
+    userShow.lastWatchedAt !== aggregates.lastWatchedAt ||
+    userShow.status !== nextStatus
+  );
 }
 
 function normalizePositiveEpisodeCount(value?: number | null) {
@@ -2226,6 +2262,7 @@ function buildShowPayloadFromNormalized(
     genres: show.genres,
     status: show.status,
     totalEpisodes: show.totalEpisodes,
+    releasedEpisodes: show.releasedEpisodes,
     totalSeasons: show.totalSeasons,
     episodeRuntime: show.episodeRuntime,
     rating: show.rating,
@@ -2274,6 +2311,7 @@ function mergeShowPayload(
     genres: incoming.genres ?? existing.genres,
     status: incoming.status ?? existing.status,
     totalEpisodes: incoming.totalEpisodes ?? existing.totalEpisodes,
+    releasedEpisodes: incoming.releasedEpisodes ?? existing.releasedEpisodes,
     totalSeasons: incoming.totalSeasons ?? existing.totalSeasons,
     episodeRuntime: incoming.episodeRuntime ?? existing.episodeRuntime,
     rating: incoming.rating ?? existing.rating,
@@ -3225,17 +3263,22 @@ async function refreshShowMetadataAndRepairTracking(
   }
 
   let targetUserShows: Array<Doc<"userShows">> = [];
-  const shouldLoadTargetUserShows =
-    options?.skipBroadAggregateRepair !== true || options?.repairUserId !== undefined;
-  if (shouldLoadTargetUserShows) {
-    const userShows = await ctx.runQuery(internal.shows.findUserShowByShowId, {
+  if (options?.repairUserId !== undefined) {
+    const userShow: Doc<"userShows"> | null = await ctx.runQuery(
+      internal.shows.findUserShowByUserAndShowId,
+      {
+        userId: options.repairUserId,
+        showId,
+      }
+    );
+    targetUserShows = userShow ? [userShow] : [];
+  } else if (options?.skipBroadAggregateRepair !== true) {
+    targetUserShows = await ctx.runQuery(internal.shows.findUserShowByShowId, {
       showId,
     });
-    targetUserShows =
-      options?.repairUserId !== undefined
-        ? userShows.filter((userShow) => userShow.userId === options.repairUserId)
-        : userShows;
+  }
 
+  if (options?.repairUserId !== undefined) {
     if (targetUserShows.length === 0) {
       return {
         refreshed: false,
@@ -3599,6 +3642,20 @@ export const findUserShowByShowId = internalQuery({
       .collect(),
 });
 
+export const findUserShowByUserAndShowId = internalQuery({
+  args: {
+    userId: v.id("users"),
+    showId: v.id("shows"),
+  },
+  handler: async (ctx, args) =>
+    ctx.db
+      .query("userShows")
+      .withIndex("by_user_show", (q) =>
+        q.eq("userId", args.userId).eq("showId", args.showId)
+      )
+      .unique(),
+});
+
 export const getUserShowTracking = query({
   args: showLookupInput,
   handler: async (ctx, args) => {
@@ -3790,7 +3847,9 @@ export const repairMyShowsTrackingBatch = mutation({
         continue;
       }
 
-      patched += 1;
+      if (refreshed.patched) {
+        patched += 1;
+      }
       watchedEpisodesCount += refreshed.watchedEpisodesCount;
       watchedTotalCount += refreshed.watchedTotalCount;
       watchedRuntimeMinutes += refreshed.watchedRuntimeMinutes;

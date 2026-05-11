@@ -183,7 +183,7 @@ export function normalizeTmdbShowDetails(
 
   const normalizedStatus = normalizeStatus(details.status);
   
-  // Ensure totalEpisodes has a value (TV shows with unknown episode count default to 0)
+  // Keep planned totals separate from released episode counts for TV.
   const reportedTotalEpisodes =
     details.number_of_episodes && details.number_of_episodes > 0
       ? details.number_of_episodes
