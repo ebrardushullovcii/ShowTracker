@@ -423,7 +423,6 @@ export const resumeCompletedUserShowsForNewReleasedEpisodes = internalMutation({
 
     for (const userShow of page.page) {
       scanned += 1;
-      let projectionUserShow = userShow;
 
       if (userShow.status === "completed") {
         if (releasedEpisodeCount === null) {
@@ -442,26 +441,27 @@ export const resumeCompletedUserShowsForNewReleasedEpisodes = internalMutation({
             status: nextStatus,
             completedAt: undefined,
             autoPausedAt: undefined,
+            droppedAt: undefined,
             statusChangedAt: now,
           });
-          projectionUserShow = {
+          const projectionUserShow = {
             ...userShow,
             status: nextStatus,
             completedAt: undefined,
             autoPausedAt: undefined,
+            droppedAt: undefined,
             statusChangedAt: now,
           };
+          const projectionUpdated = await upsertFeedProjectionForUserShowDoc(
+            ctx,
+            projectionUserShow,
+            show
+          );
+          if (projectionUpdated) {
+            projectionsUpdated += 1;
+          }
           resumed += 1;
         }
-      }
-
-      const projectionUpdated = await upsertFeedProjectionForUserShowDoc(
-        ctx,
-        projectionUserShow,
-        show
-      );
-      if (projectionUpdated) {
-        projectionsUpdated += 1;
       }
     }
 
