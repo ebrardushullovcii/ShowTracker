@@ -38,6 +38,7 @@ const TARGETED_TRACKING_REPAIR_PAGE_SIZE_MAX = 30;
 const COMPLETED_SHOW_METADATA_REFRESH_PAGE_SIZE = 100;
 const COMPLETED_SHOW_METADATA_REFRESH_MAX_SCANNED = 500;
 const COMPLETED_SHOW_METADATA_REFRESH_MAX_CANDIDATES = 25;
+const COMPLETED_SHOW_METADATA_REFRESH_CURSOR_KEY = "completed-show-refresh";
 const RELATION_INCLUDE_TYPES = new Set(["PREQUEL", "SEQUEL"]);
 
 const showInput = {
@@ -438,6 +439,7 @@ export const resumeCompletedUserShowsForNewReleasedEpisodes = internalMutation({
             status: nextStatus,
             completedAt: undefined,
             autoPausedAt: undefined,
+            lastWatchedAt: now,
             statusChangedAt: now,
           });
           projectionUserShow = {
@@ -445,6 +447,7 @@ export const resumeCompletedUserShowsForNewReleasedEpisodes = internalMutation({
             status: nextStatus,
             completedAt: undefined,
             autoPausedAt: undefined,
+            lastWatchedAt: now,
             statusChangedAt: now,
           };
           resumed += 1;
@@ -559,10 +562,50 @@ export const getCompletedUserShowsForMetadataRefresh = internalQuery({
 
     return {
       scanned: page.page.length,
-      showIds: page.page.map((userShow) => userShow.showId),
+      showIds: page.page
+        .filter((userShow) => userShow.mediaType !== "movie")
+        .map((userShow) => userShow.showId),
       nextCursor: page.continueCursor,
       isDone: page.isDone,
     };
+  },
+});
+
+export const getMaintenanceCursor = internalQuery({
+  args: { key: v.string() },
+  handler: async (ctx, args) => {
+    const row = await ctx.db
+      .query("maintenanceState")
+      .withIndex("by_key", (q) => q.eq("key", args.key))
+      .unique();
+    return row?.cursor ?? null;
+  },
+});
+
+export const setMaintenanceCursor = internalMutation({
+  args: {
+    key: v.string(),
+    cursor: v.union(v.string(), v.null()),
+  },
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query("maintenanceState")
+      .withIndex("by_key", (q) => q.eq("key", args.key))
+      .unique();
+    const patch = {
+      cursor: args.cursor ?? undefined,
+      updatedAt: Date.now(),
+    };
+
+    if (existing) {
+      await ctx.db.patch(existing._id, patch);
+      return existing._id;
+    }
+
+    return ctx.db.insert("maintenanceState", {
+      key: args.key,
+      ...patch,
+    });
   },
 });
 
@@ -578,7 +621,10 @@ export const refreshCompletedShowsForNewEpisodes = internalAction({
     skippedUnsupported: number;
     failedRefreshes: number;
   }> => {
-    let cursor: string | undefined;
+    let cursor =
+      (await ctx.runQuery(internal.shows.getMaintenanceCursor, {
+        key: COMPLETED_SHOW_METADATA_REFRESH_CURSOR_KEY,
+      })) ?? undefined;
     let isDone = false;
     let scannedUserShows = 0;
     const candidateShowIds: Id<"shows">[] = [];
@@ -615,6 +661,11 @@ export const refreshCompletedShowsForNewEpisodes = internalAction({
       cursor = page.nextCursor ?? undefined;
       isDone = page.isDone;
     }
+
+    await ctx.runMutation(internal.shows.setMaintenanceCursor, {
+      key: COMPLETED_SHOW_METADATA_REFRESH_CURSOR_KEY,
+      cursor: cursor ?? null,
+    });
 
     let attemptedRefreshes = 0;
     let refreshedShows = 0;
@@ -1875,7 +1926,6 @@ async function refreshUserShowTrackingAggregates(
   showId: Id<"shows">,
   options: { deriveStatus?: boolean } = {}
 ) {
-  const { deriveStatus = true } = options;
   const userShow = await ctx.db
     .query("userShows")
     .withIndex("by_user_show", (q) => q.eq("userId", userId).eq("showId", showId))
@@ -1884,6 +1934,18 @@ async function refreshUserShowTrackingAggregates(
   if (!userShow) {
     return null;
   }
+
+  return refreshUserShowTrackingAggregatesForDoc(ctx, userShow, options);
+}
+
+async function refreshUserShowTrackingAggregatesForDoc(
+  ctx: MutationCtx,
+  userShow: Doc<"userShows">,
+  options: { deriveStatus?: boolean } = {}
+) {
+  const { deriveStatus = true } = options;
+  const userId = userShow.userId;
+  const showId = userShow.showId;
 
   const show = await ctx.db.get(userShow.showId);
   if (!show) {
@@ -3928,10 +3990,9 @@ export const repairMyShowsTrackingBatch = mutation({
     let watchedRuntimeMinutes = 0;
 
     for (const userShow of page.page) {
-      const refreshed = await refreshUserShowTrackingAggregates(
+      const refreshed = await refreshUserShowTrackingAggregatesForDoc(
         ctx,
-        userId,
-        userShow.showId
+        userShow
       );
 
       if (!refreshed) {

@@ -1151,9 +1151,9 @@ export default function ProfileScreen() {
       let batches = 0;
       let isDone = false;
       let hitBatchLimit = false;
-      let previousCursor: string | null = null;
 
       while (!isDone) {
+        const requestCursor = cursor;
         const batch: {
           scanned: number;
           patched: number;
@@ -1163,14 +1163,13 @@ export default function ProfileScreen() {
           cursor ? { continueCursor: cursor } : {}
         );
 
-        if (!batch.isDone && batch.continueCursor === previousCursor) {
+        if (!batch.isDone && batch.continueCursor === requestCursor) {
           throw new Error("Repair cursor did not advance.");
         }
 
         scanned += batch.scanned;
         patched += batch.patched;
         batches += 1;
-        previousCursor = cursor;
         cursor = batch.continueCursor;
         isDone = batch.isDone;
         setTrackingRepairCursor(isDone ? null : cursor);

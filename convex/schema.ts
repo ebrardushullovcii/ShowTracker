@@ -206,4 +206,9 @@ export default defineSchema({
     nextRetryTime: v.number(),
     updatedAt: v.number(),
   }).index("by_key", ["key"]),
+  maintenanceState: defineTable({
+    key: v.string(),
+    cursor: v.optional(v.string()),
+    updatedAt: v.number(),
+  }).index("by_key", ["key"]),
 });
