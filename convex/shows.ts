@@ -132,9 +132,11 @@ function buildFeedProjectionFields(
   const watchedCount = Math.max(0, Math.floor(userShow.watchedEpisodesCount ?? 0));
   const totalEpisodes =
     typeof show.totalEpisodes === "number" ? show.totalEpisodes : undefined;
+  const watchableEpisodes =
+    typeof show.releasedEpisodes === "number" ? show.releasedEpisodes : totalEpisodes;
   const remainingEpisodes =
-    typeof totalEpisodes === "number"
-      ? Math.max(totalEpisodes - watchedCount, 0)
+    typeof watchableEpisodes === "number"
+      ? Math.max(watchableEpisodes - watchedCount, 0)
       : undefined;
 
   return {
@@ -439,7 +441,6 @@ export const resumeCompletedUserShowsForNewReleasedEpisodes = internalMutation({
             status: nextStatus,
             completedAt: undefined,
             autoPausedAt: undefined,
-            lastWatchedAt: now,
             statusChangedAt: now,
           });
           projectionUserShow = {
@@ -447,7 +448,6 @@ export const resumeCompletedUserShowsForNewReleasedEpisodes = internalMutation({
             status: nextStatus,
             completedAt: undefined,
             autoPausedAt: undefined,
-            lastWatchedAt: now,
             statusChangedAt: now,
           };
           resumed += 1;
@@ -7386,10 +7386,14 @@ const DROPPED_REMINDER_DAYS = 90;
 function shouldAutoPause(
   status: UserShowStatus,
   lastWatchedAt: number | undefined,
+  statusChangedAt: number | undefined,
   now: number = Date.now()
 ): boolean {
   if (status !== "watching") return false;
   if (!lastWatchedAt) return false;
+  if (statusChangedAt && now - statusChangedAt < INACTIVITY_THRESHOLD_DAYS * 24 * 60 * 60 * 1000) {
+    return false;
+  }
   
   const daysSinceLastWatch = (now - lastWatchedAt) / (1000 * 60 * 60 * 24);
   return daysSinceLastWatch >= INACTIVITY_THRESHOLD_DAYS;
@@ -7445,7 +7449,7 @@ export const autoPauseInactiveShows = internalMutation({
       }
 
       // Double-check the condition
-      if (shouldAutoPause(userShow.status, userShow.lastWatchedAt, now)) {
+      if (shouldAutoPause(userShow.status, userShow.lastWatchedAt, userShow.statusChangedAt, now)) {
         await ctx.db.patch(userShow._id, {
           status: "paused",
           statusChangedAt: now,
