@@ -662,11 +662,6 @@ export const refreshCompletedShowsForNewEpisodes = internalAction({
       isDone = page.isDone;
     }
 
-    await ctx.runMutation(internal.shows.setMaintenanceCursor, {
-      key: COMPLETED_SHOW_METADATA_REFRESH_CURSOR_KEY,
-      cursor: cursor ?? null,
-    });
-
     let attemptedRefreshes = 0;
     let refreshedShows = 0;
     let resumedUserShows = 0;
@@ -703,6 +698,11 @@ export const refreshCompletedShowsForNewEpisodes = internalAction({
         });
       }
     }
+
+    await ctx.runMutation(internal.shows.setMaintenanceCursor, {
+      key: COMPLETED_SHOW_METADATA_REFRESH_CURSOR_KEY,
+      cursor: cursor ?? null,
+    });
 
     return {
       scannedUserShows,
@@ -3401,17 +3401,6 @@ async function refreshShowMetadataAndRepairTracking(
     };
   }
 
-  const latest = await fetchLatestNormalizedShowForExistingShow(show);
-  if (!latest) {
-    return {
-      refreshed: false,
-      repairedUsers: 0,
-      resumedUserShows: 0,
-      externalShowId: getShowRouteId(show),
-      reason: "unsupported_show_source" as const,
-    };
-  }
-
   let targetUserShows: Array<Doc<"userShows">> = [];
   if (options?.repairUserId !== undefined) {
     const userShow: Doc<"userShows"> | null = await ctx.runQuery(
@@ -3434,16 +3423,34 @@ async function refreshShowMetadataAndRepairTracking(
         refreshed: false,
         repairedUsers: 0,
         resumedUserShows: 0,
-        externalShowId: getShowRouteId({
-          mediaType: latest.mediaType,
-          tmdbId: latest.tmdbId,
-          anilistId: latest.anilistId,
-          malId: latest.malId,
-          tvmazeId: latest.tvmazeId,
-        }),
+        externalShowId: getShowRouteId(show),
         reason: "not_tracked" as const,
       };
     }
+  } else if (options?.skipBroadAggregateRepair === true) {
+    const trackedUserShows = await ctx.runQuery(internal.shows.findUserShowByShowId, {
+      showId,
+    });
+    if (trackedUserShows.length === 0) {
+      return {
+        refreshed: false,
+        repairedUsers: 0,
+        resumedUserShows: 0,
+        externalShowId: getShowRouteId(show),
+        reason: "not_tracked" as const,
+      };
+    }
+  }
+
+  const latest = await fetchLatestNormalizedShowForExistingShow(show);
+  if (!latest) {
+    return {
+      refreshed: false,
+      repairedUsers: 0,
+      resumedUserShows: 0,
+      externalShowId: getShowRouteId(show),
+      reason: "unsupported_show_source" as const,
+    };
   }
 
   const refreshedShowId = await ctx.runMutation(internal.shows.upsertShowByInternalId, {
