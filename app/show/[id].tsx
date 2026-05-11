@@ -3330,6 +3330,10 @@ export function ShowDetailScreen() {
   const watchProgressRatio = totalEpisodesCount
     ? Math.min(1, clampedWatchedEpisodesCount / totalEpisodesCount)
     : 0;
+  const watchProgressPercent =
+    totalEpisodesCount && clampedWatchedEpisodesCount >= totalEpisodesCount
+      ? 100
+      : Math.floor(watchProgressRatio * 100);
 
   const releasedEpisodeCountForShowAction = useMemo(() => {
     let count = 0;
@@ -3851,7 +3855,7 @@ export function ShowDetailScreen() {
                       : "Loading tracking..."}
                 </Text>
                 <Text className="text-xs font-semibold text-text-secondary">
-                  {Math.round(watchProgressRatio * 100)}%
+                  {watchProgressPercent}%
                 </Text>
               </View>
             </View>
