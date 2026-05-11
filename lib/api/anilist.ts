@@ -164,7 +164,7 @@ async function patchAniListWithJikanFallback(
   malId?: number
 ) {
   const resolvedMalId = show.malId ?? malId;
-  if (!resolvedMalId || (hasRequiredAnimeFields(show) && show.releasedEpisodes != null)) {
+  if (!resolvedMalId || hasRequiredAnimeFields(show)) {
     return show;
   }
 

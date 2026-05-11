@@ -9,12 +9,13 @@ import { internal } from "@/convex/_generated/api";
 
 const crons = cronJobs();
 
-// Run daily shortly after metadata refresh to auto-pause inactive shows
+// Run daily before metadata refresh so newly resumed completed shows are not
+// immediately paused by stale lastWatchedAt values.
 // Cron syntax: minute hour day month dayOfWeek
-// "15 2 * * *" = Every day at 2:15 AM UTC
+// "45 1 * * *" = Every day at 1:45 AM UTC
 crons.cron(
   "autoPauseInactiveShows",
-  "15 2 * * *",
+  "45 1 * * *",
   internal.shows.autoPauseInactiveShows
 );
 

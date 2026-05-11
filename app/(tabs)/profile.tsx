@@ -653,6 +653,7 @@ export default function ProfileScreen() {
     patched: 0,
     batches: 0,
   });
+  const [trackingRepairCursor, setTrackingRepairCursor] = useState<string | null>(null);
   const [statsVersion, setStatsVersion] = useState<"A" | "B">("A");
   const [shouldLoadHeavySections, setShouldLoadHeavySections] = useState(false);
   const [visibleRailCount, setVisibleRailCount] = useState(8);
@@ -1144,12 +1145,13 @@ export default function ProfileScreen() {
     setTrackingRepairProgress({ scanned: 0, patched: 0, batches: 0 });
 
     try {
-      let cursor: string | null = null;
+      let cursor: string | null = trackingRepairCursor;
       let scanned = 0;
       let patched = 0;
       let batches = 0;
       let isDone = false;
       let hitBatchLimit = false;
+      let previousCursor: string | null = null;
 
       while (!isDone) {
         const batch: {
@@ -1161,18 +1163,24 @@ export default function ProfileScreen() {
           cursor ? { continueCursor: cursor } : {}
         );
 
+        if (!batch.isDone && batch.continueCursor === previousCursor) {
+          throw new Error("Repair cursor did not advance.");
+        }
+
         scanned += batch.scanned;
         patched += batch.patched;
         batches += 1;
+        previousCursor = cursor;
         cursor = batch.continueCursor;
         isDone = batch.isDone;
+        setTrackingRepairCursor(isDone ? null : cursor);
 
         setTrackingRepairProgress({ scanned, patched, batches });
 
         if (!isDone && batches >= TRACKING_REPAIR_MAX_BATCHES) {
           hitBatchLimit = true;
           setTrackingRepairError(
-            `Stopped after ${batches} batches (${scanned} scanned, ${patched} patched) before completion${cursor ? "." : " at the start of pagination."}`
+            `Stopped after ${batches} batches (${scanned} scanned, ${patched} patched) before completion${cursor ? ". Tap again to continue." : " at the start of pagination."}`
           );
           break;
         }
@@ -1182,6 +1190,7 @@ export default function ProfileScreen() {
         return;
       }
 
+      setTrackingRepairCursor(null);
       setTrackingRepairNotice(
         scanned === 0
           ? "No tracked shows to refresh."
@@ -1193,7 +1202,7 @@ export default function ProfileScreen() {
     } finally {
       setIsRepairingTracking(false);
     }
-  }, [isAuthenticated, isRepairingTracking, repairMyShowsTrackingBatch]);
+  }, [isAuthenticated, isRepairingTracking, repairMyShowsTrackingBatch, trackingRepairCursor]);
 
   const openProfileEditor = () => {
     setDraftUsername(profileIdentity?.username ?? "");

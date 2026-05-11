@@ -36,6 +36,8 @@ const HOME_FEED_MAX_RESULTS = 40;
 const TARGETED_TRACKING_REPAIR_PAGE_SIZE = 20;
 const TARGETED_TRACKING_REPAIR_PAGE_SIZE_MAX = 30;
 const COMPLETED_SHOW_METADATA_REFRESH_PAGE_SIZE = 100;
+const COMPLETED_SHOW_METADATA_REFRESH_MAX_SCANNED = 500;
+const COMPLETED_SHOW_METADATA_REFRESH_MAX_CANDIDATES = 25;
 const RELATION_INCLUDE_TYPES = new Set(["PREQUEL", "SEQUEL"]);
 
 const showInput = {
@@ -166,6 +168,67 @@ function buildFeedProjectionFields(
   };
 }
 
+type FeedProjectionFields = ReturnType<typeof buildFeedProjectionFields>;
+
+const FEED_PROJECTION_COMPARE_KEYS: Array<
+  keyof Omit<FeedProjectionFields, "updatedAt">
+> = [
+  "userId",
+  "showId",
+  "userShowId",
+  "title",
+  "mediaType",
+  "posterUrl",
+  "backdropUrl",
+  "tmdbId",
+  "anilistId",
+  "malId",
+  "tvmazeId",
+  "imdbId",
+  "firstAired",
+  "anilistFormat",
+  "animeSeason",
+  "animeSeasonYear",
+  "totalEpisodes",
+  "status",
+  "isAutoTracked",
+  "relationRootAnilistId",
+  "watchedEpisodesCount",
+  "remainingEpisodes",
+  "lastWatchedAt",
+];
+
+function hasFeedProjectionChanges(
+  existing: Doc<"feedProjections">,
+  fields: FeedProjectionFields
+) {
+  return FEED_PROJECTION_COMPARE_KEYS.some((key) => existing[key] !== fields[key]);
+}
+
+async function upsertFeedProjectionForUserShowDoc(
+  ctx: MutationCtx,
+  userShow: Doc<"userShows">,
+  show: Doc<"shows">
+) {
+  const existing = await ctx.db
+    .query("feedProjections")
+    .withIndex("by_userShow", (q) => q.eq("userShowId", userShow._id))
+    .unique();
+
+  const fields = buildFeedProjectionFields(userShow, show);
+
+  if (existing) {
+    if (!hasFeedProjectionChanges(existing, fields)) {
+      return false;
+    }
+    await ctx.db.patch(existing._id, fields);
+    return true;
+  }
+
+  await ctx.db.insert("feedProjections", fields);
+  return true;
+}
+
 async function upsertFeedProjectionForUserShow(
   ctx: MutationCtx,
   userShowId: Id<"userShows">
@@ -180,19 +243,7 @@ async function upsertFeedProjectionForUserShow(
     return;
   }
 
-  const existing = await ctx.db
-    .query("feedProjections")
-    .withIndex("by_userShow", (q) => q.eq("userShowId", userShowId))
-    .unique();
-
-  const fields = buildFeedProjectionFields(userShow, show);
-
-  if (existing) {
-    await ctx.db.patch(existing._id, fields);
-    return;
-  }
-
-  await ctx.db.insert("feedProjections", fields);
+  return upsertFeedProjectionForUserShowDoc(ctx, userShow, show);
 }
 
 async function deleteFeedProjectionForUserShow(
@@ -279,19 +330,14 @@ export const refreshProjectionsForShow = internalMutation({
 
     let updated = 0;
     for (const userShow of page.page) {
-      const existing = await ctx.db
-        .query("feedProjections")
-        .withIndex("by_userShow", (q) => q.eq("userShowId", userShow._id))
-        .unique();
-
-      const fields = buildFeedProjectionFields(userShow, show);
-
-      if (existing) {
-        await ctx.db.patch(existing._id, fields);
-      } else {
-        await ctx.db.insert("feedProjections", fields);
+      const projectionUpdated = await upsertFeedProjectionForUserShowDoc(
+        ctx,
+        userShow,
+        show
+      );
+      if (projectionUpdated) {
+        updated += 1;
       }
-      updated += 1;
     }
 
     return {
@@ -339,6 +385,19 @@ export const resumeCompletedUserShowsForNewReleasedEpisodes = internalMutation({
     cursor: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    const show = await ctx.db.get(args.showId);
+    if (!show) {
+      return {
+        scanned: 0,
+        resumed: 0,
+        projectionsUpdated: 0,
+        skippedFutureOnly: 0,
+        skippedUnchanged: 0,
+        nextCursor: null,
+        isDone: true,
+      };
+    }
+
     const page = await ctx.db
       .query("userShows")
       .withIndex("by_showId", (q) => q.eq("showId", args.showId))
@@ -349,6 +408,7 @@ export const resumeCompletedUserShowsForNewReleasedEpisodes = internalMutation({
 
     let scanned = 0;
     let resumed = 0;
+    let projectionsUpdated = 0;
     let skippedFutureOnly = 0;
     let skippedUnchanged = 0;
     const now = Date.now();
@@ -359,39 +419,52 @@ export const resumeCompletedUserShowsForNewReleasedEpisodes = internalMutation({
 
     for (const userShow of page.page) {
       scanned += 1;
-      if (userShow.status !== "completed") {
-        continue;
+      let projectionUserShow = userShow;
+
+      if (userShow.status === "completed") {
+        if (releasedEpisodeCount === null) {
+          skippedFutureOnly += 1;
+        } else if (!shouldResumeForNewContent(userShow, releasedEpisodeCount)) {
+          skippedUnchanged += 1;
+        } else {
+          const watchedEpisodesCount = Math.max(
+            0,
+            Math.floor(userShow.watchedEpisodesCount ?? 0)
+          );
+          const nextStatus: UserShowStatus =
+            watchedEpisodesCount > 0 ? "watching" : "plan_to_watch";
+
+          await ctx.db.patch(userShow._id, {
+            status: nextStatus,
+            completedAt: undefined,
+            autoPausedAt: undefined,
+            statusChangedAt: now,
+          });
+          projectionUserShow = {
+            ...userShow,
+            status: nextStatus,
+            completedAt: undefined,
+            autoPausedAt: undefined,
+            statusChangedAt: now,
+          };
+          resumed += 1;
+        }
       }
 
-      if (releasedEpisodeCount === null) {
-        skippedFutureOnly += 1;
-        continue;
-      }
-
-      if (!shouldResumeForNewContent(userShow, releasedEpisodeCount)) {
-        skippedUnchanged += 1;
-        continue;
-      }
-
-      const watchedEpisodesCount = Math.max(
-        0,
-        Math.floor(userShow.watchedEpisodesCount ?? 0)
+      const projectionUpdated = await upsertFeedProjectionForUserShowDoc(
+        ctx,
+        projectionUserShow,
+        show
       );
-      const nextStatus: UserShowStatus =
-        watchedEpisodesCount > 0 ? "watching" : "plan_to_watch";
-
-      await ctx.db.patch(userShow._id, {
-        status: nextStatus,
-        completedAt: undefined,
-        autoPausedAt: undefined,
-        statusChangedAt: now,
-      });
-      resumed += 1;
+      if (projectionUpdated) {
+        projectionsUpdated += 1;
+      }
     }
 
     return {
       scanned,
       resumed,
+      projectionsUpdated,
       skippedFutureOnly,
       skippedUnchanged,
       nextCursor: page.continueCursor,
@@ -415,6 +488,7 @@ export const runResumeCompletedUserShowsForNewReleasedEpisodes = internalAction(
       return {
         scanned: 0,
         resumed: 0,
+        projectionsUpdated: 0,
         skippedFutureOnly: 0,
         skippedUnchanged: 0,
         rounds: 0,
@@ -425,6 +499,7 @@ export const runResumeCompletedUserShowsForNewReleasedEpisodes = internalAction(
     let isDone = false;
     let scanned = 0;
     let resumed = 0;
+    let projectionsUpdated = 0;
     let skippedFutureOnly = 0;
     let skippedUnchanged = 0;
     let rounds = 0;
@@ -433,6 +508,7 @@ export const runResumeCompletedUserShowsForNewReleasedEpisodes = internalAction(
       const batch: {
         scanned: number;
         resumed: number;
+        projectionsUpdated: number;
         skippedFutureOnly: number;
         skippedUnchanged: number;
         nextCursor: string | null;
@@ -448,6 +524,7 @@ export const runResumeCompletedUserShowsForNewReleasedEpisodes = internalAction(
 
       scanned += batch.scanned;
       resumed += batch.resumed;
+      projectionsUpdated += batch.projectionsUpdated;
       skippedFutureOnly += batch.skippedFutureOnly;
       skippedUnchanged += batch.skippedUnchanged;
       cursor = batch.nextCursor ?? undefined;
@@ -455,7 +532,7 @@ export const runResumeCompletedUserShowsForNewReleasedEpisodes = internalAction(
       rounds += 1;
     }
 
-    return { scanned, resumed, skippedFutureOnly, skippedUnchanged, rounds };
+    return { scanned, resumed, projectionsUpdated, skippedFutureOnly, skippedUnchanged, rounds };
   },
 });
 
@@ -507,7 +584,11 @@ export const refreshCompletedShowsForNewEpisodes = internalAction({
     const candidateShowIds: Id<"shows">[] = [];
     const seenShowIds = new Set<string>();
 
-    while (!isDone) {
+    while (
+      !isDone &&
+      scannedUserShows < COMPLETED_SHOW_METADATA_REFRESH_MAX_SCANNED &&
+      candidateShowIds.length < COMPLETED_SHOW_METADATA_REFRESH_MAX_CANDIDATES
+    ) {
       const page: {
         scanned: number;
         showIds: Array<Id<"shows">>;
@@ -520,6 +601,9 @@ export const refreshCompletedShowsForNewEpisodes = internalAction({
 
       scannedUserShows += page.scanned;
       for (const showId of page.showIds) {
+        if (candidateShowIds.length >= COMPLETED_SHOW_METADATA_REFRESH_MAX_CANDIDATES) {
+          break;
+        }
         const showIdKey = String(showId);
         if (seenShowIds.has(showIdKey)) {
           continue;
@@ -1858,16 +1942,20 @@ async function refreshUserShowTrackingAggregates(
   const patched = hasUserShowAggregateChanges(userShow, nextStatus, aggregates);
   if (patched) {
     await ctx.db.patch(userShow._id, patch);
-    // Keep feed projection in sync with the updated tracking aggregates.
-    await upsertFeedProjectionForUserShow(ctx, userShow._id);
   }
+  const projectionUserShow = patched ? { ...userShow, ...patch } : userShow;
+  const projectionUpdated = await upsertFeedProjectionForUserShowDoc(
+    ctx,
+    projectionUserShow,
+    show
+  );
 
   return {
     ...aggregates,
     status: nextStatus,
     userShowId: userShow._id,
     patched,
-    projectionUpdated: patched,
+    projectionUpdated,
   };
 }
 
@@ -3315,16 +3403,19 @@ async function refreshShowMetadataAndRepairTracking(
     }
   }
 
-  const resumeSummary: {
-    resumed: number;
-  } = await ctx.runAction(internal.shows.runResumeCompletedUserShowsForNewReleasedEpisodes, {
-    showId: refreshedShowId,
-    releasedEpisodeCount,
-  });
+  const resumeSummary: { resumed: number } =
+    releasedEpisodeCount !== null
+      ? await ctx.runAction(internal.shows.runResumeCompletedUserShowsForNewReleasedEpisodes, {
+          showId: refreshedShowId,
+          releasedEpisodeCount,
+        })
+      : { resumed: 0 };
 
-  await ctx.runAction(internal.shows.runRefreshProjectionsForShow, {
-    showId: refreshedShowId,
-  });
+  if (releasedEpisodeCount === null) {
+    await ctx.runAction(internal.shows.runRefreshProjectionsForShow, {
+      showId: refreshedShowId,
+    });
+  }
 
   return {
     refreshed: true,
