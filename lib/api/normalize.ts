@@ -192,7 +192,7 @@ export function normalizeTmdbShowDetails(
     mediaType === "tv" ? getTmdbReleasedTvEpisodeCount(details) : undefined;
   const totalEpisodes =
     mediaType === "tv"
-      ? (releasedTvEpisodeCount ?? reportedTotalEpisodes)
+      ? (reportedTotalEpisodes ?? releasedTvEpisodeCount ?? 1)
       : (reportedTotalEpisodes ?? 1); // Movies count as 1 episode
 
   const totalSeasons = details.number_of_seasons && details.number_of_seasons > 0
@@ -213,7 +213,7 @@ export function normalizeTmdbShowDetails(
     genres: details.genres?.map((genre) => genre.name),
     status: normalizedStatus,
     totalEpisodes,
-    releasedEpisodes: mediaType === "tv" ? releasedTvEpisodeCount : totalEpisodes,
+    releasedEpisodes: mediaType === "tv" ? (releasedTvEpisodeCount ?? 0) : totalEpisodes,
     totalSeasons,
     episodeRuntime: normalizedRuntime,
     rating: details.vote_average,

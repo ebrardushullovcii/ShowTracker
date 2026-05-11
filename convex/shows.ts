@@ -481,6 +481,7 @@ export const refreshCompletedShowsForNewEpisodes = internalAction({
     resumedUserShows: number;
     skippedFresh: number;
     skippedUnsupported: number;
+    failedRefreshes: number;
   }> => {
     let cursor: string | undefined;
     let isDone = false;
@@ -518,6 +519,7 @@ export const refreshCompletedShowsForNewEpisodes = internalAction({
     let resumedUserShows = 0;
     let skippedFresh = 0;
     let skippedUnsupported = 0;
+    let failedRefreshes = 0;
 
     for (const showId of candidateShowIds) {
       const show = await ctx.runQuery(internal.shows.getShowById, { showId });
@@ -526,18 +528,26 @@ export const refreshCompletedShowsForNewEpisodes = internalAction({
         continue;
       }
 
-      const result = await refreshShowMetadataAndRepairTracking(ctx, showId, {
-        skipBroadAggregateRepair: true,
-      });
       attemptedRefreshes += 1;
+      try {
+        const result = await refreshShowMetadataAndRepairTracking(ctx, showId, {
+          skipBroadAggregateRepair: true,
+        });
 
-      if (result.refreshed) {
-        refreshedShows += 1;
-        resumedUserShows += result.resumedUserShows;
-      } else if (result.reason === "throttled") {
-        skippedFresh += 1;
-      } else if (result.reason === "unsupported_show_source") {
-        skippedUnsupported += 1;
+        if (result.refreshed) {
+          refreshedShows += 1;
+          resumedUserShows += result.resumedUserShows;
+        } else if (result.reason === "throttled") {
+          skippedFresh += 1;
+        } else if (result.reason === "unsupported_show_source") {
+          skippedUnsupported += 1;
+        }
+      } catch (error) {
+        failedRefreshes += 1;
+        console.error("Completed show metadata refresh failed", {
+          showId,
+          message: error instanceof Error ? error.message : "Unknown error",
+        });
       }
     }
 
@@ -549,6 +559,7 @@ export const refreshCompletedShowsForNewEpisodes = internalAction({
       resumedUserShows,
       skippedFresh,
       skippedUnsupported,
+      failedRefreshes,
     };
   },
 });

@@ -95,6 +95,7 @@ type AnimeCompletionBehavior =
 type HomePausedSectionMode = "auto_paused_only" | "all_paused";
 
 const ANIME_SETTINGS_UPDATE_TIMEOUT_MS = 12000;
+const TRACKING_REPAIR_MAX_BATCHES = 200;
 
 function formatCount(value: number) {
   return value.toLocaleString("en-US");
@@ -1148,6 +1149,7 @@ export default function ProfileScreen() {
       let patched = 0;
       let batches = 0;
       let isDone = false;
+      let hitBatchLimit = false;
 
       while (!isDone) {
         const batch: {
@@ -1166,6 +1168,18 @@ export default function ProfileScreen() {
         isDone = batch.isDone;
 
         setTrackingRepairProgress({ scanned, patched, batches });
+
+        if (!isDone && batches >= TRACKING_REPAIR_MAX_BATCHES) {
+          hitBatchLimit = true;
+          setTrackingRepairError(
+            `Stopped after ${batches} batches (${scanned} scanned, ${patched} patched) before completion${cursor ? "." : " at the start of pagination."}`
+          );
+          break;
+        }
+      }
+
+      if (hitBatchLimit) {
+        return;
       }
 
       setTrackingRepairNotice(
