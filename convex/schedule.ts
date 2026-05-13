@@ -1,6 +1,7 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
 import {
   action,
+  internalAction,
   internalMutation,
   internalQuery,
   mutation,
@@ -30,6 +31,7 @@ const MAX_SCHEDULE_RANGE_DAYS = 120;
 const HOME_SIGNAL_LOOKAHEAD_DAYS = 21;
 const HOME_SIGNAL_PAST_CACHE_DAYS = 7;
 const HOME_SIGNAL_MAX_MATCHES = 200;
+const MONTHLY_SIGNAL_USER_PAGE_SIZE = 500;
 
 type DateCacheStatus = {
   tvCount: number;
@@ -87,6 +89,23 @@ type HomeScheduleSignalResult = {
   patchedFeedProjections?: number;
   clearedUserShows?: number;
   clearedFeedProjections?: number;
+};
+
+type MonthlyHomeScheduleSignalResult = {
+  skipped: boolean;
+  reason?: "already_completed";
+  month: string;
+  startDate: string;
+  endDate: string;
+  scannedFeedProjections?: number;
+  processedUsers?: number;
+  hydratedDays?: number;
+  refreshedDays?: number;
+  failedHydrationDays?: number;
+  matchedShows?: number;
+  matchedEpisodes?: number;
+  patchedUserShows?: number;
+  patchedFeedProjections?: number;
 };
 
 export const getRateLimitState = internalQuery({
@@ -241,6 +260,27 @@ function addUtcDays(date: Date, days: number) {
   const next = new Date(date);
   next.setUTCDate(next.getUTCDate() + days);
   return next;
+}
+
+function getPreviousUtcMonthRange(now: Date) {
+  const currentMonthStart = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)
+  );
+  const previousMonthStart = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1)
+  );
+  const previousMonthEnd = addUtcDays(currentMonthStart, -1);
+
+  return {
+    month: formatDate(previousMonthStart).slice(0, 7),
+    startDate: formatDate(previousMonthStart),
+    endDate: formatDate(previousMonthEnd),
+    days:
+      Math.floor(
+        (previousMonthEnd.getTime() - previousMonthStart.getTime()) /
+          (1000 * 60 * 60 * 24)
+      ) + 1,
+  };
 }
 
 function getTvMazeScheduleRateLimitKey(date: string) {
@@ -786,6 +826,27 @@ async function hydrateOneDate(
   };
 }
 
+async function hydrateScheduleDates(ctx: ActionCtx, dateKeys: string[]) {
+  const results: Awaited<ReturnType<typeof hydrateOneDate>>[] = [];
+  let didWarnAnimeRateLimit = false;
+
+  for (let index = 0; index < dateKeys.length; index += HYDRATE_BATCH_SIZE) {
+    const batch = dateKeys.slice(index, index + HYDRATE_BATCH_SIZE);
+    const batchResults = await Promise.all(
+      batch.map((dateKey) => hydrateOneDate(ctx, dateKey))
+    );
+    if (!didWarnAnimeRateLimit && batchResults.some((result) => result.animeRateLimited)) {
+      didWarnAnimeRateLimit = true;
+      console.warn(
+        "AniList schedule rate limited during range hydration; using cached anime schedule where available."
+      );
+    }
+    results.push(...batchResults);
+  }
+
+  return results;
+}
+
 export const hydrateScheduleDate = action({
   args: {
     date: v.string(),
@@ -821,31 +882,7 @@ export const hydrateScheduleRange = action({
       return formatDate(date);
     });
 
-    const results: {
-      date: string;
-      tvCount: number;
-      animeCount: number;
-      cached: boolean;
-      hydrationFailed?: boolean;
-      tvFetchFailed?: boolean;
-      animeFetchFailed?: boolean;
-      animeRateLimited?: boolean;
-    }[] = [];
-    let didWarnAnimeRateLimit = false;
-
-    for (let index = 0; index < dateKeys.length; index += HYDRATE_BATCH_SIZE) {
-      const batch = dateKeys.slice(index, index + HYDRATE_BATCH_SIZE);
-      const batchResults = await Promise.all(
-        batch.map((dateKey) => hydrateOneDate(ctx, dateKey))
-      );
-      if (!didWarnAnimeRateLimit && batchResults.some((result) => result.animeRateLimited)) {
-        didWarnAnimeRateLimit = true;
-        console.warn(
-          "AniList schedule rate limited during range hydration; using cached anime schedule where available."
-        );
-      }
-      results.push(...batchResults);
-    }
+    const results = await hydrateScheduleDates(ctx, dateKeys);
 
     return {
       days: safeDays,
@@ -1078,6 +1115,45 @@ export const getHomeScheduleSignalMatches = internalQuery({
         .slice(0, HOME_SIGNAL_MAX_MATCHES)
         .map(({ latestEpisodeKey: _latestEpisodeKey, ...match }) => match),
       checked: Array.from(checkedByProjection.values()).slice(0, HOME_SIGNAL_MAX_MATCHES * 2),
+    };
+  },
+});
+
+export const getHomeScheduleSignalCandidateUsersPage = internalQuery({
+  args: {
+    cursor: v.optional(v.union(v.string(), v.null())),
+    pageSize: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const safePageSize = Math.max(
+      1,
+      Math.min(args.pageSize ?? MONTHLY_SIGNAL_USER_PAGE_SIZE, MONTHLY_SIGNAL_USER_PAGE_SIZE)
+    );
+    const page = await ctx.db.query("feedProjections").paginate({
+      numItems: safePageSize,
+      cursor: args.cursor ?? null,
+    });
+    const userIds = new Set<Id<"users">>();
+
+    for (const projection of page.page) {
+      if (projection.mediaType !== "tv" && projection.mediaType !== "anime") {
+        continue;
+      }
+      if (projection.status !== "watching" && projection.status !== "completed") {
+        continue;
+      }
+      if (projection.watchedEpisodesCount <= 0) {
+        continue;
+      }
+
+      userIds.add(projection.userId);
+    }
+
+    return {
+      scanned: page.page.length,
+      userIds: Array.from(userIds),
+      nextCursor: page.continueCursor,
+      isDone: page.isDone,
     };
   },
 });
@@ -1315,6 +1391,143 @@ export const ensureHomeWatchlistScheduleSignals = action({
       key: maintenanceKey,
       cursor: "done",
     });
+
+    return result;
+  },
+});
+
+export const runMonthlyHomeWatchlistScheduleSignalBackfill = internalAction({
+  args: {},
+  handler: async (ctx): Promise<MonthlyHomeScheduleSignalResult> => {
+    const range = getPreviousUtcMonthRange(new Date());
+    const maintenanceKey = `home-schedule-signal-monthly:v1:${range.month}`;
+    let cursor =
+      (await ctx.runQuery(internal.shows.getMaintenanceCursor, {
+        key: maintenanceKey,
+      })) ?? undefined;
+
+    if (cursor === "done") {
+      return {
+        skipped: true,
+        reason: "already_completed",
+        month: range.month,
+        startDate: range.startDate,
+        endDate: range.endDate,
+      };
+    }
+
+    const startDate = parseRequiredScheduleDateKey(
+      range.startDate,
+      "monthly schedule signal start date"
+    ).date;
+    const hydrateDates = Array.from({ length: range.days }, (_, index) =>
+      formatDate(addUtcDays(startDate, index))
+    );
+    const hydrateResults = await hydrateScheduleDates(ctx, hydrateDates);
+    const failedHydrationDays = hydrateResults.filter(
+      (result) => result.hydrationFailed
+    ).length;
+
+    let scannedFeedProjections = 0;
+    let processedUsers = 0;
+    let matchedShows = 0;
+    let matchedEpisodes = 0;
+    let patchedUserShows = 0;
+    let patchedFeedProjections = 0;
+    const processedUserIds = new Set<string>();
+
+    while (cursor !== "done") {
+      const page: {
+        scanned: number;
+        userIds: Array<Id<"users">>;
+        nextCursor: string | null;
+        isDone: boolean;
+      } = await ctx.runQuery(
+        internal.schedule.getHomeScheduleSignalCandidateUsersPage,
+        {
+          cursor,
+          pageSize: MONTHLY_SIGNAL_USER_PAGE_SIZE,
+        }
+      );
+
+      scannedFeedProjections += page.scanned;
+
+      for (const userId of page.userIds) {
+        const userKey = String(userId);
+        if (processedUserIds.has(userKey)) {
+          continue;
+        }
+        processedUserIds.add(userKey);
+
+        const signalEvaluation: HomeScheduleSignalEvaluation = await ctx.runQuery(
+          internal.schedule.getHomeScheduleSignalMatches,
+          {
+            userId,
+            startDate: range.startDate,
+            endDate: range.endDate,
+            availableDate: range.endDate,
+            nowMs: Date.now(),
+          }
+        );
+
+        if (signalEvaluation.matches.length === 0) {
+          processedUsers += 1;
+          continue;
+        }
+
+        const applied: {
+          patchedUserShows: number;
+          patchedFeedProjections: number;
+          clearedUserShows: number;
+          clearedFeedProjections: number;
+        } = await ctx.runMutation(internal.schedule.applyHomeScheduleSignals, {
+          userId,
+          matches: signalEvaluation.matches,
+          checked: [],
+        });
+
+        processedUsers += 1;
+        matchedShows += signalEvaluation.matches.length;
+        matchedEpisodes += signalEvaluation.matches.reduce(
+          (sum: number, match: HomeScheduleSignalMatch) =>
+            sum + match.matchedEpisodes,
+          0
+        );
+        patchedUserShows += applied.patchedUserShows;
+        patchedFeedProjections += applied.patchedFeedProjections;
+      }
+
+      cursor = page.isDone ? "done" : (page.nextCursor ?? undefined);
+      await ctx.runMutation(internal.shows.setMaintenanceCursor, {
+        key: maintenanceKey,
+        cursor: cursor ?? null,
+      });
+    }
+
+    if (failedHydrationDays > 0) {
+      await ctx.runMutation(internal.shows.setMaintenanceCursor, {
+        key: maintenanceKey,
+        cursor: null,
+      });
+    }
+
+    const result: MonthlyHomeScheduleSignalResult = {
+      skipped: false,
+      month: range.month,
+      startDate: range.startDate,
+      endDate: range.endDate,
+      scannedFeedProjections,
+      processedUsers,
+      hydratedDays: hydrateResults.length,
+      refreshedDays: hydrateResults.filter((result) => !result.cached).length,
+      failedHydrationDays,
+      matchedShows,
+      matchedEpisodes,
+      patchedUserShows,
+      patchedFeedProjections,
+    };
+
+    console.info("Monthly home watchlist schedule signal backfill", result);
 
     return result;
   },
