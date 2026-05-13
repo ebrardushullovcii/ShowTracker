@@ -23,6 +23,7 @@ const SCHEDULE_CACHE_FRESH_MS = 1000 * 60 * 60 * 6;
 const MAX_ANILIST_SCHEDULE_PAGES = 8;
 const ANILIST_SCHEDULE_RATE_LIMIT_COOLDOWN_MS = 90_000;
 const ANILIST_SCHEDULE_RATE_LIMIT_KEY = "anilistSchedule";
+const MAX_SCHEDULE_RANGE_DAYS = 120;
 
 type DateCacheStatus = {
   tvCount: number;
@@ -144,6 +145,37 @@ function parseScheduleDateKey(dateString: string) {
   }
 
   return formatDate(parsed) === dateString ? parsed : null;
+}
+
+function parseRequiredScheduleDateKey(dateString: string, label: string) {
+  const parsed = parseScheduleDateKey(dateString);
+  if (!parsed) {
+    throw new Error(`Invalid ${label}: ${dateString}`);
+  }
+  return {
+    date: parsed,
+    key: formatDate(parsed),
+  };
+}
+
+function getScheduleRangeKeys(startDate: string, endDate: string) {
+  const start = parseRequiredScheduleDateKey(startDate, "schedule start date");
+  const end = parseRequiredScheduleDateKey(endDate, "schedule end date");
+  if (end.date.getTime() < start.date.getTime()) {
+    throw new Error("Schedule end date must be on or after start date");
+  }
+
+  const spanDays =
+    Math.floor((end.date.getTime() - start.date.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+  if (spanDays > MAX_SCHEDULE_RANGE_DAYS) {
+    throw new Error(`Schedule range cannot exceed ${MAX_SCHEDULE_RANGE_DAYS} days`);
+  }
+
+  return {
+    startDate: start.key,
+    endDate: end.key,
+    spanDays,
+  };
 }
 
 function getEpisodeAirtimeTimestamp(airDate?: string | null) {
@@ -487,9 +519,10 @@ export const getScheduleCacheStatusForDate = query({
 
     const now = Date.now();
     const todayKey = formatDate(new Date());
+    const dateKey = parseRequiredScheduleDateKey(args.date, "schedule cache date").key;
     const rows = await ctx.db
       .query("scheduleCache")
-      .withIndex("by_date", (q) => q.eq("date", args.date))
+      .withIndex("by_date", (q) => q.eq("date", dateKey))
       .collect();
 
     let tvCount = 0;
@@ -517,7 +550,7 @@ export const getScheduleCacheStatusForDate = query({
       typeof animeLastUpdated === "number" &&
       now - animeLastUpdated < SCHEDULE_CACHE_FRESH_MS;
     const shouldForceRefreshPastAnimeZero =
-      animeCount === 0 && args.date === todayKey;
+      animeCount === 0 && dateKey === todayKey;
     const hasFreshAnime =
       ((args.date < todayKey && animeLastUpdated !== null) || hasFreshAnimeByTime) &&
       !shouldForceRefreshPastAnimeZero;
@@ -664,7 +697,10 @@ export const hydrateScheduleRange = action({
       throw new Error("Unauthorized");
     }
 
-    const startDate = new Date(args.startDate);
+    const startDate = parseRequiredScheduleDateKey(
+      args.startDate,
+      "schedule hydration start date"
+    ).date;
     const safeDays = Math.max(1, Math.min(args.days, 42));
     const dateKeys = Array.from({ length: safeDays }, (_, index) => {
       const date = new Date(startDate);
@@ -718,6 +754,7 @@ export const getUpcomingSchedule = query({
     }
 
     const typedUserId = userId as Id<"users">;
+    const range = getScheduleRangeKeys(args.startDate, args.endDate);
     
     const today = startOfDay(new Date());
 
@@ -800,16 +837,16 @@ export const getUpcomingSchedule = query({
       ? await ctx.db
           .query("scheduleCache")
           .withIndex("by_type_date", (q) =>
-            q
-              .eq("mediaType", mediaFilter)
-              .gte("date", args.startDate)
-              .lte("date", args.endDate)
+              q
+                .eq("mediaType", mediaFilter)
+                .gte("date", range.startDate)
+                .lte("date", range.endDate)
           )
           .collect()
       : await ctx.db
           .query("scheduleCache")
           .withIndex("by_date", (q) =>
-            q.gte("date", args.startDate).lte("date", args.endDate)
+            q.gte("date", range.startDate).lte("date", range.endDate)
           )
           .collect();
 
@@ -911,6 +948,7 @@ async function getFutureUpcomingCountsForUser(
     mediaFilter?: "tv" | "anime";
   }
 ): Promise<WatchlistFutureCountRow[]> {
+    const range = getScheduleRangeKeys(args.startDate, args.endDate);
     const today = startOfDay(new Date());
     const mediaFilter = args.mediaFilter;
 
@@ -970,16 +1008,16 @@ async function getFutureUpcomingCountsForUser(
       ? await ctx.db
           .query("scheduleCache")
           .withIndex("by_type_date", (q) =>
-            q
-              .eq("mediaType", mediaFilter)
-              .gte("date", args.startDate)
-              .lte("date", args.endDate)
+              q
+                .eq("mediaType", mediaFilter)
+                .gte("date", range.startDate)
+                .lte("date", range.endDate)
           )
           .collect()
       : await ctx.db
           .query("scheduleCache")
           .withIndex("by_date", (q) =>
-            q.gte("date", args.startDate).lte("date", args.endDate)
+            q.gte("date", range.startDate).lte("date", range.endDate)
           )
           .collect();
 

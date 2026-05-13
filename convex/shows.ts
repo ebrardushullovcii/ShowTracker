@@ -3927,6 +3927,30 @@ export const repairShowMetadataById = internalAction({
   },
 });
 
+export const markUserShowAutoPausedForRepair = internalMutation({
+  args: {
+    userShowId: v.id("userShows"),
+    autoPausedAt: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const userShow = await ctx.db.get(args.userShowId);
+    if (!userShow) {
+      throw new Error("User show not found");
+    }
+
+    await ctx.db.patch(args.userShowId, {
+      status: "paused",
+      statusChangedAt: args.autoPausedAt,
+      completedAt: undefined,
+      droppedAt: undefined,
+      autoPausedAt: args.autoPausedAt,
+    });
+    await upsertFeedProjectionForUserShow(ctx, args.userShowId);
+
+    return { userShowId: args.userShowId, status: "paused", autoPausedAt: args.autoPausedAt };
+  },
+});
+
 export const auditTrackedShowHealthForUser = internalAction({
   args: {
     userId: v.id("users"),
