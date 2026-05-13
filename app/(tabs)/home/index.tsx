@@ -1793,13 +1793,10 @@ export function HomeScreen() {
         watchlistAirtimeMode === "after_airtime"
           ? upcomingCounts?.unavailableCount ?? 0
           : upcomingCounts?.futureCount ?? 0;
-      const hasTmdbAiredEpisodeFallback =
-        item.mediaType === "tv" && typeof item.tmdbId === "number";
       const hasAvailableScheduleSignal =
         typeof item.newEpisodeSignalAt === "number" &&
         item.newEpisodeSignalAt > (item.lastWatchedAt ?? 0);
       const allRemainingEpisodesAreFuture =
-        (!hasTmdbAiredEpisodeFallback || watchlistAirtimeMode === "after_airtime") &&
         typeof item.remainingEpisodes === "number" &&
         item.remainingEpisodes > 0 &&
         unavailableUpcomingCount >= item.remainingEpisodes;
