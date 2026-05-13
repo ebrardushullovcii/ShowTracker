@@ -278,7 +278,7 @@ function findTrackedScheduleMatch<T extends {
 
   const titleCandidates = trackedShows.filter(
     (tracked) =>
-      (tracked.mediaType === "anime" || tracked.mediaType === "tv") &&
+      tracked.mediaType === mediaType &&
       isAnimeSeasonTitleVariant(entry.normalizedTitle, tracked.normalizedTitle)
   );
 
