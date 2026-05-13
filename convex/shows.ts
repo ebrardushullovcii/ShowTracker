@@ -61,6 +61,10 @@ function parseTmdbAirDateMs(airDate?: string | null) {
   );
 }
 
+function formatUtcDateKey(date: Date) {
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
+}
+
 async function getTmdbReleasedEpisodeCountFromSeasonDetails(
   tmdbId: number,
   seasons?: { season_number: number }[]
@@ -2680,20 +2684,33 @@ async function fetchLatestNormalizedShowForExistingShow(show: Doc<"shows">) {
       details
     );
 
-    if (show.mediaType !== "movie") {
-      const releasedFromSeasons =
-        await getTmdbReleasedEpisodeCountFromSeasonDetails(show.tmdbId, details.seasons);
-      if (
-        typeof releasedFromSeasons === "number" &&
-        releasedFromSeasons > (normalized.releasedEpisodes ?? 0)
-      ) {
-        return {
-          ...normalized,
-          releasedEpisodes: Math.min(
-            releasedFromSeasons,
-            normalized.totalEpisodes ?? releasedFromSeasons
-          ),
-        };
+    const releasedEpisodeCount = normalized.releasedEpisodes ?? null;
+    const totalEpisodeCount = normalized.totalEpisodes ?? null;
+    if (
+      show.mediaType !== "movie" &&
+      (releasedEpisodeCount === null ||
+        (typeof totalEpisodeCount === "number" && releasedEpisodeCount < totalEpisodeCount))
+    ) {
+      try {
+        const releasedFromSeasons =
+          await getTmdbReleasedEpisodeCountFromSeasonDetails(show.tmdbId, details.seasons);
+        if (
+          typeof releasedFromSeasons === "number" &&
+          releasedFromSeasons > (normalized.releasedEpisodes ?? 0)
+        ) {
+          return {
+            ...normalized,
+            releasedEpisodes: Math.min(
+              releasedFromSeasons,
+              normalized.totalEpisodes ?? releasedFromSeasons
+            ),
+          };
+        }
+      } catch (error) {
+        console.warn("Failed to refine TMDB released episode count from season details", {
+          tmdbId: show.tmdbId,
+          error,
+        });
       }
     }
 
@@ -3999,10 +4016,10 @@ export const auditTrackedShowHealthForUser = internalAction({
     });
 
     const today = new Date();
-    const startDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+    const startDate = formatUtcDateKey(today);
     const endDateObj = new Date(today);
-    endDateObj.setDate(endDateObj.getDate() + 119);
-    const endDate = `${endDateObj.getFullYear()}-${String(endDateObj.getMonth() + 1).padStart(2, "0")}-${String(endDateObj.getDate()).padStart(2, "0")}`;
+    endDateObj.setUTCDate(endDateObj.getUTCDate() + 119);
+    const endDate = formatUtcDateKey(endDateObj);
 
     const futureCounts: Array<{ routeId: string; futureCount: number }> = await ctx.runQuery(
       internal.schedule.getFutureUpcomingCountsForWatchlistForUser,
