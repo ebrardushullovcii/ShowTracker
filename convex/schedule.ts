@@ -7,7 +7,7 @@ import {
   query,
 } from "@/convex/_generated/server";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
-import type { ActionCtx } from "@/convex/_generated/server";
+import type { ActionCtx, QueryCtx } from "@/convex/_generated/server";
 import { v } from "convex/values";
 import { getAniListAiringSchedule } from "@/lib/api/anilist";
 import {
@@ -42,6 +42,12 @@ type CompactScheduleEntry = {
   showId: string;
   normalizedTitle: string;
   episode: CompactScheduleEpisode;
+};
+
+type WatchlistFutureCountRow = {
+  routeId: string;
+  futureCount: number;
+  unavailableCount: number;
 };
 
 export const getRateLimitState = internalQuery({
@@ -896,20 +902,15 @@ export const getUpcomingSchedule = query({
   },
 });
 
-export const getFutureUpcomingCountsForWatchlist = query({
+async function getFutureUpcomingCountsForUser(
+  ctx: QueryCtx,
   args: {
-    startDate: v.string(),
-    endDate: v.string(),
-    mediaFilter: v.optional(v.union(v.literal("tv"), v.literal("anime"))),
-  },
-  handler: async (ctx, args) => {
-    const userId = await getAuthUserId(ctx);
-
-    if (!userId) {
-      return [] as { routeId: string; futureCount: number }[];
-    }
-
-    const typedUserId = userId as Id<"users">;
+    userId: Id<"users">;
+    startDate: string;
+    endDate: string;
+    mediaFilter?: "tv" | "anime";
+  }
+): Promise<WatchlistFutureCountRow[]> {
     const today = startOfDay(new Date());
     const mediaFilter = args.mediaFilter;
 
@@ -917,7 +918,7 @@ export const getFutureUpcomingCountsForWatchlist = query({
       ? await ctx.db
           .query("feedProjections")
           .withIndex("by_user_media", (q) =>
-            q.eq("userId", typedUserId).eq("mediaType", mediaFilter)
+            q.eq("userId", args.userId).eq("mediaType", mediaFilter)
           )
           .collect()
       : (
@@ -925,20 +926,20 @@ export const getFutureUpcomingCountsForWatchlist = query({
             ctx.db
               .query("feedProjections")
               .withIndex("by_user_media", (q) =>
-                q.eq("userId", typedUserId).eq("mediaType", "tv")
+                q.eq("userId", args.userId).eq("mediaType", "tv")
               )
               .collect(),
             ctx.db
               .query("feedProjections")
               .withIndex("by_user_media", (q) =>
-                q.eq("userId", typedUserId).eq("mediaType", "anime")
+                q.eq("userId", args.userId).eq("mediaType", "anime")
               )
               .collect(),
           ])
         ).flat();
 
     if (nonMovieProjections.length === 0) {
-      return [] as { routeId: string; futureCount: number }[];
+      return [] as WatchlistFutureCountRow[];
     }
 
     const trackedShows = nonMovieProjections.map((p) => ({
@@ -1041,5 +1042,34 @@ export const getFutureUpcomingCountsForWatchlist = query({
         futureCount: count.futureCount,
         unavailableCount: count.unavailableCount,
       }));
+}
+
+export const getFutureUpcomingCountsForWatchlistForUser = internalQuery({
+  args: {
+    userId: v.id("users"),
+    startDate: v.string(),
+    endDate: v.string(),
+    mediaFilter: v.optional(v.union(v.literal("tv"), v.literal("anime"))),
+  },
+  handler: async (ctx, args) => getFutureUpcomingCountsForUser(ctx, args),
+});
+
+export const getFutureUpcomingCountsForWatchlist = query({
+  args: {
+    startDate: v.string(),
+    endDate: v.string(),
+    mediaFilter: v.optional(v.union(v.literal("tv"), v.literal("anime"))),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+
+    if (!userId) {
+      return [] as WatchlistFutureCountRow[];
+    }
+
+    return getFutureUpcomingCountsForUser(ctx, {
+      userId: userId as Id<"users">,
+      ...args,
+    });
   },
 });

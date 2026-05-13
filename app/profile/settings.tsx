@@ -182,12 +182,15 @@ export default function ProfileSettingsScreen() {
 
       let settingsSaved = false;
       try {
-        const requestStartedAt = Date.now();
+        const lastKnownUpdatedAt =
+          typeof animeHomeSettings?.updatedAt === "number"
+            ? animeHomeSettings.updatedAt
+            : undefined;
         if (animeSettingsTimeoutRef.current) clearTimeout(animeSettingsTimeoutRef.current);
         await Promise.race([
           setUserAnimeHomeSettings({
             ...args,
-            requestStartedAt,
+            lastKnownUpdatedAt,
           }),
           new Promise<never>((_, reject) => {
             animeSettingsTimeoutRef.current = setTimeout(
@@ -216,7 +219,7 @@ export default function ProfileSettingsScreen() {
         setIsSavingAnimeSettings(false);
       }
     },
-    [isSavingAnimeSettings, setUserAnimeHomeSettings, syncTrackedAnimeRelations]
+    [animeHomeSettings?.updatedAt, isSavingAnimeSettings, setUserAnimeHomeSettings, syncTrackedAnimeRelations]
   );
 
   const refreshStats = useCallback(async () => {

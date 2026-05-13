@@ -1353,10 +1353,7 @@ function selectHomeFeedItemsFromProjections(args: {
 
   const matchesSection = (entry: HomeFeedProjectionItem) => {
     if (args.section === "active") {
-      return (
-        !isHomeFeedPausedSectionEntry(entry, args.pausedSectionMode) &&
-        !isHomeFeedNotStartedSectionEntry(entry)
-      );
+      return shouldShowHomeFeedWatchlistEntry(entry);
     }
     if (args.section === "paused") {
       return isHomeFeedPausedSectionEntry(entry, args.pausedSectionMode);
@@ -1558,26 +1555,33 @@ export const getHomeFeed = query({
 
     const typedUserId = userId as Id<"users">;
 
-    const [{ globalRelationMode, pausedSectionMode, relationModeByRoot }, tvProjections, animeProjections] =
+    const { globalRelationMode, pausedSectionMode, relationModeByRoot } =
+      await getHomeFeedSettings(ctx, typedUserId);
+    const [activeProjections, pausedProjections, notStartedProjections] =
       await Promise.all([
-        getHomeFeedSettings(ctx, typedUserId),
-        ctx.db
-          .query("feedProjections")
-          .withIndex("by_user_media", (q) =>
-            q.eq("userId", typedUserId).eq("mediaType", "tv")
-          )
-          .collect(),
-        ctx.db
-          .query("feedProjections")
-          .withIndex("by_user_media", (q) =>
-            q.eq("userId", typedUserId).eq("mediaType", "anime")
-          )
-          .collect(),
+        getHomeFeedProjectionCandidates(ctx, {
+          userId: typedUserId,
+          mediaFilter: undefined,
+          statuses: ["watching"],
+          perStatusLimit: HOME_FEED_MAX_RESULTS * 4,
+        }),
+        getHomeFeedProjectionCandidates(ctx, {
+          userId: typedUserId,
+          mediaFilter: undefined,
+          statuses: ["paused"],
+          perStatusLimit: HOME_FEED_MAX_RESULTS,
+          orderByAutoPausedAt: true,
+        }),
+        getHomeFeedProjectionCandidates(ctx, {
+          userId: typedUserId,
+          mediaFilter: undefined,
+          statuses: ["plan_to_watch"],
+          perStatusLimit: HOME_FEED_MAX_RESULTS,
+        }),
       ]);
 
-    const projections = [...tvProjections, ...animeProjections];
     const active = selectHomeFeedItemsFromProjections({
-      projections,
+      projections: activeProjections,
       globalRelationMode,
       pausedSectionMode,
       relationModeByRoot,
@@ -1585,7 +1589,7 @@ export const getHomeFeed = query({
       limit: HOME_FEED_MAX_RESULTS,
     });
     const paused = selectHomeFeedItemsFromProjections({
-      projections,
+      projections: pausedProjections,
       globalRelationMode,
       pausedSectionMode,
       relationModeByRoot,
@@ -1593,7 +1597,7 @@ export const getHomeFeed = query({
       limit: HOME_FEED_MAX_RESULTS,
     });
     const notStarted = selectHomeFeedItemsFromProjections({
-      projections,
+      projections: notStartedProjections,
       globalRelationMode,
       pausedSectionMode,
       relationModeByRoot,
@@ -1616,13 +1620,19 @@ async function getHomeFeedSection(ctx: QueryCtx, args: {
   }
 
   const typedUserId = userId as Id<"users">;
-  const safeLimit = Math.max(1, args.limit ?? HOME_FEED_MAX_RESULTS);
-  const perStatusLimit = Math.max(safeLimit, 20);
+  const safeLimit = Math.max(
+    1,
+    Math.min(args.limit ?? HOME_FEED_MAX_RESULTS, HOME_FEED_MAX_RESULTS)
+  );
+  const perStatusLimit =
+    args.section === "active"
+      ? Math.max(safeLimit * 4, 80)
+      : Math.max(safeLimit, 20);
   const { globalRelationMode, pausedSectionMode, relationModeByRoot } =
     await getHomeFeedSettings(ctx, typedUserId);
   const statuses: UserShowStatus[] =
     args.section === "active"
-      ? ["watching", "completed", "plan_to_watch"]
+      ? ["watching"]
       : args.section === "paused"
         ? ["paused"]
         : ["plan_to_watch"];
@@ -1835,11 +1845,13 @@ async function getUserAnimeHomeSettingsFromDb(
     watchlistAirtimeMode:
       (existing?.watchlistAirtimeMode as WatchlistAirtimeMode | undefined) ??
       DEFAULT_WATCHLIST_AIRTIME_MODE,
+    updatedAt: existing?.updatedAt ?? 0,
   } as {
     relationMode: AnimeHomeRelationMode;
     completionBehavior: AnimeCompletionBehavior;
     pausedSectionMode: HomePausedSectionMode;
     watchlistAirtimeMode: WatchlistAirtimeMode;
+    updatedAt: number;
   };
 }
 
@@ -3408,7 +3420,7 @@ export const setUserAnimeHomeSettings = mutation({
     completionBehavior: v.optional(animeCompletionBehaviorValidator),
     pausedSectionMode: v.optional(homePausedSectionModeValidator),
     watchlistAirtimeMode: v.optional(watchlistAirtimeModeValidator),
-    requestStartedAt: v.optional(v.number()),
+    lastKnownUpdatedAt: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const userId = await getCurrentUserId(ctx);
@@ -3437,8 +3449,8 @@ export const setUserAnimeHomeSettings = mutation({
         };
     if (
       existing &&
-      typeof args.requestStartedAt === "number" &&
-      existing.updatedAt > args.requestStartedAt
+      typeof args.lastKnownUpdatedAt === "number" &&
+      existing.updatedAt > args.lastKnownUpdatedAt
     ) {
       throw new Error("Settings were changed by a newer request.");
     }
@@ -3959,8 +3971,9 @@ export const auditTrackedShowHealthForUser = internalAction({
     const endDate = `${endDateObj.getFullYear()}-${String(endDateObj.getMonth() + 1).padStart(2, "0")}-${String(endDateObj.getDate()).padStart(2, "0")}`;
 
     const futureCounts: Array<{ routeId: string; futureCount: number }> = await ctx.runQuery(
-      api.schedule.getFutureUpcomingCountsForWatchlist,
+      internal.schedule.getFutureUpcomingCountsForWatchlistForUser,
       {
+        userId: args.userId,
         startDate,
         endDate,
         mediaFilter: "tv",
