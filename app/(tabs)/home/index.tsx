@@ -71,7 +71,7 @@ const DAY_IN_MS = 1000 * 60 * 60 * 24;
 const GRID_GAP = 12;
 const INITIAL_UPCOMING_HYDRATION_TIMEOUT_MS = 8000;
 const TMDB_AIRED_LOOKUP_BATCH_SIZE = 8;
-const WATCHLIST_FUTURE_LOOKAHEAD_DAYS = 90;
+const WATCHLIST_FUTURE_LOOKAHEAD_DAYS = 365;
 const homeModeOptions = [
   { value: "watchlist" as const, label: "Watchlist" },
   { value: "upcoming" as const, label: "Schedule" },
@@ -1463,16 +1463,13 @@ export function HomeScreen() {
   const isSmallPhone = width < 390;
   const watchlistPageSize = Math.max(columns * 3, 6);
   const secondarySectionPageSize = Math.max(columns * 2, 6);
-  const watchlistQueryLimit = Math.min(
-    Math.max(watchlistVisibleCount + watchlistPageSize * 2, watchlistPageSize * 4),
-    120
+  const watchlistQueryLimit = Math.max(
+    watchlistVisibleCount + watchlistPageSize * 2,
+    watchlistPageSize * 4
   );
-  const secondaryQueryLimit = Math.min(
-    Math.max(
-      Math.max(pausedVisibleCount, notStartedVisibleCount) + secondarySectionPageSize * 2,
-      secondarySectionPageSize * 4
-    ),
-    120
+  const secondaryQueryLimit = Math.max(
+    Math.max(pausedVisibleCount, notStartedVisibleCount) + secondarySectionPageSize * 2,
+    secondarySectionPageSize * 4
   );
   const homeFeedMediaFilter =
     mediaFilter === "all" ? undefined : mediaFilter;

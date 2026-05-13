@@ -176,10 +176,15 @@ export default function ProfileSettingsScreen() {
       setError(null);
       setNotice(null);
 
+      let settingsSaved = false;
       try {
+        const requestStartedAt = Date.now();
         if (animeSettingsTimeoutRef.current) clearTimeout(animeSettingsTimeoutRef.current);
         await Promise.race([
-          setUserAnimeHomeSettings(args),
+          setUserAnimeHomeSettings({
+            ...args,
+            requestStartedAt,
+          }),
           new Promise<never>((_, reject) => {
             animeSettingsTimeoutRef.current = setTimeout(
               () => reject(new Error("timeout")),
@@ -187,13 +192,18 @@ export default function ProfileSettingsScreen() {
             );
           }),
         ]);
+        settingsSaved = true;
         if (args.relationMode === "all_relations") {
-          void syncTrackedAnimeRelations({ force: true }).catch(() => {});
+          await syncTrackedAnimeRelations({ force: true });
         }
         setNotice("Settings saved.");
       } catch (settingsError) {
         console.error("Failed to update settings", settingsError);
-        setError("Could not save settings.");
+        setError(
+          settingsSaved && args.relationMode === "all_relations"
+            ? "Settings saved, but anime relation sync failed. Try again from Settings."
+            : "Could not save settings."
+        );
       } finally {
         if (animeSettingsTimeoutRef.current) {
           clearTimeout(animeSettingsTimeoutRef.current);

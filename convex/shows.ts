@@ -21,7 +21,7 @@ import {
 } from "@/lib/api/anilist";
 import { getJikanAnime } from "@/lib/api/jikan";
 import { normalizeTmdbShowDetails } from "@/lib/api/normalize";
-import { getTmdbShowDetails } from "@/lib/api/tmdb";
+import { getTmdbSeasonDetails, getTmdbShowDetails } from "@/lib/api/tmdb";
 import type { NormalizedShow } from "@/lib/api/types";
 
 const RELATION_SYNC_THROTTLE_MS = 1000 * 60 * 60 * 24 * 30;
@@ -38,6 +38,57 @@ const TARGETED_TRACKING_REPAIR_PAGE_SIZE = 20;
 const TARGETED_TRACKING_REPAIR_PAGE_SIZE_MAX = 30;
 const COMPLETED_SHOW_METADATA_REFRESH_PAGE_SIZE = 100;
 const COMPLETED_SHOW_METADATA_REFRESH_MAX_SCANNED = 500;
+
+function startOfUtcDayMs(value: Date) {
+  return Date.UTC(value.getUTCFullYear(), value.getUTCMonth(), value.getUTCDate());
+}
+
+function parseTmdbAirDateMs(airDate?: string | null) {
+  if (!airDate?.trim()) {
+    return null;
+  }
+
+  const match = airDate.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) {
+    const parsed = new Date(airDate);
+    return Number.isNaN(parsed.getTime()) ? null : startOfUtcDayMs(parsed);
+  }
+
+  return Date.UTC(
+    Number(match[1]),
+    Number(match[2]) - 1,
+    Number(match[3])
+  );
+}
+
+async function getTmdbReleasedEpisodeCountFromSeasonDetails(
+  tmdbId: number,
+  seasons?: { season_number: number }[]
+) {
+  const seasonNumbers = (seasons ?? [])
+    .map((season) => season.season_number)
+    .filter((seasonNumber) => Number.isFinite(seasonNumber) && seasonNumber > 0)
+    .sort((a, b) => a - b);
+
+  if (!seasonNumbers.length || seasonNumbers.length > 40) {
+    return null;
+  }
+
+  const todayMs = startOfUtcDayMs(new Date());
+  let releasedEpisodes = 0;
+
+  for (const seasonNumber of seasonNumbers) {
+    const season = await getTmdbSeasonDetails(tmdbId, seasonNumber);
+    for (const episode of season.episodes ?? []) {
+      const airDateMs = parseTmdbAirDateMs(episode.air_date);
+      if (airDateMs !== null && airDateMs <= todayMs) {
+        releasedEpisodes++;
+      }
+    }
+  }
+
+  return releasedEpisodes;
+}
 const COMPLETED_SHOW_METADATA_REFRESH_MAX_CANDIDATES = 25;
 const COMPLETED_SHOW_METADATA_REFRESH_CURSOR_KEY = "completed-show-refresh";
 const COMPLETED_SHOW_RESUME_MAX_ROUNDS = 10;
@@ -1292,6 +1343,22 @@ function selectHomeFeedItemsFromProjections(args: {
     }
   }
 
+  const matchesSection = (entry: HomeFeedProjectionItem) => {
+    if (args.section === "active") {
+      return (
+        !isHomeFeedPausedSectionEntry(entry, args.pausedSectionMode) &&
+        !isHomeFeedNotStartedSectionEntry(entry)
+      );
+    }
+    if (args.section === "paused") {
+      return isHomeFeedPausedSectionEntry(entry, args.pausedSectionMode);
+    }
+    if (args.section === "not_started") {
+      return isHomeFeedNotStartedSectionEntry(entry);
+    }
+    return true;
+  };
+
   const groupedAnime = new Map<string, HomeFeedProjectionItem[]>();
   const selectedEntries: HomeFeedProjectionItem[] = [];
 
@@ -1330,8 +1397,9 @@ function selectHomeFeedItemsFromProjections(args: {
       relationRootAnilistId !== null
         ? args.relationModeByRoot.get(relationRootAnilistId) ?? args.globalRelationMode
         : args.globalRelationMode;
+    const sectionEntries = entries.filter(matchesSection);
 
-    const selected = selectHomeAnimeFranchiseRepresentative(entries, {
+    const selected = selectHomeAnimeFranchiseRepresentative(sectionEntries, {
       isMainlineEntry: isProjectionMainlineAnime,
       pausedSectionMode: args.pausedSectionMode,
       preferMainlineOnly: effectiveRelationMode === "core_only",
@@ -1347,22 +1415,6 @@ function selectHomeFeedItemsFromProjections(args: {
       lastWatchedAt: selected.lastActivityAt,
     });
   }
-
-  const filterSection = (entry: HomeFeedProjectionItem) => {
-    if (args.section === "active") {
-      return (
-        !isHomeFeedPausedSectionEntry(entry, args.pausedSectionMode) &&
-        !isHomeFeedNotStartedSectionEntry(entry)
-      );
-    }
-    if (args.section === "paused") {
-      return isHomeFeedPausedSectionEntry(entry, args.pausedSectionMode);
-    }
-    if (args.section === "not_started") {
-      return isHomeFeedNotStartedSectionEntry(entry);
-    }
-    return true;
-  };
 
   const sortSection = (a: HomeFeedProjectionItem, b: HomeFeedProjectionItem) => {
     if (args.section === "paused") {
@@ -1382,7 +1434,7 @@ function selectHomeFeedItemsFromProjections(args: {
   };
 
   return selectedEntries
-    .filter(filterSection)
+    .filter(matchesSection)
     .sort(sortSection)
     .slice(0, args.limit);
 }
@@ -2590,10 +2642,29 @@ async function fetchLatestNormalizedShowForExistingShow(show: Doc<"shows">) {
       show.mediaType === "movie" ? "movie" : "tv",
       show.tmdbId
     );
-    return normalizeTmdbShowDetails(
+    const normalized = normalizeTmdbShowDetails(
       show.mediaType === "movie" ? "movie" : "tv",
       details
     );
+
+    if (show.mediaType !== "movie") {
+      const releasedFromSeasons =
+        await getTmdbReleasedEpisodeCountFromSeasonDetails(show.tmdbId, details.seasons);
+      if (
+        typeof releasedFromSeasons === "number" &&
+        releasedFromSeasons > (normalized.releasedEpisodes ?? 0)
+      ) {
+        return {
+          ...normalized,
+          releasedEpisodes: Math.min(
+            releasedFromSeasons,
+            normalized.totalEpisodes ?? releasedFromSeasons
+          ),
+        };
+      }
+    }
+
+    return normalized;
   }
 
   return null;
@@ -3324,6 +3395,7 @@ export const setUserAnimeHomeSettings = mutation({
     relationMode: v.optional(animeHomeRelationModeValidator),
     completionBehavior: v.optional(animeCompletionBehaviorValidator),
     pausedSectionMode: v.optional(homePausedSectionModeValidator),
+    requestStartedAt: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const userId = await getCurrentUserId(ctx);
@@ -3346,6 +3418,13 @@ export const setUserAnimeHomeSettings = mutation({
           completionBehavior: DEFAULT_ANIME_COMPLETION_BEHAVIOR,
           pausedSectionMode: DEFAULT_HOME_PAUSED_SECTION_MODE,
         };
+    if (
+      existing &&
+      typeof args.requestStartedAt === "number" &&
+      existing.updatedAt > args.requestStartedAt
+    ) {
+      throw new Error("Settings were changed by a newer request.");
+    }
 
     const next = {
       relationMode: args.relationMode ?? current.relationMode,
@@ -4294,7 +4373,8 @@ export const repairMyShowsTrackingBatch = mutation({
     for (const userShow of page.page) {
       const refreshed = await refreshUserShowTrackingAggregatesForDoc(
         ctx,
-        userShow
+        userShow,
+        { deriveStatus: false }
       );
 
       if (!refreshed) {
