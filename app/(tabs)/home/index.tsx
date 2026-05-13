@@ -1674,15 +1674,20 @@ export function HomeScreen() {
     [activeFeedItems, notStartedFeedItems, pausedFeedItems]
   );
 
-  const unavailableUpcomingCountByRoute = useMemo(() => {
-    const counts = new Map<string, { futureCount: number; unavailableCount: number }>();
+  const upcomingAvailabilityByRoute = useMemo(() => {
+    const counts = new Map<
+      string,
+      { availableCount: number; futureCount: number; unavailableCount: number }
+    >();
 
     for (const entry of (watchlistFutureUpcomingCounts ?? []) as {
       routeId: string;
+      availableCount?: number;
       futureCount: number;
       unavailableCount?: number;
     }[]) {
       counts.set(entry.routeId, {
+        availableCount: entry.availableCount ?? 0,
         futureCount: entry.futureCount,
         unavailableCount: entry.unavailableCount ?? entry.futureCount,
       });
@@ -1787,18 +1792,25 @@ export function HomeScreen() {
     return activeFeedItems.filter((item) => {
       const routeId = item.id;
       const upcomingCounts = routeId
-        ? unavailableUpcomingCountByRoute.get(routeId)
+        ? upcomingAvailabilityByRoute.get(routeId)
         : undefined;
       const unavailableUpcomingCount =
         watchlistAirtimeMode === "after_airtime"
           ? upcomingCounts?.unavailableCount ?? 0
           : upcomingCounts?.futureCount ?? 0;
+      const availableScheduleCount =
+        watchlistAirtimeMode === "after_airtime"
+          ? upcomingCounts?.availableCount ?? 0
+          : (upcomingCounts?.availableCount ?? 0) +
+            ((upcomingCounts?.unavailableCount ?? 0) -
+              (upcomingCounts?.futureCount ?? 0));
       const hasAvailableScheduleSignal =
         typeof item.newEpisodeSignalAt === "number" &&
         item.newEpisodeSignalAt > (item.lastWatchedAt ?? 0);
       const allRemainingEpisodesAreFuture =
         typeof item.remainingEpisodes === "number" &&
         item.remainingEpisodes > 0 &&
+        availableScheduleCount <= 0 &&
         unavailableUpcomingCount >= item.remainingEpisodes;
 
       if (item.status === "paused") return false;
@@ -1839,7 +1851,7 @@ export function HomeScreen() {
       return true;
     });
   }, [
-    unavailableUpcomingCountByRoute,
+    upcomingAvailabilityByRoute,
     mediaFilter,
     tmdbAiredEpisodeCountById,
     activeFeedItems,

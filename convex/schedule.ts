@@ -50,6 +50,7 @@ type CompactScheduleEntry = {
 
 type WatchlistFutureCountRow = {
   routeId: string;
+  availableCount: number;
   futureCount: number;
   unavailableCount: number;
 };
@@ -1401,7 +1402,10 @@ async function getFutureUpcomingCountsForUser(
       )
       .collect();
 
-    const counts = new Map<string, { futureCount: number; unavailableCount: number }>();
+    const counts = new Map<
+      string,
+      { availableCount: number; futureCount: number; unavailableCount: number }
+    >();
     const dedupe = new Set<string>();
     const nowMs = Date.now();
 
@@ -1437,14 +1441,16 @@ async function getFutureUpcomingCountsForUser(
         const airtimeMs = getEpisodeAirtimeTimestamp(entry.episode.airDate);
         const isFutureDay = daysUntil > 0;
         const isTodayBeforeAirtime = daysUntil === 0 && airtimeMs !== null && airtimeMs > nowMs;
-        if (!isFutureDay && !isTodayBeforeAirtime) {
-          continue;
-        }
-
         const existing = counts.get(tracked.watchlistId) ?? {
+          availableCount: 0,
           futureCount: 0,
           unavailableCount: 0,
         };
+        if (!isFutureDay && !isTodayBeforeAirtime) {
+          existing.availableCount += 1;
+          counts.set(tracked.watchlistId, existing);
+          continue;
+        }
         if (isFutureDay) {
           existing.futureCount += 1;
         }
@@ -1457,6 +1463,7 @@ async function getFutureUpcomingCountsForUser(
       .sort(([routeIdA], [routeIdB]) => routeIdA.localeCompare(routeIdB))
       .map(([routeId, count]) => ({
         routeId,
+        availableCount: count.availableCount,
         futureCount: count.futureCount,
         unavailableCount: count.unavailableCount,
       }));
