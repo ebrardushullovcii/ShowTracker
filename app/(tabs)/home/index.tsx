@@ -1439,7 +1439,28 @@ export function HomeScreen() {
   const { width } = useWindowDimensions();
   const isWeb = Platform.OS === "web";
 
-  const todayDate = useMemo(() => new Date(), []);
+  const [todayDate, setTodayDate] = useState(() => new Date());
+  useEffect(() => {
+    let timeout: ReturnType<typeof setTimeout> | null = null;
+
+    const scheduleNextDayTick = () => {
+      const now = new Date();
+      const nextDay = new Date(now);
+      nextDay.setHours(24, 0, 1, 0);
+      timeout = setTimeout(() => {
+        setTodayDate(new Date());
+        scheduleNextDayTick();
+      }, Math.max(1000, nextDay.getTime() - now.getTime()));
+    };
+
+    scheduleNextDayTick();
+
+    return () => {
+      if (timeout) {
+        clearTimeout(timeout);
+      }
+    };
+  }, []);
   const todayKey = useMemo(() => formatDateForApi(todayDate), [todayDate]);
   const setHomeMode = useCallback((value: HomeTab) => {
     setActiveTab(value);
@@ -1816,7 +1837,7 @@ export function HomeScreen() {
       if (item.status === "paused") return false;
       if (item.status === "dropped") return false;
       if (item.trackingState === "upcoming") return false;
-      if (item.status === "completed") return false;
+      if (item.status === "completed" && !hasAvailableScheduleSignal) return false;
       if (item.watchedEpisodes <= 0) {
         return false;
       }
@@ -1829,7 +1850,7 @@ export function HomeScreen() {
         if (typeof airedEpisodes === "number") {
           const watchedEpisodes = Math.min(item.watchedEpisodes, airedEpisodes);
           const releasedRemaining = Math.max(airedEpisodes - watchedEpisodes, 0);
-          if (releasedRemaining <= 0) {
+          if (releasedRemaining <= 0 && !hasAvailableScheduleSignal) {
             return false;
           }
         } else if (

@@ -933,7 +933,7 @@ function hasAvailableScheduleSignal(
   entry: Pick<WatchlistEntryLike, "status" | "lastWatchedAt" | "newEpisodeSignalAt">
 ) {
   return (
-    entry.status === "watching" &&
+    (entry.status === "watching" || entry.status === "completed") &&
     typeof entry.newEpisodeSignalAt === "number" &&
     entry.newEpisodeSignalAt > (entry.lastWatchedAt ?? 0)
   );
@@ -945,6 +945,10 @@ function isCompletedWatchlistEntry(
     "mediaType" | "status" | "remainingEpisodes" | "lastWatchedAt" | "newEpisodeSignalAt"
   >
 ) {
+  if (entry.status === "completed" && hasAvailableScheduleSignal(entry)) {
+    return false;
+  }
+
   if (entry.status === "completed") {
     return true;
   }
@@ -1491,6 +1495,7 @@ function selectHomeFeedItemsFromProjections(args: {
     selectedEntries.push({
       ...selected.entry,
       lastWatchedAt: selected.lastActivityAt,
+      homeSortAt: Math.max(selected.entry.homeSortAt, selected.lastActivityAt),
     });
   }
 
@@ -1656,7 +1661,7 @@ export const getHomeFeed = query({
         getHomeFeedProjectionCandidates(ctx, {
           userId: typedUserId,
           mediaFilter: undefined,
-          statuses: ["watching"],
+          statuses: ["watching", "completed"],
           perStatusLimit: HOME_FEED_MAX_RESULTS * 4,
         }),
         getHomeFeedProjectionCandidates(ctx, {
@@ -1728,7 +1733,7 @@ async function getHomeFeedSection(ctx: QueryCtx, args: {
     });
   const statuses: UserShowStatus[] =
     args.section === "active"
-      ? ["watching"]
+      ? ["watching", "completed"]
       : args.section === "paused"
         ? ["paused"]
         : ["plan_to_watch"];

@@ -23,6 +23,9 @@ const SCHEDULE_CACHE_FRESH_MS = 1000 * 60 * 60 * 6;
 const MAX_ANILIST_SCHEDULE_PAGES = 8;
 const ANILIST_SCHEDULE_RATE_LIMIT_COOLDOWN_MS = 90_000;
 const ANILIST_SCHEDULE_RATE_LIMIT_KEY = "anilistSchedule";
+const TVMAZE_SCHEDULE_RATE_LIMIT_PREFIX = "tvmazeSchedule";
+const TVMAZE_SCHEDULE_RETRY_BASE_MS = 60_000;
+const TVMAZE_SCHEDULE_RETRY_MAX_MS = 15 * 60_000;
 const MAX_SCHEDULE_RANGE_DAYS = 120;
 const HOME_SIGNAL_LOOKAHEAD_DAYS = 21;
 const HOME_SIGNAL_PAST_CACHE_DAYS = 7;
@@ -87,6 +90,7 @@ export const getRateLimitState = internalQuery({
     return {
       lastAttemptTime: existing?.lastAttemptTime ?? 0,
       nextRetryTime: existing?.nextRetryTime ?? 0,
+      retryCount: existing?.retryCount ?? 0,
     };
   },
 });
@@ -96,6 +100,7 @@ export const setRateLimitState = internalMutation({
     key: v.string(),
     lastAttemptTime: v.number(),
     nextRetryTime: v.number(),
+    retryCount: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const existing = await ctx.db
@@ -107,6 +112,7 @@ export const setRateLimitState = internalMutation({
       key: args.key,
       lastAttemptTime: args.lastAttemptTime,
       nextRetryTime: args.nextRetryTime,
+      retryCount: args.retryCount,
       updatedAt: Date.now(),
     };
 
@@ -223,6 +229,18 @@ function addUtcDays(date: Date, days: number) {
   const next = new Date(date);
   next.setUTCDate(next.getUTCDate() + days);
   return next;
+}
+
+function getTvMazeScheduleRateLimitKey(date: string) {
+  return `${TVMAZE_SCHEDULE_RATE_LIMIT_PREFIX}:${date}`;
+}
+
+function getTvMazeScheduleRetryDelayMs(retryCount: number) {
+  const exponent = Math.max(0, retryCount - 1);
+  return Math.min(
+    TVMAZE_SCHEDULE_RETRY_BASE_MS * 2 ** exponent,
+    TVMAZE_SCHEDULE_RETRY_MAX_MS
+  );
 }
 
 function normalizeTitle(title: string) {
@@ -641,13 +659,40 @@ async function hydrateOneDate(
   let tvFetchFailed = false;
   let animeFetchFailed = false;
   let animeFetchRateLimited = false;
+  const tvRateLimitKey = getTvMazeScheduleRateLimitKey(date);
+  const tvRateLimitState = await ctx.runQuery(internal.schedule.getRateLimitState, {
+    key: tvRateLimitKey,
+  });
 
-  try {
-    const tvSchedule = await getTvMazeScheduleByDate(date, "US");
-    tvEntries = tvSchedule.map((entry) => normalizeTvMazeScheduleEntry(entry));
-  } catch (error) {
+  if (now < tvRateLimitState.nextRetryTime) {
     tvFetchFailed = true;
-    console.error(`Failed TV schedule fetch for ${date}`, error);
+  } else {
+    try {
+      const tvSchedule = await getTvMazeScheduleByDate(date, "US");
+      tvEntries = tvSchedule.map((entry) => normalizeTvMazeScheduleEntry(entry));
+
+      if (
+        tvRateLimitState.retryCount > 0 ||
+        tvRateLimitState.nextRetryTime > 0
+      ) {
+        await ctx.runMutation(internal.schedule.setRateLimitState, {
+          key: tvRateLimitKey,
+          lastAttemptTime: now,
+          nextRetryTime: 0,
+          retryCount: 0,
+        });
+      }
+    } catch (error) {
+      tvFetchFailed = true;
+      const retryCount = tvRateLimitState.retryCount + 1;
+      await ctx.runMutation(internal.schedule.setRateLimitState, {
+        key: tvRateLimitKey,
+        lastAttemptTime: now,
+        nextRetryTime: now + getTvMazeScheduleRetryDelayMs(retryCount),
+        retryCount,
+      });
+      console.error(`Failed TV schedule fetch for ${date}`, error);
+    }
   }
 
   const rateLimitState = await ctx.runQuery(internal.schedule.getRateLimitState, {
@@ -682,6 +727,7 @@ async function hydrateOneDate(
             key: ANILIST_SCHEDULE_RATE_LIMIT_KEY,
             lastAttemptTime: Date.now(),
             nextRetryTime: retryUntil,
+            retryCount: rateLimitState.retryCount + 1,
           });
           break;
         }
@@ -837,7 +883,7 @@ export const getHomeScheduleSignalMatches = internalQuery({
     const trackedShows = nonMovieProjections
       .filter(
         (projection) =>
-          projection.status === "watching" &&
+          (projection.status === "watching" || projection.status === "completed") &&
           projection.watchedEpisodesCount > 0
       )
       .map((projection) => ({
@@ -916,7 +962,14 @@ export const getHomeScheduleSignalMatches = internalQuery({
         dedupe.add(uniqueKey);
 
         const airtimeMs = getEpisodeAirtimeTimestamp(entry.episode.airDate);
-        const signalAt = Math.min(airtimeMs ?? bucketDayStartMs, args.nowMs);
+        if (
+          bucketDayStartMs === availableDayStartMs &&
+          airtimeMs !== null &&
+          airtimeMs > args.nowMs
+        ) {
+          continue;
+        }
+        const signalAt = airtimeMs ?? Math.min(bucketDayStartMs, args.nowMs);
         const existing = matches.get(tracked.projectionId);
         const latestEpisodeKey = `${row.date}:${entry.episode.seasonNumber}:${entry.episode.episodeNumber}`;
 
@@ -1044,8 +1097,9 @@ export const ensureHomeWatchlistScheduleSignals = action({
 
     const hydrateResults: Awaited<ReturnType<typeof hydrateOneDate>>[] = [];
     const hydrateDates = Array.from(
-      { length: HOME_SIGNAL_LOOKAHEAD_DAYS + 1 },
-      (_, index) => formatDate(addUtcDays(today, index))
+      { length: HOME_SIGNAL_PAST_CACHE_DAYS + HOME_SIGNAL_LOOKAHEAD_DAYS + 1 },
+      (_, index) =>
+        formatDate(addUtcDays(today, index - HOME_SIGNAL_PAST_CACHE_DAYS))
     );
 
     for (let index = 0; index < hydrateDates.length; index += HYDRATE_BATCH_SIZE) {

@@ -147,7 +147,13 @@ export async function getTvMazeScheduleByDate(
 
   for (const entry of webSchedule) {
     const show = entry._embedded?.show;
-    if (!show || byEpisodeId.has(entry.id)) {
+    if (
+      !show ||
+      !Number.isFinite(entry.id) ||
+      !Number.isFinite(entry.season) ||
+      !Number.isFinite(entry.number) ||
+      byEpisodeId.has(entry.id)
+    ) {
       continue;
     }
 

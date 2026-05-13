@@ -238,6 +238,7 @@ export default defineSchema({
     key: v.string(),
     lastAttemptTime: v.number(),
     nextRetryTime: v.number(),
+    retryCount: v.optional(v.number()),
     updatedAt: v.number(),
   }).index("by_key", ["key"]),
   maintenanceState: defineTable({
