@@ -276,9 +276,14 @@ function findTrackedScheduleMatch<T extends {
     return null;
   }
 
+  const tvTitleMatch = byTitle.get(getTitleLookupKey("tv", entry.normalizedTitle));
+  if (tvTitleMatch) {
+    return tvTitleMatch;
+  }
+
   const titleCandidates = trackedShows.filter(
     (tracked) =>
-      tracked.mediaType === mediaType &&
+      (tracked.mediaType === mediaType || tracked.mediaType === "tv") &&
       isAnimeSeasonTitleVariant(entry.normalizedTitle, tracked.normalizedTitle)
   );
 
@@ -286,7 +291,14 @@ function findTrackedScheduleMatch<T extends {
     return null;
   }
 
-  titleCandidates.sort((a, b) => b.normalizedTitle.length - a.normalizedTitle.length);
+  titleCandidates.sort((a, b) => {
+    const mediaTypeDelta =
+      Number(b.mediaType === mediaType) - Number(a.mediaType === mediaType);
+    if (mediaTypeDelta !== 0) {
+      return mediaTypeDelta;
+    }
+    return b.normalizedTitle.length - a.normalizedTitle.length;
+  });
   return titleCandidates[0] ?? null;
 }
 
@@ -896,7 +908,7 @@ export const getHomeScheduleSignalMatches = internalQuery({
           continue;
         }
 
-        const uniqueKey = `${tracked.projectionId}:${row.date}:${entry.episode.seasonNumber}:${entry.episode.episodeNumber}`;
+        const uniqueKey = `${tracked.projectionId}:${row.date}:${entry.episode.episodeNumber}`;
         if (dedupe.has(uniqueKey)) {
           continue;
         }
@@ -1195,22 +1207,12 @@ export const getUpcomingSchedule = query({
       );
     }
 
-    const rows = mediaFilter
-      ? await ctx.db
-          .query("scheduleCache")
-          .withIndex("by_type_date", (q) =>
-              q
-                .eq("mediaType", mediaFilter)
-                .gte("date", range.startDate)
-                .lte("date", range.endDate)
-          )
-          .collect()
-      : await ctx.db
-          .query("scheduleCache")
-          .withIndex("by_date", (q) =>
-            q.gte("date", range.startDate).lte("date", range.endDate)
-          )
-          .collect();
+    const rows = await ctx.db
+      .query("scheduleCache")
+      .withIndex("by_date", (q) =>
+        q.gte("date", range.startDate).lte("date", range.endDate)
+      )
+      .collect();
 
     const grouped = new Map<
       string,
@@ -1228,7 +1230,10 @@ export const getUpcomingSchedule = query({
         };
       }[]
     >();
-    const dedupe = new Set<string>();
+    const dedupe = new Map<
+      string,
+      { dayKey: string; index: number; sourceMatchesTracked: boolean }
+    >();
 
     for (const row of rows) {
       const entries = parseCachedScheduleEntries(row.episodes);
@@ -1245,7 +1250,7 @@ export const getUpcomingSchedule = query({
 
         if (!tracked) continue;
         if (tracked.mediaType !== "tv" && tracked.mediaType !== "anime") continue;
-        if (args.mediaFilter && rowMediaType !== args.mediaFilter) continue;
+        if (args.mediaFilter && tracked.mediaType !== args.mediaFilter) continue;
 
         const dayKey = row.date;
         const bucketDate = parseScheduleDateKey(dayKey);
@@ -1255,18 +1260,21 @@ export const getUpcomingSchedule = query({
           (startOfDay(bucketDate).getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
         );
 
-        const uniqueKey = `${dayKey}:${tracked.routeId ?? entry.showId}:${entry.episode.seasonNumber}:${entry.episode.episodeNumber}`;
-        if (dedupe.has(uniqueKey)) continue;
-        dedupe.add(uniqueKey);
-
         if (!grouped.has(dayKey)) {
           grouped.set(dayKey, []);
         }
 
-        grouped.get(dayKey)!.push({
+        const sourceMatchesTracked = rowMediaType === tracked.mediaType;
+        const uniqueKey = `${dayKey}:${tracked.routeId ?? entry.showId}:${entry.episode.episodeNumber}`;
+        const existing = dedupe.get(uniqueKey);
+        if (existing?.sourceMatchesTracked && !sourceMatchesTracked) {
+          continue;
+        }
+
+        const scheduleEpisode = {
           routeId: tracked.routeId,
           showTitle: tracked.title,
-          mediaType: rowMediaType,
+          mediaType: tracked.mediaType,
           posterUrl: tracked.posterUrl,
           daysUntil,
           episode: {
@@ -1275,6 +1283,26 @@ export const getUpcomingSchedule = query({
             ...(entry.episode.name ? { name: entry.episode.name } : {}),
             ...(entry.episode.airDate ? { airDate: entry.episode.airDate } : {}),
           },
+        };
+
+        const dayEpisodes = grouped.get(dayKey)!;
+        if (existing) {
+          if (sourceMatchesTracked && !existing.sourceMatchesTracked) {
+            dayEpisodes[existing.index] = scheduleEpisode;
+            dedupe.set(uniqueKey, {
+              dayKey,
+              index: existing.index,
+              sourceMatchesTracked,
+            });
+          }
+          continue;
+        }
+
+        dayEpisodes.push(scheduleEpisode);
+        dedupe.set(uniqueKey, {
+          dayKey,
+          index: dayEpisodes.length - 1,
+          sourceMatchesTracked,
         });
       }
     }
@@ -1366,22 +1394,12 @@ async function getFutureUpcomingCountsForUser(
       );
     }
 
-    const rows = mediaFilter
-      ? await ctx.db
-          .query("scheduleCache")
-          .withIndex("by_type_date", (q) =>
-              q
-                .eq("mediaType", mediaFilter)
-                .gte("date", range.startDate)
-                .lte("date", range.endDate)
-          )
-          .collect()
-      : await ctx.db
-          .query("scheduleCache")
-          .withIndex("by_date", (q) =>
-            q.gte("date", range.startDate).lte("date", range.endDate)
-          )
-          .collect();
+    const rows = await ctx.db
+      .query("scheduleCache")
+      .withIndex("by_date", (q) =>
+        q.gte("date", range.startDate).lte("date", range.endDate)
+      )
+      .collect();
 
     const counts = new Map<string, { futureCount: number; unavailableCount: number }>();
     const dedupe = new Set<string>();
@@ -1402,7 +1420,7 @@ async function getFutureUpcomingCountsForUser(
 
         if (!tracked || !tracked.watchlistId) continue;
         if (tracked.mediaType !== "tv" && tracked.mediaType !== "anime") continue;
-        if (args.mediaFilter && rowMediaType !== args.mediaFilter) continue;
+        if (args.mediaFilter && tracked.mediaType !== args.mediaFilter) continue;
 
         const dayKey = row.date;
         const bucketDate = parseScheduleDateKey(dayKey);
@@ -1412,7 +1430,7 @@ async function getFutureUpcomingCountsForUser(
           (startOfDay(bucketDate).getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
         );
 
-        const uniqueKey = `${tracked.watchlistId}:${dayKey}:${entry.episode.seasonNumber}:${entry.episode.episodeNumber}`;
+        const uniqueKey = `${tracked.watchlistId}:${dayKey}:${entry.episode.episodeNumber}`;
         if (dedupe.has(uniqueKey)) continue;
         dedupe.add(uniqueKey);
 
