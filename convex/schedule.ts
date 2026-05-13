@@ -812,7 +812,7 @@ export const getUpcomingSchedule = query({
       normalizedTitle: normalizeTitle(p.title),
       mediaType: p.mediaType as "tv" | "anime",
       posterUrl: p.posterUrl ?? undefined,
-      routeId: getRouteIdForProjection(p),
+      routeId: getWatchlistIdForProjection(p),
       anilistId: p.anilistId,
       tvmazeId: p.tvmazeId,
     }));
