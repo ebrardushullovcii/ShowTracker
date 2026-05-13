@@ -47,6 +47,7 @@ type WatchlistItem = {
   totalEpisodes: number | null;
   autoPausedAt?: number | null;
   lastWatchedAt?: number | null;
+  newEpisodeSignalAt?: number | null;
 };
 
 type UpcomingEpisode = {
@@ -1476,6 +1477,7 @@ export function HomeScreen() {
     mediaFilter === "all" ? undefined : mediaFilter;
 
   const hydratedRangesRef = useRef(new Set<string>());
+  const homeScheduleSignalRunsRef = useRef(new Set<string>());
   const watchlistLoadMoreTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [tmdbAiredEpisodeCountById, setTmdbAiredEpisodeCountById] = useState<
     Record<number, number>
@@ -1564,6 +1566,9 @@ export function HomeScreen() {
       : "skip"
   );
   const hydrateScheduleRange = useAction(api.schedule.hydrateScheduleRange);
+  const ensureHomeWatchlistScheduleSignals = useAction(
+    api.schedule.ensureHomeWatchlistScheduleSignals
+  );
   const homeSettings = useQuery(api.shows.getUserAnimeHomeSettings);
   const pausedSectionMode =
     (homeSettings?.pausedSectionMode as HomePausedSectionMode | undefined) ??
@@ -1593,6 +1598,29 @@ export function HomeScreen() {
     },
     [hydrateScheduleRange]
   );
+
+  useEffect(() => {
+    if (activeTab !== "watchlist") {
+      return;
+    }
+
+    const cacheKey = todayKey;
+    if (homeScheduleSignalRunsRef.current.has(cacheKey)) {
+      return;
+    }
+
+    homeScheduleSignalRunsRef.current.add(cacheKey);
+    void ensureHomeWatchlistScheduleSignals()
+      .then((result) => {
+        if (result?.reason === "schedule_hydration_failed") {
+          homeScheduleSignalRunsRef.current.delete(cacheKey);
+        }
+      })
+      .catch((error) => {
+        homeScheduleSignalRunsRef.current.delete(cacheKey);
+        console.warn("Home watchlist schedule signal refresh failed", error);
+      });
+  }, [activeTab, ensureHomeWatchlistScheduleSignals, todayKey]);
 
   useEffect(() => {
     if (activeTab !== "upcoming") {
@@ -1767,6 +1795,9 @@ export function HomeScreen() {
           : upcomingCounts?.futureCount ?? 0;
       const hasTmdbAiredEpisodeFallback =
         item.mediaType === "tv" && typeof item.tmdbId === "number";
+      const hasAvailableScheduleSignal =
+        typeof item.newEpisodeSignalAt === "number" &&
+        item.newEpisodeSignalAt > (item.lastWatchedAt ?? 0);
       const allRemainingEpisodesAreFuture =
         (!hasTmdbAiredEpisodeFallback || watchlistAirtimeMode === "after_airtime") &&
         typeof item.remainingEpisodes === "number" &&
@@ -1792,12 +1823,17 @@ export function HomeScreen() {
           if (releasedRemaining <= 0) {
             return false;
           }
-        } else if (typeof item.remainingEpisodes === "number" && item.remainingEpisodes <= 0) {
+        } else if (
+          typeof item.remainingEpisodes === "number" &&
+          item.remainingEpisodes <= 0 &&
+          !hasAvailableScheduleSignal
+        ) {
           return false;
         }
       } else if (
         typeof item.remainingEpisodes === "number" &&
-        item.remainingEpisodes <= 0
+        item.remainingEpisodes <= 0 &&
+        !hasAvailableScheduleSignal
       ) {
         return false;
       }

@@ -206,6 +206,12 @@ function buildFeedProjectionFields(
     typeof watchableEpisodes === "number"
       ? Math.max(watchableEpisodes - watchedCount, 0)
       : undefined;
+  const lastWatchedAt = userShow.lastWatchedAt ?? userShow.addedAt;
+  const newEpisodeSignalAt = userShow.newEpisodeSignalAt;
+  const homeSortAt = Math.max(
+    lastWatchedAt,
+    typeof newEpisodeSignalAt === "number" ? newEpisodeSignalAt : 0
+  );
 
   return {
     userId: userShow.userId,
@@ -233,7 +239,9 @@ function buildFeedProjectionFields(
       userShow.relationRootAnilistId ?? show.rootAnilistId ?? show.anilistId,
     watchedEpisodesCount: watchedCount,
     remainingEpisodes,
-    lastWatchedAt: userShow.lastWatchedAt ?? userShow.addedAt,
+    lastWatchedAt,
+    newEpisodeSignalAt,
+    homeSortAt,
     autoPausedAt: userShow.autoPausedAt,
 
     updatedAt: Date.now(),
@@ -268,6 +276,8 @@ const FEED_PROJECTION_COMPARE_KEYS: Array<
   "watchedEpisodesCount",
   "remainingEpisodes",
   "lastWatchedAt",
+  "newEpisodeSignalAt",
+  "homeSortAt",
   "autoPausedAt",
 ];
 
@@ -910,18 +920,44 @@ function sortProjectionAnimeCandidates(a: ProjectionFeedEntry, b: ProjectionFeed
 }
 
 type WatchlistEntryLike = {
+  mediaType: "tv" | "anime" | "movie";
   status: UserShowStatus;
   watchedEpisodes: number;
   remainingEpisodes: number | null;
+  lastWatchedAt?: number | null;
+  newEpisodeSignalAt?: number | null;
   autoPausedAt?: number | null;
 };
 
-function isCompletedWatchlistEntry(
-  entry: Pick<WatchlistEntryLike, "status" | "remainingEpisodes">
+function hasAvailableScheduleSignal(
+  entry: Pick<WatchlistEntryLike, "status" | "lastWatchedAt" | "newEpisodeSignalAt">
 ) {
   return (
-    entry.status === "completed" ||
-    (typeof entry.remainingEpisodes === "number" && entry.remainingEpisodes <= 0)
+    entry.status === "watching" &&
+    typeof entry.newEpisodeSignalAt === "number" &&
+    entry.newEpisodeSignalAt > (entry.lastWatchedAt ?? 0)
+  );
+}
+
+function isCompletedWatchlistEntry(
+  entry: Pick<
+    WatchlistEntryLike,
+    "mediaType" | "status" | "remainingEpisodes" | "lastWatchedAt" | "newEpisodeSignalAt"
+  >
+) {
+  if (entry.status === "completed") {
+    return true;
+  }
+
+  if (
+    entry.status === "watching" &&
+    (entry.mediaType === "tv" || hasAvailableScheduleSignal(entry))
+  ) {
+    return false;
+  }
+
+  return (
+    typeof entry.remainingEpisodes === "number" && entry.remainingEpisodes <= 0
   );
 }
 
@@ -930,7 +966,15 @@ function hasWatchlistProgress(entry: Pick<WatchlistEntryLike, "watchedEpisodes">
 }
 
 function shouldShowHomeFeedWatchlistEntry(
-  entry: Pick<WatchlistEntryLike, "status" | "watchedEpisodes" | "remainingEpisodes">
+  entry: Pick<
+    WatchlistEntryLike,
+    | "mediaType"
+    | "status"
+    | "watchedEpisodes"
+    | "remainingEpisodes"
+    | "lastWatchedAt"
+    | "newEpisodeSignalAt"
+  >
 ) {
   return (
     isHomeFeedDisplayableEntry(entry) &&
@@ -955,7 +999,15 @@ function isHomeFeedPausedSectionEntry(
 }
 
 function isHomeFeedNotStartedSectionEntry(
-  entry: Pick<WatchlistEntryLike, "status" | "watchedEpisodes" | "remainingEpisodes">
+  entry: Pick<
+    WatchlistEntryLike,
+    | "mediaType"
+    | "status"
+    | "watchedEpisodes"
+    | "remainingEpisodes"
+    | "lastWatchedAt"
+    | "newEpisodeSignalAt"
+  >
 ) {
   return (
     !isCompletedWatchlistEntry(entry) &&
@@ -980,7 +1032,10 @@ type AnimeFranchiseProgressEntry = AnimeFranchiseSelectionEntry & {
 };
 
 function canAdvanceFromCompletedWatchlistEntry(
-  entry: Pick<WatchlistEntryLike, "status" | "remainingEpisodes">
+  entry: Pick<
+    WatchlistEntryLike,
+    "mediaType" | "status" | "remainingEpisodes" | "lastWatchedAt" | "newEpisodeSignalAt"
+  >
 ) {
   return !isCompletedWatchlistEntry(entry) && entry.status !== "dropped";
 }
@@ -1054,10 +1109,13 @@ function selectAnimeFranchiseRepresentative<T extends AnimeFranchiseSelectionEnt
 }
 
 function isHomeFeedDisplayableEntry(
-  entry: Pick<WatchlistEntryLike, "status" | "remainingEpisodes">
+  entry: Pick<
+    WatchlistEntryLike,
+    "mediaType" | "status" | "remainingEpisodes" | "lastWatchedAt" | "newEpisodeSignalAt"
+  >
 ) {
   return (
-    entry.remainingEpisodes != null &&
+    (entry.remainingEpisodes != null || hasAvailableScheduleSignal(entry)) &&
     entry.status !== "paused" &&
     entry.status !== "dropped" &&
     !isCompletedWatchlistEntry(entry)
@@ -1269,6 +1327,8 @@ type HomeFeedProjectionItem = {
   remainingEpisodes: number | null;
   progressPercent: number | null;
   lastWatchedAt: number;
+  newEpisodeSignalAt: number | null;
+  homeSortAt: number;
   autoPausedAt: number | null;
 };
 
@@ -1323,6 +1383,15 @@ function hydrateHomeFeedProjection(
     remainingEpisodes,
     progressPercent,
     lastWatchedAt: projection.lastWatchedAt,
+    newEpisodeSignalAt: projection.newEpisodeSignalAt ?? null,
+    homeSortAt:
+      projection.homeSortAt ??
+      Math.max(
+        projection.lastWatchedAt,
+        typeof projection.newEpisodeSignalAt === "number"
+          ? projection.newEpisodeSignalAt
+          : 0
+      ),
     autoPausedAt: projection.autoPausedAt ?? null,
   };
 }
@@ -1439,7 +1508,7 @@ function selectHomeFeedItemsFromProjections(args: {
       }
     }
 
-    return b.lastWatchedAt - a.lastWatchedAt;
+    return b.homeSortAt - a.homeSortAt;
   };
 
   return selectedEntries
@@ -1492,11 +1561,12 @@ async function getHomeFeedProjectionCandidates(ctx: QueryCtx, args: {
   orderByAutoPausedAt?: boolean;
 }) {
   const mediaTypes = args.mediaFilter ? [args.mediaFilter] : ["tv", "anime"] as const;
-  const pages = await Promise.all(
-    mediaTypes.flatMap((mediaType) =>
-      args.statuses.map((status) => {
+  const queries: Promise<Doc<"feedProjections">[]>[] = [];
+
+  for (const mediaType of mediaTypes) {
+    for (const status of args.statuses) {
         if (args.orderByAutoPausedAt) {
-          return ctx.db
+          queries.push(ctx.db
             .query("feedProjections")
             .withIndex("by_user_media_status_autoPausedAt", (q) =>
               q
@@ -1505,10 +1575,22 @@ async function getHomeFeedProjectionCandidates(ctx: QueryCtx, args: {
                 .eq("status", status)
             )
             .order("desc")
-            .take(args.perStatusLimit);
+            .take(args.perStatusLimit));
+          continue;
         }
 
-        return ctx.db
+        queries.push(ctx.db
+          .query("feedProjections")
+          .withIndex("by_user_media_status_homeSortAt", (q) =>
+            q
+              .eq("userId", args.userId)
+              .eq("mediaType", mediaType)
+              .eq("status", status)
+          )
+          .order("desc")
+          .take(args.perStatusLimit));
+
+        queries.push(ctx.db
           .query("feedProjections")
           .withIndex("by_user_media_status_lastWatched", (q) =>
             q
@@ -1517,10 +1599,11 @@ async function getHomeFeedProjectionCandidates(ctx: QueryCtx, args: {
               .eq("status", status)
           )
           .order("desc")
-          .take(args.perStatusLimit);
-      })
-    )
-  );
+          .take(args.perStatusLimit));
+    }
+  }
+
+  const pages = await Promise.all(queries);
 
   const deduped = new Map<string, Doc<"feedProjections">>();
   for (const projection of pages.flat()) {
@@ -3096,6 +3179,7 @@ export const ensureNextMainlineAnimeEntryActive = internalMutation({
 
           return {
             userShowId: userShow._id,
+            mediaType: "anime" as const,
             title: show.title,
             firstAired: show.firstAired ?? null,
             animeSeason: show.animeSeason ?? null,
@@ -6513,6 +6597,7 @@ export const pauseOtherRelatedAnimeEntries = mutation({
           return {
             userShowId: userShow._id,
             showId: userShow.showId,
+            mediaType: "anime" as const,
             title: show.title,
             firstAired: show.firstAired ?? null,
             animeSeason: show.animeSeason ?? null,
