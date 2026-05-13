@@ -1444,16 +1444,23 @@ function selectHomeFeedItemsFromProjections(args: {
     .slice(0, args.limit);
 }
 
-async function getHomeFeedSettings(ctx: QueryCtx, userId: Id<"users">) {
+async function getHomeFeedSettings(
+  ctx: QueryCtx,
+  userId: Id<"users">,
+  options: { includeFranchiseSettings?: boolean } = {}
+) {
+  const includeFranchiseSettings = options.includeFranchiseSettings ?? true;
   const [homeSettings, franchiseSettings] = await Promise.all([
     ctx.db
       .query("userAnimeHomeSettings")
       .withIndex("by_user", (q) => q.eq("userId", userId))
       .unique(),
-    ctx.db
-      .query("userAnimeFranchiseSettings")
-      .withIndex("by_user", (q) => q.eq("userId", userId))
-      .take(200),
+    includeFranchiseSettings
+      ? ctx.db
+          .query("userAnimeFranchiseSettings")
+          .withIndex("by_user", (q) => q.eq("userId", userId))
+          .take(200)
+      : Promise.resolve([]),
   ]);
 
   const globalRelationMode =
@@ -1629,7 +1636,9 @@ async function getHomeFeedSection(ctx: QueryCtx, args: {
       ? Math.max(safeLimit * 4, 80)
       : Math.max(safeLimit, 20);
   const { globalRelationMode, pausedSectionMode, relationModeByRoot } =
-    await getHomeFeedSettings(ctx, typedUserId);
+    await getHomeFeedSettings(ctx, typedUserId, {
+      includeFranchiseSettings: args.mediaFilter !== "tv",
+    });
   const statuses: UserShowStatus[] =
     args.section === "active"
       ? ["watching"]
@@ -3477,6 +3486,7 @@ export const setUserAnimeHomeSettings = mutation({
       completionBehavior: next.completionBehavior,
       pausedSectionMode: next.pausedSectionMode,
       watchlistAirtimeMode: next.watchlistAirtimeMode,
+      updatedAt: next.updatedAt,
     };
   },
 });
@@ -3991,7 +4001,7 @@ export const auditTrackedShowHealthForUser = internalAction({
     const today = new Date();
     const startDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
     const endDateObj = new Date(today);
-    endDateObj.setDate(endDateObj.getDate() + 365);
+    endDateObj.setDate(endDateObj.getDate() + 119);
     const endDate = `${endDateObj.getFullYear()}-${String(endDateObj.getMonth() + 1).padStart(2, "0")}-${String(endDateObj.getDate()).padStart(2, "0")}`;
 
     const futureCounts: Array<{ routeId: string; futureCount: number }> = await ctx.runQuery(

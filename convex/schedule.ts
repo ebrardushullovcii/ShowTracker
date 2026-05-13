@@ -704,7 +704,7 @@ export const hydrateScheduleRange = action({
     const safeDays = Math.max(1, Math.min(args.days, 42));
     const dateKeys = Array.from({ length: safeDays }, (_, index) => {
       const date = new Date(startDate);
-      date.setDate(startDate.getDate() + index);
+      date.setUTCDate(startDate.getUTCDate() + index);
       return formatDate(date);
     });
 
