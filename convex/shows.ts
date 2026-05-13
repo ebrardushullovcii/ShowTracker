@@ -949,6 +949,8 @@ function isHomeFeedNotStartedSectionEntry(
 ) {
   return (
     !isCompletedWatchlistEntry(entry) &&
+    typeof entry.remainingEpisodes === "number" &&
+    entry.remainingEpisodes > 0 &&
     !hasWatchlistProgress(entry) &&
     entry.status !== "watching" &&
     entry.status !== "paused" &&
@@ -1608,7 +1610,7 @@ async function getHomeFeedSection(ctx: QueryCtx, args: {
   }
 
   const typedUserId = userId as Id<"users">;
-  const safeLimit = Math.max(1, Math.min(args.limit ?? HOME_FEED_MAX_RESULTS, 120));
+  const safeLimit = Math.max(1, args.limit ?? HOME_FEED_MAX_RESULTS);
   const perStatusLimit = Math.max(safeLimit, 20);
   const { globalRelationMode, pausedSectionMode, relationModeByRoot } =
     await getHomeFeedSettings(ctx, typedUserId);
@@ -1616,8 +1618,8 @@ async function getHomeFeedSection(ctx: QueryCtx, args: {
     args.section === "active"
       ? ["watching", "completed", "plan_to_watch"]
       : args.section === "paused"
-        ? ["paused", "watching", "completed", "plan_to_watch"]
-        : ["plan_to_watch", "watching", "completed", "paused"];
+        ? ["paused"]
+        : ["plan_to_watch"];
   const projections = await getHomeFeedProjectionCandidates(ctx, {
     userId: typedUserId,
     mediaFilter: args.mediaFilter,

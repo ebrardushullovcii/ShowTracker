@@ -71,7 +71,7 @@ const DAY_IN_MS = 1000 * 60 * 60 * 24;
 const GRID_GAP = 12;
 const INITIAL_UPCOMING_HYDRATION_TIMEOUT_MS = 8000;
 const TMDB_AIRED_LOOKUP_BATCH_SIZE = 8;
-const WATCHLIST_FUTURE_LOOKAHEAD_DAYS = 365;
+const WATCHLIST_FUTURE_LOOKAHEAD_DAYS = 90;
 const homeModeOptions = [
   { value: "watchlist" as const, label: "Watchlist" },
   { value: "upcoming" as const, label: "Schedule" },
