@@ -162,6 +162,10 @@ const homePausedSectionModeValidator = v.union(
   v.literal("auto_paused_only"),
   v.literal("all_paused")
 );
+const watchlistAirtimeModeValidator = v.union(
+  v.literal("same_day"),
+  v.literal("after_airtime")
+);
 const homeFeedMediaFilterValidator = v.optional(
   v.union(v.literal("tv"), v.literal("anime"))
 );
@@ -172,12 +176,14 @@ type AnimeCompletionBehavior =
   | "auto_open_next"
   | "auto_pause_others_keep_next";
 type HomePausedSectionMode = "auto_paused_only" | "all_paused";
+type WatchlistAirtimeMode = "same_day" | "after_airtime";
 type HomeFeedMediaFilter = "tv" | "anime" | undefined;
 type HomeFeedSection = "active" | "paused" | "not_started";
 
 const DEFAULT_ANIME_HOME_RELATION_MODE: AnimeHomeRelationMode = "core_only";
 const DEFAULT_ANIME_COMPLETION_BEHAVIOR: AnimeCompletionBehavior = "ask_every_time";
 const DEFAULT_HOME_PAUSED_SECTION_MODE: HomePausedSectionMode = "auto_paused_only";
+const DEFAULT_WATCHLIST_AIRTIME_MODE: WatchlistAirtimeMode = "same_day";
 
 function isAniListRateLimitError(error: unknown): error is { status: number } {
   return !!error && typeof error === "object" && "status" in error && error.status === 429;
@@ -1826,10 +1832,14 @@ async function getUserAnimeHomeSettingsFromDb(
     pausedSectionMode:
       (existing?.pausedSectionMode as HomePausedSectionMode | undefined) ??
       DEFAULT_HOME_PAUSED_SECTION_MODE,
+    watchlistAirtimeMode:
+      (existing?.watchlistAirtimeMode as WatchlistAirtimeMode | undefined) ??
+      DEFAULT_WATCHLIST_AIRTIME_MODE,
   } as {
     relationMode: AnimeHomeRelationMode;
     completionBehavior: AnimeCompletionBehavior;
     pausedSectionMode: HomePausedSectionMode;
+    watchlistAirtimeMode: WatchlistAirtimeMode;
   };
 }
 
@@ -3397,6 +3407,7 @@ export const setUserAnimeHomeSettings = mutation({
     relationMode: v.optional(animeHomeRelationModeValidator),
     completionBehavior: v.optional(animeCompletionBehaviorValidator),
     pausedSectionMode: v.optional(homePausedSectionModeValidator),
+    watchlistAirtimeMode: v.optional(watchlistAirtimeModeValidator),
     requestStartedAt: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
@@ -3414,11 +3425,15 @@ export const setUserAnimeHomeSettings = mutation({
           pausedSectionMode:
             (existing.pausedSectionMode as HomePausedSectionMode | undefined) ??
             DEFAULT_HOME_PAUSED_SECTION_MODE,
+          watchlistAirtimeMode:
+            (existing.watchlistAirtimeMode as WatchlistAirtimeMode | undefined) ??
+            DEFAULT_WATCHLIST_AIRTIME_MODE,
         }
       : {
           relationMode: DEFAULT_ANIME_HOME_RELATION_MODE,
           completionBehavior: DEFAULT_ANIME_COMPLETION_BEHAVIOR,
           pausedSectionMode: DEFAULT_HOME_PAUSED_SECTION_MODE,
+          watchlistAirtimeMode: DEFAULT_WATCHLIST_AIRTIME_MODE,
         };
     if (
       existing &&
@@ -3432,6 +3447,7 @@ export const setUserAnimeHomeSettings = mutation({
       relationMode: args.relationMode ?? current.relationMode,
       completionBehavior: args.completionBehavior ?? current.completionBehavior,
       pausedSectionMode: args.pausedSectionMode ?? current.pausedSectionMode,
+      watchlistAirtimeMode: args.watchlistAirtimeMode ?? current.watchlistAirtimeMode,
       updatedAt: Date.now(),
     };
 
@@ -3448,6 +3464,7 @@ export const setUserAnimeHomeSettings = mutation({
       relationMode: next.relationMode,
       completionBehavior: next.completionBehavior,
       pausedSectionMode: next.pausedSectionMode,
+      watchlistAirtimeMode: next.watchlistAirtimeMode,
     };
   },
 });

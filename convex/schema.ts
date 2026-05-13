@@ -65,6 +65,9 @@ export default defineSchema({
     pausedSectionMode: v.optional(
       v.union(v.literal("auto_paused_only"), v.literal("all_paused"))
     ),
+    watchlistAirtimeMode: v.optional(
+      v.union(v.literal("same_day"), v.literal("after_airtime"))
+    ),
     updatedAt: v.number(),
   }).index("by_user", ["userId"]),
   userAnimeFranchiseSettings: defineTable({

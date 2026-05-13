@@ -29,6 +29,7 @@ import { toHttpsImageUrl } from "@/lib/image-url";
 type HomeTab = "watchlist" | "upcoming";
 type HomeMediaFilter = "all" | "tv" | "anime";
 type HomePausedSectionMode = "auto_paused_only" | "all_paused";
+type WatchlistAirtimeMode = "same_day" | "after_airtime";
 
 type WatchlistItem = {
   id: string;
@@ -1567,6 +1568,9 @@ export function HomeScreen() {
   const pausedSectionMode =
     (homeSettings?.pausedSectionMode as HomePausedSectionMode | undefined) ??
     "auto_paused_only";
+  const watchlistAirtimeMode =
+    (homeSettings?.watchlistAirtimeMode as WatchlistAirtimeMode | undefined) ??
+    "same_day";
 
   const hydrateRange = useCallback(
     async (startDate: string, days: number) => {
@@ -1642,14 +1646,18 @@ export function HomeScreen() {
     [activeFeedItems, notStartedFeedItems, pausedFeedItems]
   );
 
-  const futureUpcomingCountByRoute = useMemo(() => {
-    const counts = new Map<string, number>();
+  const unavailableUpcomingCountByRoute = useMemo(() => {
+    const counts = new Map<string, { futureCount: number; unavailableCount: number }>();
 
     for (const entry of (watchlistFutureUpcomingCounts ?? []) as {
       routeId: string;
       futureCount: number;
+      unavailableCount?: number;
     }[]) {
-      counts.set(entry.routeId, entry.futureCount);
+      counts.set(entry.routeId, {
+        futureCount: entry.futureCount,
+        unavailableCount: entry.unavailableCount ?? entry.futureCount,
+      });
     }
 
     return counts;
@@ -1750,13 +1758,20 @@ export function HomeScreen() {
   const filteredWatchlist = useMemo(() => {
     return activeFeedItems.filter((item) => {
       const routeId = item.id;
-      const futureUpcomingCount = routeId
-        ? futureUpcomingCountByRoute.get(routeId) ?? 0
-        : 0;
+      const upcomingCounts = routeId
+        ? unavailableUpcomingCountByRoute.get(routeId)
+        : undefined;
+      const unavailableUpcomingCount =
+        watchlistAirtimeMode === "after_airtime"
+          ? upcomingCounts?.unavailableCount ?? 0
+          : upcomingCounts?.futureCount ?? 0;
+      const hasTmdbAiredEpisodeFallback =
+        item.mediaType === "tv" && typeof item.tmdbId === "number";
       const allRemainingEpisodesAreFuture =
+        (!hasTmdbAiredEpisodeFallback || watchlistAirtimeMode === "after_airtime") &&
         typeof item.remainingEpisodes === "number" &&
         item.remainingEpisodes > 0 &&
-        futureUpcomingCount >= item.remainingEpisodes;
+        unavailableUpcomingCount >= item.remainingEpisodes;
 
       if (item.status === "paused") return false;
       if (item.status === "dropped") return false;
@@ -1791,10 +1806,11 @@ export function HomeScreen() {
       return true;
     });
   }, [
-    futureUpcomingCountByRoute,
+    unavailableUpcomingCountByRoute,
     mediaFilter,
     tmdbAiredEpisodeCountById,
     activeFeedItems,
+    watchlistAirtimeMode,
   ]);
 
   const pausedSectionWatchlist = useMemo(() => {

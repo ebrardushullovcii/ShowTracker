@@ -24,6 +24,7 @@ type AnimeCompletionBehavior =
   | "auto_open_next"
   | "auto_pause_others_keep_next";
 type HomePausedSectionMode = "auto_paused_only" | "all_paused";
+type WatchlistAirtimeMode = "same_day" | "after_airtime";
 
 const TRACKING_REPAIR_MAX_BATCHES = 6;
 const ANIME_SETTINGS_UPDATE_TIMEOUT_MS = 12000;
@@ -156,6 +157,8 @@ export default function ProfileSettingsScreen() {
     (animeHomeSettings?.completionBehavior as AnimeCompletionBehavior | undefined) ?? "ask_every_time";
   const homePausedSectionMode =
     (animeHomeSettings?.pausedSectionMode as HomePausedSectionMode | undefined) ?? "auto_paused_only";
+  const watchlistAirtimeMode =
+    (animeHomeSettings?.watchlistAirtimeMode as WatchlistAirtimeMode | undefined) ?? "same_day";
 
   const close = useCallback(() => {
     if (router.canDismiss()) {
@@ -170,6 +173,7 @@ export default function ProfileSettingsScreen() {
       relationMode?: AnimeHomeFranchiseMode;
       completionBehavior?: AnimeCompletionBehavior;
       pausedSectionMode?: HomePausedSectionMode;
+      watchlistAirtimeMode?: WatchlistAirtimeMode;
     }) => {
       if (isSavingAnimeSettings) return;
       setIsSavingAnimeSettings(true);
@@ -311,6 +315,23 @@ export default function ProfileSettingsScreen() {
         ],
       },
       {
+        title: "Home Watchlist",
+        options: [
+          {
+            title: "Show Same-Day Episodes",
+            detail: "Show episodes on Home once their calendar day starts.",
+            selected: watchlistAirtimeMode === "same_day",
+            onPress: () => updateAnimeSettings({ watchlistAirtimeMode: "same_day" }),
+          },
+          {
+            title: "Wait Until Airtime",
+            detail: "Hide same-day episodes until the scheduled time passes.",
+            selected: watchlistAirtimeMode === "after_airtime",
+            onPress: () => updateAnimeSettings({ watchlistAirtimeMode: "after_airtime" }),
+          },
+        ],
+      },
+      {
         title: "Home Paused Shelf",
         options: [
           {
@@ -328,7 +349,13 @@ export default function ProfileSettingsScreen() {
         ],
       },
     ],
-    [animeCompletionBehavior, animeHomeFranchiseMode, homePausedSectionMode, updateAnimeSettings]
+    [
+      animeCompletionBehavior,
+      animeHomeFranchiseMode,
+      homePausedSectionMode,
+      updateAnimeSettings,
+      watchlistAirtimeMode,
+    ]
   );
 
   const wrapSettings = (content: ReactElement) => {

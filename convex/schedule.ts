@@ -982,8 +982,9 @@ export const getFutureUpcomingCountsForWatchlist = query({
           )
           .collect();
 
-    const counts = new Map<string, number>();
+    const counts = new Map<string, { futureCount: number; unavailableCount: number }>();
     const dedupe = new Set<string>();
+    const nowMs = Date.now();
 
     for (const row of rows) {
       const entries = parseCachedScheduleEntries(row.episodes);
@@ -1010,20 +1011,35 @@ export const getFutureUpcomingCountsForWatchlist = query({
           (startOfDay(bucketDate).getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
         );
 
-        if (daysUntil <= 0) {
-          continue;
-        }
-
         const uniqueKey = `${tracked.watchlistId}:${dayKey}:${entry.episode.seasonNumber}:${entry.episode.episodeNumber}`;
         if (dedupe.has(uniqueKey)) continue;
         dedupe.add(uniqueKey);
 
-        counts.set(tracked.watchlistId, (counts.get(tracked.watchlistId) ?? 0) + 1);
+        const airtimeMs = getEpisodeAirtimeTimestamp(entry.episode.airDate);
+        const isFutureDay = daysUntil > 0;
+        const isTodayBeforeAirtime = daysUntil === 0 && airtimeMs !== null && airtimeMs > nowMs;
+        if (!isFutureDay && !isTodayBeforeAirtime) {
+          continue;
+        }
+
+        const existing = counts.get(tracked.watchlistId) ?? {
+          futureCount: 0,
+          unavailableCount: 0,
+        };
+        if (isFutureDay) {
+          existing.futureCount += 1;
+        }
+        existing.unavailableCount += 1;
+        counts.set(tracked.watchlistId, existing);
       }
     }
 
     return Array.from(counts.entries())
       .sort(([routeIdA], [routeIdB]) => routeIdA.localeCompare(routeIdB))
-      .map(([routeId, futureCount]) => ({ routeId, futureCount }));
+      .map(([routeId, count]) => ({
+        routeId,
+        futureCount: count.futureCount,
+        unavailableCount: count.unavailableCount,
+      }));
   },
 });
