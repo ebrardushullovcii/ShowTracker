@@ -307,14 +307,9 @@ function findTrackedScheduleMatch<T extends {
     return null;
   }
 
-  const tvTitleMatch = byTitle.get(getTitleLookupKey("tv", entry.normalizedTitle));
-  if (tvTitleMatch) {
-    return tvTitleMatch;
-  }
-
   const titleCandidates = trackedShows.filter(
     (tracked) =>
-      (tracked.mediaType === mediaType || tracked.mediaType === "tv") &&
+      tracked.mediaType === mediaType &&
       isAnimeSeasonTitleVariant(entry.normalizedTitle, tracked.normalizedTitle)
   );
 
@@ -1235,7 +1230,7 @@ export const ensureHomeWatchlistScheduleSignals = action({
     const now = new Date();
     const today = startOfDay(now);
     const todayKey = formatDate(today);
-    const maintenanceKey = `home-schedule-signal:v2:${userId}:${todayKey}`;
+    const maintenanceKey = `home-schedule-signal:v3:${userId}:${todayKey}`;
     const existingCursor = await ctx.runQuery(internal.shows.getMaintenanceCursor, {
       key: maintenanceKey,
     });

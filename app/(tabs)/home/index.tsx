@@ -1828,7 +1828,10 @@ export function HomeScreen() {
       const hasAvailableScheduleSignal =
         typeof item.newEpisodeSignalAt === "number" &&
         item.newEpisodeSignalAt > (item.lastWatchedAt ?? 0);
+      const hasTmdbAiredEpisodeFallback =
+        item.mediaType === "tv" && typeof item.tmdbId === "number";
       const allRemainingEpisodesAreFuture =
+        (!hasTmdbAiredEpisodeFallback || watchlistAirtimeMode === "after_airtime") &&
         typeof item.remainingEpisodes === "number" &&
         item.remainingEpisodes > 0 &&
         availableScheduleCount <= 0 &&

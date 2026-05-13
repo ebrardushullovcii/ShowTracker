@@ -953,10 +953,7 @@ function isCompletedWatchlistEntry(
     return true;
   }
 
-  if (
-    entry.status === "watching" &&
-    (entry.mediaType === "tv" || hasAvailableScheduleSignal(entry))
-  ) {
+  if (entry.status === "watching" && hasAvailableScheduleSignal(entry)) {
     return false;
   }
 
