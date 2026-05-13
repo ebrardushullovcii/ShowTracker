@@ -65,6 +65,16 @@ type HomeScheduleSignalMatch = {
   matchedEpisodes: number;
 };
 
+type HomeScheduleSignalCheck = {
+  userShowId: Id<"userShows">;
+  feedProjectionId: Id<"feedProjections">;
+};
+
+type HomeScheduleSignalEvaluation = {
+  matches: HomeScheduleSignalMatch[];
+  checked: HomeScheduleSignalCheck[];
+};
+
 type HomeScheduleSignalResult = {
   skipped: boolean;
   reason?: "unauthenticated" | "already_ran_today" | "schedule_hydration_failed";
@@ -75,6 +85,8 @@ type HomeScheduleSignalResult = {
   matchedEpisodes?: number;
   patchedUserShows?: number;
   patchedFeedProjections?: number;
+  clearedUserShows?: number;
+  clearedFeedProjections?: number;
 };
 
 export const getRateLimitState = internalQuery({
@@ -855,7 +867,7 @@ export const getHomeScheduleSignalMatches = internalQuery({
     availableDate: v.string(),
     nowMs: v.number(),
   },
-  handler: async (ctx, args): Promise<HomeScheduleSignalMatch[]> => {
+  handler: async (ctx, args): Promise<HomeScheduleSignalEvaluation> => {
     const range = getScheduleRangeKeys(args.startDate, args.endDate);
     const availableDate = parseRequiredScheduleDateKey(
       args.availableDate,
@@ -889,6 +901,10 @@ export const getHomeScheduleSignalMatches = internalQuery({
       .map((projection) => ({
         projectionId: projection._id,
         userShowId: projection.userShowId,
+        showId: projection.showId,
+        remainingEpisodes: projection.remainingEpisodes,
+        lastWatchedAt: projection.lastWatchedAt,
+        newEpisodeSignalAt: projection.newEpisodeSignalAt,
         normalizedTitle: normalizeTitle(projection.title),
         mediaType: projection.mediaType as "tv" | "anime",
         anilistId: projection.anilistId,
@@ -896,7 +912,7 @@ export const getHomeScheduleSignalMatches = internalQuery({
       }));
 
     if (trackedShows.length === 0) {
-      return [];
+      return { matches: [], checked: [] };
     }
 
     const byExternalKey = new Map<string, (typeof trackedShows)[number]>();
@@ -922,10 +938,13 @@ export const getHomeScheduleSignalMatches = internalQuery({
       )
       .collect();
 
-    const matches = new Map<
-      string,
-      HomeScheduleSignalMatch & { latestEpisodeKey: string }
-    >();
+    const candidates: Array<{
+      tracked: (typeof trackedShows)[number];
+      seasonNumber: number;
+      episodeNumber: number;
+      signalAt: number;
+      latestEpisodeKey: string;
+    }> = [];
     const dedupe = new Set<string>();
 
     for (const row of rows) {
@@ -955,7 +974,7 @@ export const getHomeScheduleSignalMatches = internalQuery({
           continue;
         }
 
-        const uniqueKey = `${tracked.projectionId}:${row.date}:${entry.episode.episodeNumber}`;
+        const uniqueKey = `${tracked.projectionId}:${row.date}:${entry.episode.seasonNumber}:${entry.episode.episodeNumber}`;
         if (dedupe.has(uniqueKey)) {
           continue;
         }
@@ -970,40 +989,107 @@ export const getHomeScheduleSignalMatches = internalQuery({
           continue;
         }
         const signalAt = airtimeMs ?? Math.min(bucketDayStartMs, args.nowMs);
-        const existing = matches.get(tracked.projectionId);
         const latestEpisodeKey = `${row.date}:${entry.episode.seasonNumber}:${entry.episode.episodeNumber}`;
 
-        if (!existing) {
-          matches.set(tracked.projectionId, {
-            userShowId: tracked.userShowId,
-            feedProjectionId: tracked.projectionId,
-            signalAt,
-            matchedEpisodes: 1,
-            latestEpisodeKey,
-          });
-          continue;
-        }
-
-        existing.matchedEpisodes += 1;
-        if (
-          signalAt > existing.signalAt ||
-          (signalAt === existing.signalAt && latestEpisodeKey > existing.latestEpisodeKey)
-        ) {
-          existing.signalAt = signalAt;
-          existing.latestEpisodeKey = latestEpisodeKey;
-        }
+        candidates.push({
+          tracked,
+          seasonNumber: entry.episode.seasonNumber,
+          episodeNumber: entry.episode.episodeNumber,
+          signalAt,
+          latestEpisodeKey,
+        });
       }
     }
 
-    return Array.from(matches.values())
-      .sort((a, b) => b.signalAt - a.signalAt)
-      .slice(0, HOME_SIGNAL_MAX_MATCHES)
-      .map(({ latestEpisodeKey: _latestEpisodeKey, ...match }) => match);
+    const candidateShowIds = Array.from(
+      new Set(candidates.map((candidate) => candidate.tracked.showId))
+    );
+    const watchedEpisodeKeys = new Set<string>();
+    await Promise.all(
+      candidateShowIds.map(async (showId) => {
+        const watchedEpisodes = await ctx.db
+          .query("watchedEpisodes")
+          .withIndex("by_user_show", (q) =>
+            q.eq("userId", args.userId).eq("showId", showId)
+          )
+          .collect();
+
+        for (const watched of watchedEpisodes) {
+          watchedEpisodeKeys.add(`${showId}:${watched.season}:${watched.episode}`);
+        }
+      })
+    );
+
+    const matches = new Map<
+      string,
+      HomeScheduleSignalMatch & { latestEpisodeKey: string }
+    >();
+    const checkedByProjection = new Map<string, HomeScheduleSignalCheck>();
+
+    for (const tracked of trackedShows) {
+      if (
+        typeof tracked.newEpisodeSignalAt === "number" &&
+        tracked.newEpisodeSignalAt > tracked.lastWatchedAt &&
+        typeof tracked.remainingEpisodes === "number" &&
+        tracked.remainingEpisodes <= 0
+      ) {
+        checkedByProjection.set(tracked.projectionId, {
+          userShowId: tracked.userShowId,
+          feedProjectionId: tracked.projectionId,
+        });
+      }
+    }
+
+    for (const candidate of candidates) {
+      checkedByProjection.set(candidate.tracked.projectionId, {
+        userShowId: candidate.tracked.userShowId,
+        feedProjectionId: candidate.tracked.projectionId,
+      });
+
+      if (
+        watchedEpisodeKeys.has(
+          `${candidate.tracked.showId}:${candidate.seasonNumber}:${candidate.episodeNumber}`
+        )
+      ) {
+        continue;
+      }
+
+      const existing = matches.get(candidate.tracked.projectionId);
+      if (!existing) {
+        matches.set(candidate.tracked.projectionId, {
+          userShowId: candidate.tracked.userShowId,
+          feedProjectionId: candidate.tracked.projectionId,
+          signalAt: candidate.signalAt,
+          matchedEpisodes: 1,
+          latestEpisodeKey: candidate.latestEpisodeKey,
+        });
+        continue;
+      }
+
+      existing.matchedEpisodes += 1;
+      if (
+        candidate.signalAt > existing.signalAt ||
+        (candidate.signalAt === existing.signalAt &&
+          candidate.latestEpisodeKey > existing.latestEpisodeKey)
+      ) {
+        existing.signalAt = candidate.signalAt;
+        existing.latestEpisodeKey = candidate.latestEpisodeKey;
+      }
+    }
+
+    return {
+      matches: Array.from(matches.values())
+        .sort((a, b) => b.signalAt - a.signalAt)
+        .slice(0, HOME_SIGNAL_MAX_MATCHES)
+        .map(({ latestEpisodeKey: _latestEpisodeKey, ...match }) => match),
+      checked: Array.from(checkedByProjection.values()).slice(0, HOME_SIGNAL_MAX_MATCHES * 2),
+    };
   },
 });
 
 export const applyHomeScheduleSignals = internalMutation({
   args: {
+    userId: v.id("users"),
     matches: v.array(
       v.object({
         userShowId: v.id("userShows"),
@@ -1012,11 +1098,25 @@ export const applyHomeScheduleSignals = internalMutation({
         matchedEpisodes: v.number(),
       })
     ),
+    checked: v.array(
+      v.object({
+        userShowId: v.id("userShows"),
+        feedProjectionId: v.id("feedProjections"),
+      })
+    ),
   },
   handler: async (ctx: MutationCtx, args) => {
     const now = Date.now();
     let patchedUserShows = 0;
     let patchedFeedProjections = 0;
+    let clearedUserShows = 0;
+    let clearedFeedProjections = 0;
+    const validSignalProjectionIds = new Set(
+      args.matches.map((match) => match.feedProjectionId)
+    );
+    const validSignalUserShowIds = new Set(
+      args.matches.map((match) => match.userShowId)
+    );
 
     for (const match of args.matches.slice(0, HOME_SIGNAL_MAX_MATCHES)) {
       const [userShow, projection] = await Promise.all([
@@ -1026,6 +1126,7 @@ export const applyHomeScheduleSignals = internalMutation({
 
       if (
         userShow &&
+        userShow.userId === args.userId &&
         ((userShow.newEpisodeSignalAt ?? 0) < match.signalAt)
       ) {
         await ctx.db.patch(userShow._id, {
@@ -1035,6 +1136,10 @@ export const applyHomeScheduleSignals = internalMutation({
       }
 
       if (!projection) {
+        continue;
+      }
+
+      if (projection.userId !== args.userId) {
         continue;
       }
 
@@ -1062,9 +1167,56 @@ export const applyHomeScheduleSignals = internalMutation({
       patchedFeedProjections += 1;
     }
 
+    for (const checked of args.checked.slice(0, HOME_SIGNAL_MAX_MATCHES * 2)) {
+      if (
+        validSignalProjectionIds.has(checked.feedProjectionId) ||
+        validSignalUserShowIds.has(checked.userShowId)
+      ) {
+        continue;
+      }
+
+      const [userShow, projection] = await Promise.all([
+        ctx.db.get(checked.userShowId),
+        ctx.db.get(checked.feedProjectionId),
+      ]);
+
+      if (!projection || projection.userId !== args.userId) {
+        continue;
+      }
+
+      const projectionHasStaleSignal =
+        typeof projection.newEpisodeSignalAt === "number" &&
+        projection.newEpisodeSignalAt > projection.lastWatchedAt &&
+        typeof projection.remainingEpisodes === "number" &&
+        projection.remainingEpisodes <= 0;
+      if (!projectionHasStaleSignal) {
+        continue;
+      }
+
+      if (
+        userShow &&
+        userShow.userId === args.userId &&
+        typeof userShow.newEpisodeSignalAt === "number"
+      ) {
+        await ctx.db.patch(userShow._id, {
+          newEpisodeSignalAt: undefined,
+        });
+        clearedUserShows += 1;
+      }
+
+      await ctx.db.patch(projection._id, {
+        newEpisodeSignalAt: undefined,
+        homeSortAt: projection.lastWatchedAt,
+        updatedAt: now,
+      });
+      clearedFeedProjections += 1;
+    }
+
     return {
       patchedUserShows,
       patchedFeedProjections,
+      clearedUserShows,
+      clearedFeedProjections,
     };
   },
 });
@@ -1083,7 +1235,7 @@ export const ensureHomeWatchlistScheduleSignals = action({
     const now = new Date();
     const today = startOfDay(now);
     const todayKey = formatDate(today);
-    const maintenanceKey = `home-schedule-signal:${userId}:${todayKey}`;
+    const maintenanceKey = `home-schedule-signal:v2:${userId}:${todayKey}`;
     const existingCursor = await ctx.runQuery(internal.shows.getMaintenanceCursor, {
       key: maintenanceKey,
     });
@@ -1116,7 +1268,7 @@ export const ensureHomeWatchlistScheduleSignals = action({
 
     const matchStartDate = formatDate(addUtcDays(today, -HOME_SIGNAL_PAST_CACHE_DAYS));
     const matchEndDate = formatDate(addUtcDays(today, HOME_SIGNAL_LOOKAHEAD_DAYS));
-    const matches: HomeScheduleSignalMatch[] = await ctx.runQuery(
+    const signalEvaluation: HomeScheduleSignalEvaluation = await ctx.runQuery(
       internal.schedule.getHomeScheduleSignalMatches,
       {
         userId: userId as Id<"users">,
@@ -1130,9 +1282,15 @@ export const ensureHomeWatchlistScheduleSignals = action({
     const applied: {
       patchedUserShows: number;
       patchedFeedProjections: number;
+      clearedUserShows: number;
+      clearedFeedProjections: number;
     } = await ctx.runMutation(
       internal.schedule.applyHomeScheduleSignals,
-      { matches }
+      {
+        userId: userId as Id<"users">,
+        matches: signalEvaluation.matches,
+        checked: signalEvaluation.checked,
+      }
     );
 
     const result: HomeScheduleSignalResult = {
@@ -1140,8 +1298,8 @@ export const ensureHomeWatchlistScheduleSignals = action({
       hydratedDays: hydrateResults.length,
       refreshedDays: hydrateResults.filter((result) => !result.cached).length,
       failedHydrationDays,
-      matchedShows: matches.length,
-      matchedEpisodes: matches.reduce(
+      matchedShows: signalEvaluation.matches.length,
+      matchedEpisodes: signalEvaluation.matches.reduce(
         (sum: number, match: HomeScheduleSignalMatch) =>
           sum + match.matchedEpisodes,
         0
