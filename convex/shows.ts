@@ -22,7 +22,17 @@ import {
 import { getJikanAnime } from "@/lib/api/jikan";
 import { normalizeTmdbShowDetails } from "@/lib/api/normalize";
 import { getTmdbSeasonDetails, getTmdbShowDetails } from "@/lib/api/tmdb";
-import type { NormalizedShow } from "@/lib/api/types";
+import type {
+  ExternalAliasConfidence,
+  ExternalAliasProvider,
+  NormalizedExternalAlias,
+  NormalizedShow,
+} from "@/lib/api/types";
+import {
+  collectDirectIdentityAliases,
+  dedupeIdentityAliases,
+  normalizeIdentityAliasExternalId,
+} from "@/lib/api/identity-aliases";
 
 const RELATION_SYNC_THROTTLE_MS = 1000 * 60 * 60 * 24 * 30;
 const FRANCHISE_AUTO_SYNC_FRESH_MS = 1000 * 60 * 60 * 24 * 30;
@@ -98,6 +108,34 @@ const COMPLETED_SHOW_METADATA_REFRESH_CURSOR_KEY = "completed-show-refresh";
 const COMPLETED_SHOW_RESUME_MAX_ROUNDS = 10;
 const RELATION_INCLUDE_TYPES = new Set(["PREQUEL", "SEQUEL"]);
 
+const externalAliasProviderValidator = v.union(
+  v.literal("tmdb"),
+  v.literal("tvdb"),
+  v.literal("imdb"),
+  v.literal("anilist"),
+  v.literal("mal"),
+  v.literal("tvmaze"),
+  v.literal("twitter"),
+  v.literal("instagram"),
+  v.literal("facebook"),
+  v.literal("wikidata"),
+  v.literal("official_site"),
+  v.literal("crunchyroll")
+);
+
+const externalAliasConfidenceValidator = v.union(
+  v.literal("verified"),
+  v.literal("provider"),
+  v.literal("heuristic")
+);
+
+const externalAliasInput = {
+  provider: externalAliasProviderValidator,
+  externalId: v.string(),
+  source: v.optional(v.string()),
+  confidence: v.optional(externalAliasConfidenceValidator),
+};
+
 const showInput = {
   tmdbId: v.optional(v.number()),
   tvdbId: v.optional(v.number()),
@@ -125,6 +163,7 @@ const showInput = {
   rootAnilistId: v.optional(v.number()),
   relatedAnilistIds: v.optional(v.array(v.number())),
   lastRelationSyncAt: v.optional(v.number()),
+  externalAliases: v.optional(v.array(v.object(externalAliasInput))),
   lastUpdated: v.number(),
 };
 
@@ -223,6 +262,7 @@ function buildFeedProjectionFields(
     posterUrl: show.posterUrl,
     backdropUrl: show.backdropUrl,
     tmdbId: show.tmdbId,
+    tvdbId: show.tvdbId,
     anilistId: show.anilistId,
     malId: show.malId,
     tvmazeId: show.tvmazeId,
@@ -261,6 +301,7 @@ const FEED_PROJECTION_COMPARE_KEYS: Array<
   "posterUrl",
   "backdropUrl",
   "tmdbId",
+  "tvdbId",
   "anilistId",
   "malId",
   "tvmazeId",
@@ -340,6 +381,14 @@ async function deleteFeedProjectionForUserShow(
 
   if (existing) {
     await ctx.db.delete(existing._id);
+  }
+
+  const scheduleProjections = await ctx.db
+    .query("userScheduleProjections")
+    .withIndex("by_userShow", (q) => q.eq("userShowId", userShowId))
+    .collect();
+  for (const projection of scheduleProjections) {
+    await ctx.db.delete(projection._id);
   }
 }
 
@@ -2084,7 +2133,8 @@ function sortFiniteTimestamps(values: number[]) {
 function buildShowPatch(
   incoming: ShowPayload,
   existing?: Doc<"shows">
-): ShowPayload {
+): Omit<ShowPayload, "externalAliases"> {
+  const { externalAliases: _externalAliases, ...incomingFields } = incoming;
   const mergedRelatedIds = mergeNumberArrays(
     existing?.relatedAnilistIds,
     incoming.relatedAnilistIds
@@ -2098,7 +2148,7 @@ function buildShowPatch(
       : undefined);
 
   return {
-    ...incoming,
+    ...incomingFields,
     titleLower: incoming.title.toLowerCase().trim(),
     tmdbId: incoming.tmdbId ?? existing?.tmdbId,
     tvdbId: incoming.tvdbId ?? existing?.tvdbId,
@@ -2144,7 +2194,102 @@ type ShowPayload = {
   relatedAnilistIds?: number[];
   lastRelationSyncAt?: number;
   lastUpdated: number;
+  externalAliases?: NormalizedExternalAlias[];
 };
+
+function normalizeAliasForStorage(alias: NormalizedExternalAlias) {
+  const externalId = normalizeIdentityAliasExternalId(alias.provider, alias.externalId);
+  if (!externalId) {
+    return null;
+  }
+
+  return {
+    provider: alias.provider,
+    externalId,
+    source: alias.source,
+    confidence: alias.confidence ?? "provider",
+  } satisfies {
+    provider: ExternalAliasProvider;
+    externalId: string;
+    source?: string;
+    confidence: ExternalAliasConfidence;
+  };
+}
+
+function collectShowIdentityAliases(show: ShowPayload | Doc<"shows">) {
+  return dedupeIdentityAliases([
+    ...("externalAliases" in show ? (show.externalAliases ?? []) : []),
+    ...collectDirectIdentityAliases(
+      {
+        tmdbId: show.tmdbId,
+        tvdbId: show.tvdbId,
+        imdbId: show.imdbId,
+        anilistId: show.anilistId,
+        malId: show.malId,
+        tvmazeId: show.tvmazeId,
+      },
+      "show_record"
+    ),
+  ])
+    .map(normalizeAliasForStorage)
+    .filter((alias): alias is NonNullable<typeof alias> => alias !== null);
+}
+
+async function upsertShowIdentityAliasesForPayload(
+  ctx: MutationCtx,
+  showId: Id<"shows">,
+  show: ShowPayload | Doc<"shows">
+) {
+  const aliases = collectShowIdentityAliases(show);
+  if (aliases.length === 0) {
+    return 0;
+  }
+
+  const now = Date.now();
+  let upserted = 0;
+
+  for (const alias of aliases) {
+    const existing = await ctx.db
+      .query("showIdentityAliases")
+      .withIndex("by_show_provider_external", (q) =>
+        q
+          .eq("showId", showId)
+          .eq("provider", alias.provider)
+          .eq("externalId", alias.externalId)
+      )
+      .unique();
+
+    if (existing) {
+      if (
+        existing.mediaType !== show.mediaType ||
+        existing.source !== alias.source ||
+        existing.confidence !== alias.confidence
+      ) {
+        await ctx.db.patch(existing._id, {
+          mediaType: show.mediaType,
+          source: alias.source,
+          confidence: alias.confidence,
+          updatedAt: now,
+        });
+      }
+      continue;
+    }
+
+    await ctx.db.insert("showIdentityAliases", {
+      showId,
+      mediaType: show.mediaType,
+      provider: alias.provider,
+      externalId: alias.externalId,
+      source: alias.source,
+      confidence: alias.confidence,
+      createdAt: now,
+      updatedAt: now,
+    });
+    upserted += 1;
+  }
+
+  return upserted;
+}
 
 async function getCurrentUserId(ctx: QueryCtx | MutationCtx | ActionCtx) {
   const userId = await getAuthUserId(ctx);
@@ -2724,9 +2869,18 @@ async function ensureShowRecordId(
   const payload = buildShowPatch(args, existing ?? undefined);
   if (existing) {
     await ctx.db.patch(existing._id, payload);
+    await upsertShowIdentityAliasesForPayload(ctx, existing._id, {
+      ...args,
+      ...payload,
+    });
     return existing._id;
   }
-  return ctx.db.insert("shows", payload);
+  const showId = await ctx.db.insert("shows", payload);
+  await upsertShowIdentityAliasesForPayload(ctx, showId, {
+    ...args,
+    ...payload,
+  });
+  return showId;
 }
 
 async function ensureShow(
@@ -2835,6 +2989,7 @@ function buildShowPayloadFromNormalized(
     rootAnilistId: show.rootAnilistId,
     relatedAnilistIds: show.relatedAnilistIds,
     lastRelationSyncAt: show.lastRelationSyncAt,
+    externalAliases: show.externalAliases,
     lastUpdated: Date.now(),
     ...overrides,
   };
@@ -3839,6 +3994,10 @@ export const upsertShowByInternalId = internalMutation({
 
     const payload = buildShowPatch(args.show, existing);
     await ctx.db.patch(args.showId, payload);
+    await upsertShowIdentityAliasesForPayload(ctx, args.showId, {
+      ...args.show,
+      ...payload,
+    });
     return args.showId;
   },
 });
@@ -4037,6 +4196,76 @@ export const repairShowMetadataById = internalAction({
   },
   handler: async (ctx, args): ReturnType<typeof refreshShowMetadataAndRepairTracking> => {
     return refreshShowMetadataAndRepairTracking(ctx, args.showId);
+  },
+});
+
+export const repairShowIdentityAliasesById = internalAction({
+  args: {
+    showId: v.id("shows"),
+  },
+  handler: async (
+    ctx,
+    args
+  ): Promise<{
+    refreshed: boolean;
+    reason: "ok" | "show_not_found" | "unsupported_show_source" | "refresh_failed";
+    aliasesSourceShowId: string | null;
+  }> => {
+    const show = await ctx.runQuery(internal.shows.getShowById, {
+      showId: args.showId,
+    });
+    if (!show) {
+      return {
+        refreshed: false,
+        reason: "show_not_found",
+        aliasesSourceShowId: null,
+      };
+    }
+
+    let latest: NormalizedShow | null = null;
+    try {
+      latest = await fetchLatestNormalizedShowForExistingShow(show);
+    } catch (error) {
+      console.warn("Failed to refresh show identity aliases", {
+        showId: args.showId,
+        error,
+      });
+      return {
+        refreshed: false,
+        reason: "refresh_failed",
+        aliasesSourceShowId: getShowRouteId(show),
+      };
+    }
+
+    if (!latest) {
+      return {
+        refreshed: false,
+        reason: "unsupported_show_source",
+        aliasesSourceShowId: getShowRouteId(show),
+      };
+    }
+
+    await ctx.runMutation(internal.shows.upsertShowByInternalId, {
+      showId: args.showId,
+      show: buildShowPayloadFromNormalized(latest, {
+        tvdbId: latest.tvdbId ?? show.tvdbId,
+      }),
+    });
+    await ctx.runAction(internal.shows.runRefreshProjectionsForShow, {
+      showId: args.showId,
+    });
+
+    return {
+      refreshed: true,
+      reason: "ok",
+      aliasesSourceShowId: getShowRouteId({
+        mediaType: latest.mediaType,
+        tmdbId: latest.tmdbId,
+        anilistId: latest.anilistId,
+        malId: latest.malId,
+        tvmazeId: latest.tvmazeId,
+      }),
+    };
   },
 });
 

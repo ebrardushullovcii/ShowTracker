@@ -49,6 +49,7 @@ const anilistMediaSelection = `
   season
   seasonYear
   nextAiringEpisode { episode }
+  externalLinks { id site url type }
 `;
 
 type AniListMediaType = "ANIME" | "MANGA";
@@ -56,6 +57,13 @@ type AniListMediaType = "ANIME" | "MANGA";
 export type AniListRelationEdge = {
   relationType?: string | null;
   node?: AniListMedia | null;
+};
+
+export type AniListExternalLink = {
+  id?: number | null;
+  site?: string | null;
+  url?: string | null;
+  type?: string | null;
 };
 
 export type AniListMedia = {
@@ -80,6 +88,7 @@ export type AniListMedia = {
   season?: string | null;
   seasonYear?: number | null;
   nextAiringEpisode?: { episode?: number | null } | null;
+  externalLinks?: AniListExternalLink[] | null;
   relations?: {
     edges?: AniListRelationEdge[] | null;
   } | null;

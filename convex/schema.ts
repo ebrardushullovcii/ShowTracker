@@ -2,6 +2,33 @@ import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import { authTables } from "@convex-dev/auth/server";
 
+const mediaTypeValidator = v.union(
+  v.literal("tv"),
+  v.literal("anime"),
+  v.literal("movie")
+);
+
+const identityAliasProviderValidator = v.union(
+  v.literal("tmdb"),
+  v.literal("tvdb"),
+  v.literal("imdb"),
+  v.literal("anilist"),
+  v.literal("mal"),
+  v.literal("tvmaze"),
+  v.literal("twitter"),
+  v.literal("instagram"),
+  v.literal("facebook"),
+  v.literal("wikidata"),
+  v.literal("official_site"),
+  v.literal("crunchyroll")
+);
+
+const identityAliasConfidenceValidator = v.union(
+  v.literal("verified"),
+  v.literal("provider"),
+  v.literal("heuristic")
+);
+
 export default defineSchema({
   ...authTables,
   userProfiles: defineTable({
@@ -18,7 +45,7 @@ export default defineSchema({
   userFavorites: defineTable({
     userId: v.id("users"),
     showId: v.id("shows"),
-    mediaType: v.union(v.literal("tv"), v.literal("anime"), v.literal("movie")),
+    mediaType: mediaTypeValidator,
     addedAt: v.number(),
   })
     .index("by_user", ["userId"])
@@ -85,7 +112,7 @@ export default defineSchema({
     malId: v.optional(v.number()),
     tvmazeId: v.optional(v.number()),
     imdbId: v.optional(v.string()),
-    mediaType: v.union(v.literal("tv"), v.literal("anime"), v.literal("movie")),
+    mediaType: mediaTypeValidator,
     title: v.string(),
     titleLower: v.optional(v.string()),
     overview: v.optional(v.string()),
@@ -115,6 +142,20 @@ export default defineSchema({
     .index("by_rootAnilistId", ["rootAnilistId"])
     .index("by_tvmazeId", ["tvmazeId"])
     .index("by_mediaType", ["mediaType"]),
+  showIdentityAliases: defineTable({
+    showId: v.id("shows"),
+    mediaType: mediaTypeValidator,
+    provider: identityAliasProviderValidator,
+    externalId: v.string(),
+    source: v.optional(v.string()),
+    confidence: identityAliasConfidenceValidator,
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_show", ["showId"])
+    .index("by_provider_external", ["provider", "externalId"])
+    .index("by_show_provider", ["showId", "provider"])
+    .index("by_show_provider_external", ["showId", "provider", "externalId"]),
   userShows: defineTable({
     userId: v.id("users"),
     showId: v.id("shows"),
@@ -125,9 +166,7 @@ export default defineSchema({
       v.literal("completed"),
       v.literal("plan_to_watch")
     ),
-    mediaType: v.optional(
-      v.union(v.literal("tv"), v.literal("anime"), v.literal("movie"))
-    ),
+    mediaType: v.optional(mediaTypeValidator),
     isAutoTracked: v.optional(v.boolean()),
     relationRootAnilistId: v.optional(v.number()),
     lastRelationSyncAt: v.optional(v.number()),
@@ -182,6 +221,29 @@ export default defineSchema({
     .index("by_date", ["date"])
     .index("by_date_type", ["date", "mediaType"])
     .index("by_type_date", ["mediaType", "date"]),
+  userScheduleProjections: defineTable({
+    userId: v.id("users"),
+    showId: v.id("shows"),
+    userShowId: v.id("userShows"),
+    routeId: v.string(),
+    date: v.string(),
+    sourceProvider: v.union(v.literal("tvmaze"), v.literal("anilist")),
+    sourceMediaType: v.union(v.literal("tv"), v.literal("anime")),
+    sourceShowId: v.string(),
+    showTitle: v.string(),
+    mediaType: v.union(v.literal("tv"), v.literal("anime")),
+    posterUrl: v.optional(v.string()),
+    seasonNumber: v.number(),
+    episodeNumber: v.number(),
+    episodeName: v.optional(v.string()),
+    airDate: v.optional(v.string()),
+    availableAt: v.optional(v.number()),
+    updatedAt: v.number(),
+  })
+    .index("by_user_date", ["userId", "date"])
+    .index("by_user_route_date", ["userId", "routeId", "date"])
+    .index("by_user_show_date", ["userId", "showId", "date"])
+    .index("by_userShow", ["userShowId"]),
   // Pre-computed per-user per-show projections for Home/Upcoming feeds.
   // Eliminates the N+1 join of userShows → shows on every page load.
   // Updated incrementally by mutations and scheduled refresh jobs.
@@ -192,10 +254,11 @@ export default defineSchema({
 
     // Denormalized show metadata
     title: v.string(),
-    mediaType: v.union(v.literal("tv"), v.literal("anime"), v.literal("movie")),
+    mediaType: mediaTypeValidator,
     posterUrl: v.optional(v.string()),
     backdropUrl: v.optional(v.string()),
     tmdbId: v.optional(v.number()),
+    tvdbId: v.optional(v.number()),
     anilistId: v.optional(v.number()),
     malId: v.optional(v.number()),
     tvmazeId: v.optional(v.number()),

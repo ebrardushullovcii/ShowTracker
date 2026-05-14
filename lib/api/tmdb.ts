@@ -110,7 +110,9 @@ export type TmdbShowDetails = {
   vote_average?: number;
   first_air_date?: string;
   release_date?: string;
+  homepage?: string | null;
   imdb_id?: string | null;
+  external_ids?: TmdbExternalIds | null;
   last_episode_to_air?: {
     id?: number;
     name?: string | null;
@@ -146,6 +148,15 @@ export type TmdbShowDetails = {
     name?: string;
     episode_count?: number;
   }[];
+};
+
+export type TmdbExternalIds = {
+  imdb_id?: string | null;
+  tvdb_id?: number | null;
+  facebook_id?: string | null;
+  instagram_id?: string | null;
+  twitter_id?: string | null;
+  wikidata_id?: string | null;
 };
 
 export type TmdbSeasonDetails = {
@@ -511,7 +522,9 @@ export async function getTmdbShowDetails(
   mediaType: "tv" | "movie",
   id: number
 ) {
-  const details = await request<TmdbShowDetails>(`/${mediaType}/${id}`);
+  const details = await request<TmdbShowDetails>(`/${mediaType}/${id}`, {
+    append_to_response: "external_ids",
+  });
 
   if (mediaType === "tv") {
     const fallbackRuntime = await resolveTmdbTvRuntimeFallback(details);

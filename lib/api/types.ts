@@ -1,5 +1,28 @@
 export type MediaType = "tv" | "anime" | "movie";
 
+export type ExternalAliasProvider =
+  | "tmdb"
+  | "tvdb"
+  | "imdb"
+  | "anilist"
+  | "mal"
+  | "tvmaze"
+  | "twitter"
+  | "instagram"
+  | "facebook"
+  | "wikidata"
+  | "official_site"
+  | "crunchyroll";
+
+export type ExternalAliasConfidence = "verified" | "provider" | "heuristic";
+
+export type NormalizedExternalAlias = {
+  provider: ExternalAliasProvider;
+  externalId: string;
+  source?: string;
+  confidence?: ExternalAliasConfidence;
+};
+
 export type NormalizedShow = {
   id: string;
   mediaType: MediaType;
@@ -27,6 +50,7 @@ export type NormalizedShow = {
   rootAnilistId?: number;
   relatedAnilistIds?: number[];
   lastRelationSyncAt?: number;
+  externalAliases?: NormalizedExternalAlias[];
 };
 
 export type NormalizedSeason = {
@@ -60,4 +84,5 @@ export type NormalizedScheduleEntry = {
   mediaType: MediaType;
   episode: NormalizedEpisode;
   posterUrl?: string;
+  externalAliases?: NormalizedExternalAlias[];
 };

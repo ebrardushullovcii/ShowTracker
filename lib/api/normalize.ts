@@ -1,5 +1,6 @@
 import type {
   NormalizedEpisode,
+  NormalizedExternalAlias,
   NormalizedSeason,
   NormalizedShow,
   NormalizedScheduleEntry,
@@ -14,6 +15,13 @@ import type { AniListAiringSchedule, AniListMedia } from "@/lib/api/anilist";
 import type { TvMazeScheduleEntry } from "@/lib/api/tvmaze";
 import type { JikanAnime, JikanAnimeEpisode } from "@/lib/api/jikan";
 import {
+  collectDirectIdentityAliases,
+  createIdentityAlias,
+  createIdentityAliasFromAniListExternalLink,
+  createIdentityAliasFromExternalShowId,
+  dedupeIdentityAliases,
+} from "@/lib/api/identity-aliases";
+import {
   normalizeStatus,
   getEpisodeRuntime,
   formatAirDate,
@@ -23,6 +31,43 @@ import {
 
 const tmdbImageBase = "https://image.tmdb.org/t/p/w780";
 const tmdbPosterBase = "https://image.tmdb.org/t/p/w342";
+
+function buildTmdbExternalAliases(
+  mediaType: "tv" | "movie",
+  details: TmdbShowDetails
+): NormalizedExternalAlias[] {
+  const externalIds = details.external_ids;
+  return dedupeIdentityAliases([
+    ...collectDirectIdentityAliases(
+      {
+        tmdbId: details.id,
+        tvdbId: mediaType === "tv" ? externalIds?.tvdb_id : undefined,
+        imdbId: details.imdb_id ?? externalIds?.imdb_id,
+      },
+      "tmdb_details"
+    ),
+    createIdentityAlias("twitter", externalIds?.twitter_id, "tmdb_external_ids"),
+    createIdentityAlias("instagram", externalIds?.instagram_id, "tmdb_external_ids"),
+    createIdentityAlias("facebook", externalIds?.facebook_id, "tmdb_external_ids"),
+    createIdentityAlias("wikidata", externalIds?.wikidata_id, "tmdb_external_ids"),
+    createIdentityAlias("official_site", details.homepage, "tmdb_details"),
+  ]);
+}
+
+function buildAniListExternalAliases(media: AniListMedia): NormalizedExternalAlias[] {
+  return dedupeIdentityAliases([
+    ...collectDirectIdentityAliases(
+      {
+        anilistId: media.id,
+        malId: media.idMal,
+      },
+      "anilist_media"
+    ),
+    ...(media.externalLinks ?? []).map((link) =>
+      createIdentityAliasFromAniListExternalLink(link, "anilist_external_links")
+    ),
+  ]);
+}
 
 function formatAniListDate(date?: {
   year?: number;
@@ -157,6 +202,10 @@ export function normalizeTmdbMedia(media: TmdbMedia): NormalizedShow {
     rating: media.vote_average,
     firstAired: media.first_air_date ?? media.release_date,
     tmdbId: media.id,
+    externalAliases: collectDirectIdentityAliases(
+      { tmdbId: media.id },
+      "tmdb_search"
+    ),
     // TMDB search results don't include status, episode/season counts, or runtime
     // These will be populated from details endpoint
     status: undefined,
@@ -219,7 +268,12 @@ export function normalizeTmdbShowDetails(
     rating: details.vote_average,
     firstAired: details.first_air_date ?? details.release_date,
     tmdbId: details.id,
-    imdbId: details.imdb_id ?? undefined,
+    tvdbId:
+      mediaType === "tv" && typeof details.external_ids?.tvdb_id === "number"
+        ? details.external_ids.tvdb_id
+        : undefined,
+    imdbId: details.imdb_id ?? details.external_ids?.imdb_id ?? undefined,
+    externalAliases: buildTmdbExternalAliases(mediaType, details),
   };
 }
 
@@ -296,6 +350,7 @@ export function normalizeAniListMedia(media: AniListMedia): NormalizedShow {
     anilistFormat: media.format ?? undefined,
     animeSeason: media.season ?? undefined,
     animeSeasonYear: media.seasonYear ?? undefined,
+    externalAliases: buildAniListExternalAliases(media),
     // Anime typically has 1 season per show entry
     totalSeasons: 1,
   };
@@ -312,6 +367,13 @@ export function normalizeAniListScheduleEntry(
     showTitle:
       entry.media.title.english ?? entry.media.title.romaji ?? "Untitled",
     mediaType: "anime",
+    externalAliases: dedupeIdentityAliases([
+      createIdentityAliasFromExternalShowId(`anilist:${entry.media.id}`, "anilist_schedule"),
+      createIdentityAlias("mal", entry.media.idMal, "anilist_schedule"),
+      ...(entry.media.externalLinks ?? []).map((link) =>
+        createIdentityAliasFromAniListExternalLink(link, "anilist_external_links")
+      ),
+    ]),
     episode: {
       id: `anilist-episode:${entry.id}`,
       seasonNumber: 1,
@@ -341,6 +403,11 @@ export function normalizeTvMazeScheduleEntry(
     showId: `tvmaze:${entry.show.id}`,
     showTitle: entry.show.name,
     mediaType: "tv",
+    externalAliases: dedupeIdentityAliases([
+      createIdentityAliasFromExternalShowId(`tvmaze:${entry.show.id}`, "tvmaze_schedule"),
+      createIdentityAlias("imdb", entry.show.externals?.imdb, "tvmaze_externals"),
+      createIdentityAlias("tvdb", entry.show.externals?.thetvdb, "tvmaze_externals"),
+    ]),
     episode: {
       id: `tvmaze-episode:${entry.id}`,
       seasonNumber: entry.season,
@@ -389,6 +456,10 @@ export function normalizeJikanAnime(anime: JikanAnime): NormalizedShow {
     firstAired: normalizeDateString(anime.aired?.from),
     anilistId: undefined,
     malId: anime.mal_id,
+    externalAliases: collectDirectIdentityAliases(
+      { malId: anime.mal_id },
+      "jikan_media"
+    ),
     // Anime typically has 1 season per show entry
     totalSeasons: 1,
   };
