@@ -169,6 +169,18 @@ const fixtureLibrary = [
     totalEpisodes: 2,
     releasedEpisodes: 2,
   },
+  {
+    id: "fixture-future-season-total",
+    userId: "fixture-user",
+    showId: "show-future-season-total",
+    title: "Future Season Total Trap",
+    mediaType: "tv",
+    status: "watching",
+    watchedEpisodesCount: 18,
+    totalEpisodes: 26,
+    releasedEpisodes: 26,
+    tmdbId: 1011,
+  },
 ];
 
 const fixtureProviderEvents = [
@@ -243,6 +255,30 @@ const fixtureProviderEvents = [
     name: "Title Only",
     airDate: titleFallbackFixtureDate,
     providers: { tvmazeId: 9199 },
+  },
+  {
+    sourceProvider: "tmdb",
+    providerShowId: "tmdb:1011",
+    title: "Future Season Total Trap",
+    mediaType: "tv",
+    region: "US",
+    seasonNumber: 2,
+    episodeNumber: 8,
+    name: "Finished Current Season",
+    airDate: "2026-04-01T12:00:00.000Z",
+    providers: { tmdbId: 1011 },
+  },
+  {
+    sourceProvider: "tmdb",
+    providerShowId: "tmdb:1011",
+    title: "Future Season Total Trap",
+    mediaType: "tv",
+    region: "US",
+    seasonNumber: 3,
+    episodeNumber: 1,
+    name: "Future Season Premiere",
+    airDate: "2026-06-01T12:00:00.000Z",
+    providers: { tmdbId: 1011 },
   },
 ];
 
@@ -927,8 +963,7 @@ function isGenericEpisodeName(name) {
 }
 
 function eventNumberDedupeKey(row) {
-  const dateKey = dateKeyFromValue(row.air_date) ?? "";
-  return `${row.media_type}:${row.normalized_title}:${dateKey}:number:${row.season_number}:${row.episode_number}`;
+  return `${row.media_type}:${row.normalized_title}:number:${row.season_number}:${row.episode_number}`;
 }
 
 function eventNameDedupeKey(row) {
@@ -1081,9 +1116,8 @@ function needsMissingProviderAudit(item) {
 function buildReleaseFact(item, match, nowMs, reconciledAt) {
   const scheduleRows = dedupeProviderEventsForSchedule(match.rows);
   const releasedEvents = scheduleRows.filter((row) => row.air_timestamp <= nowMs);
-  const futureEvents = scheduleRows.filter(
-    (row) => row.air_timestamp > nowMs && row.air_timestamp <= nowMs + scheduleLookaheadMs
-  );
+  const allFutureEvents = scheduleRows.filter((row) => row.air_timestamp > nowMs);
+  const futureEvents = allFutureEvents.filter((row) => row.air_timestamp <= nowMs + scheduleLookaheadMs);
   const latestReleased = releasedEvents.at(-1);
   const nextScheduled = futureEvents[0];
   const providerIds = compactProviderIds({
@@ -1093,14 +1127,16 @@ function buildReleaseFact(item, match, nowMs, reconciledAt) {
     malId: item.mal_id,
     imdbId: item.imdb_id ?? match.rows.find((row) => row.imdb_id)?.imdb_id,
   });
-  const releasedEpisodeFloor =
-    item.released_episodes === null || item.released_episodes === undefined
-      ? item.watched_episodes_count
-      : item.released_episodes;
-  const releasedEpisodes = Math.max(
-    releasedEpisodeFloor ?? 0,
-    ...releasedEvents.map((row) => row.episode_number)
-  );
+  const hasKnownFutureEvents = allFutureEvents.length > 0;
+  const releasedEpisodes = hasKnownFutureEvents
+    ? Math.max(item.watched_episodes_count ?? 0, releasedEvents.length)
+    : Math.max(
+        item.released_episodes ?? 0,
+        item.watched_episodes_count ?? 0,
+        item.total_episodes ?? 0,
+        releasedEvents.length,
+        ...releasedEvents.map((row) => row.episode_number)
+      );
   const totalEpisodes = Math.max(
     item.total_episodes ?? 0,
     releasedEpisodes,
@@ -1688,10 +1724,13 @@ async function importConvex(db, options) {
         status: item.status,
         watchedEpisodesCount: item.watchedEpisodesCount,
         totalEpisodes: item.totalEpisodes,
-        releasedEpisodes: Math.max(
-          0,
-          (item.watchedEpisodesCount ?? 0) + (item.remainingEpisodes ?? 0)
-        ),
+        releasedEpisodes:
+          item.tmdbId || item.tvmazeId || item.anilistId || item.malId || item.imdbId
+            ? null
+            : Math.max(
+                0,
+                (item.watchedEpisodesCount ?? 0) + (item.remainingEpisodes ?? 0)
+              ),
         tmdbId: item.tmdbId,
         tvmazeId: item.tvmazeId,
         anilistId: item.anilistId,
@@ -2224,6 +2263,7 @@ function validateDevWorkflowResults({
   const missingProvider = getSnapshotRow(afterSnapshot, "Missing Provider Link");
   const titleFallback = getSnapshotRow(afterSnapshot, "Title Fallback Only");
   const conflict = getSnapshotRow(afterSnapshot, "Conflicting Provider Audit");
+  const futureSeasonTotal = getSnapshotRow(afterSnapshot, "Future Season Total Trap");
   const staleProjectionBefore = getSnapshotRow(beforeSnapshot, "Stale Projection Repair");
   const staleProjectionAfter = getSnapshotRow(afterSnapshot, "Stale Projection Repair");
 
@@ -2308,6 +2348,13 @@ function validateDevWorkflowResults({
     "Conflicting provider dev case did not emit an audit issue."
   );
   assertValidation(
+    futureSeasonTotal?.releasedEpisodes === 18 &&
+      futureSeasonTotal.totalEpisodes === 26 &&
+      firstProjection(futureSeasonTotal)?.remainingEpisodes === 0 &&
+      hasScheduleEntry(futureSeasonTotal, "2026-06-01", "tv", 1),
+    "Future season total was incorrectly treated as released watchlist work."
+  );
+  assertValidation(
     firstProjection(staleProjectionBefore)?.remainingEpisodes === 0 &&
       firstProjection(staleProjectionAfter)?.remainingEpisodes === 1 &&
       typeof firstProjection(staleProjectionAfter)?.newEpisodeSignalAt === "number",
@@ -2315,7 +2362,7 @@ function validateDevWorkflowResults({
   );
 
   return {
-    checks: 13,
+    checks: 14,
     imported: importResult.imported,
     reconciled: reconcileSummary.scannedItems,
     deltas: reconcileSummary.deltas,
