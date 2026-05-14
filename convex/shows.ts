@@ -200,8 +200,14 @@ function buildFeedProjectionFields(
   const watchedCount = Math.max(0, Math.floor(userShow.watchedEpisodesCount ?? 0));
   const totalEpisodes =
     typeof show.totalEpisodes === "number" ? show.totalEpisodes : undefined;
+  const releasedEpisodes =
+    typeof show.releasedEpisodes === "number"
+      ? typeof totalEpisodes === "number"
+        ? Math.min(show.releasedEpisodes, totalEpisodes)
+        : show.releasedEpisodes
+      : undefined;
   const watchableEpisodes =
-    typeof show.releasedEpisodes === "number" ? show.releasedEpisodes : totalEpisodes;
+    typeof releasedEpisodes === "number" ? releasedEpisodes : totalEpisodes;
   const remainingEpisodes =
     typeof watchableEpisodes === "number"
       ? Math.max(watchableEpisodes - watchedCount, 0)
@@ -640,13 +646,30 @@ export const getCompletedUserShowsForMetadataRefresh = internalQuery({
         COMPLETED_SHOW_METADATA_REFRESH_PAGE_SIZE
       )
     );
-    const page = await ctx.db
-      .query("userShows")
-      .withIndex("by_status_last_watched", (q) => q.eq("status", "completed"))
-      .paginate({
+    const completedShowsQuery = () =>
+      ctx.db
+        .query("userShows")
+        .withIndex("by_status_last_watched", (q) => q.eq("status", "completed"));
+
+    let page;
+    try {
+      page = await completedShowsQuery().paginate({
         numItems: safePageSize,
         cursor: args.cursor ?? null,
       });
+    } catch (error) {
+      if (!args.cursor || !(error instanceof Error) || !error.message.includes("Failed to parse cursor")) {
+        throw error;
+      }
+
+      console.warn("Resetting stale completed-show metadata refresh cursor", {
+        cursor: args.cursor,
+      });
+      page = await completedShowsQuery().paginate({
+        numItems: safePageSize,
+        cursor: null,
+      });
+    }
 
     return {
       scanned: page.page.length,
@@ -930,7 +953,10 @@ type WatchlistEntryLike = {
 };
 
 function hasAvailableScheduleSignal(
-  entry: Pick<WatchlistEntryLike, "status" | "lastWatchedAt" | "newEpisodeSignalAt">
+  entry: Pick<
+    WatchlistEntryLike,
+    "status" | "lastWatchedAt" | "newEpisodeSignalAt"
+  >
 ) {
   return (
     (entry.status === "watching" || entry.status === "completed") &&
@@ -2404,7 +2430,10 @@ async function refreshUserShowTrackingAggregatesForDoc(
 function getReleasedEpisodeCountForResume(show: NormalizedShow) {
   const releasedEpisodes = normalizePositiveEpisodeCount(show.releasedEpisodes);
   if (typeof releasedEpisodes === "number") {
-    return releasedEpisodes;
+    const totalEpisodes = normalizePositiveEpisodeCount(show.totalEpisodes);
+    return typeof totalEpisodes === "number"
+      ? Math.min(releasedEpisodes, totalEpisodes)
+      : releasedEpisodes;
   }
 
   if (show.mediaType === "movie") {
@@ -2769,20 +2798,11 @@ async function fetchLatestNormalizedShowForExistingShow(show: Doc<"shows">) {
       details
     );
 
-    const releasedEpisodeCount = normalized.releasedEpisodes ?? null;
-    const totalEpisodeCount = normalized.totalEpisodes ?? null;
-    if (
-      show.mediaType !== "movie" &&
-      (releasedEpisodeCount === null ||
-        (typeof totalEpisodeCount === "number" && releasedEpisodeCount < totalEpisodeCount))
-    ) {
+    if (show.mediaType !== "movie") {
       try {
         const releasedFromSeasons =
           await getTmdbReleasedEpisodeCountFromSeasonDetails(show.tmdbId, details.seasons);
-        if (
-          typeof releasedFromSeasons === "number" &&
-          releasedFromSeasons > (normalized.releasedEpisodes ?? 0)
-        ) {
+        if (typeof releasedFromSeasons === "number") {
           return {
             ...normalized,
             releasedEpisodes: Math.min(
@@ -2809,6 +2829,12 @@ function buildShowPayloadFromNormalized(
   show: NormalizedShow,
   overrides: Partial<ShowPayload> = {}
 ): ShowPayload {
+  const totalEpisodes = show.totalEpisodes;
+  const releasedEpisodes =
+    typeof show.releasedEpisodes === "number" && typeof totalEpisodes === "number"
+      ? Math.min(show.releasedEpisodes, totalEpisodes)
+      : show.releasedEpisodes;
+
   return {
     tmdbId: show.tmdbId,
     tvdbId: show.tvdbId,
@@ -2823,8 +2849,8 @@ function buildShowPayloadFromNormalized(
     backdropUrl: show.backdropUrl,
     genres: show.genres,
     status: show.status,
-    totalEpisodes: show.totalEpisodes,
-    releasedEpisodes: show.releasedEpisodes,
+    totalEpisodes,
+    releasedEpisodes,
     totalSeasons: show.totalSeasons,
     episodeRuntime: show.episodeRuntime,
     rating: show.rating,
@@ -3849,6 +3875,7 @@ async function refreshShowMetadataAndRepairTracking(
   options?: {
     repairUserId?: Id<"users">;
     skipBroadAggregateRepair?: boolean;
+    force?: boolean;
   }
 ): Promise<
   | {
@@ -3881,7 +3908,7 @@ async function refreshShowMetadataAndRepairTracking(
     };
   }
 
-  if (Date.now() - show.lastUpdated < REFRESH_THROTTLE_MS) {
+  if (options?.force !== true && Date.now() - show.lastUpdated < REFRESH_THROTTLE_MS) {
     console.info("Skipping tracked show metadata refresh because show was updated recently", {
       showId,
       lastUpdated: show.lastUpdated,
@@ -4034,9 +4061,12 @@ export const refreshTrackedShowMetadata = action({
 export const repairShowMetadataById = internalAction({
   args: {
     showId: v.id("shows"),
+    force: v.optional(v.boolean()),
   },
   handler: async (ctx, args): ReturnType<typeof refreshShowMetadataAndRepairTracking> => {
-    return refreshShowMetadataAndRepairTracking(ctx, args.showId);
+    return refreshShowMetadataAndRepairTracking(ctx, args.showId, {
+      force: args.force,
+    });
   },
 });
 
