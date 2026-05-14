@@ -181,6 +181,19 @@ const fixtureLibrary = [
     releasedEpisodes: 26,
     tmdbId: 1011,
   },
+  {
+    id: "fixture-sparse-old-total",
+    userId: "fixture-user",
+    showId: "show-sparse-old-total",
+    title: "Sparse Old Total Trap",
+    mediaType: "tv",
+    status: "watching",
+    watchedEpisodesCount: 220,
+    totalEpisodes: 378,
+    releasedEpisodes: 378,
+    tmdbId: 1012,
+    lastWatchedAt: Date.UTC(2026, 4, 1),
+  },
 ];
 
 const fixtureProviderEvents = [
@@ -279,6 +292,18 @@ const fixtureProviderEvents = [
     name: "Future Season Premiere",
     airDate: "2026-06-01T12:00:00.000Z",
     providers: { tmdbId: 1011 },
+  },
+  {
+    sourceProvider: "tmdb",
+    providerShowId: "tmdb:1012",
+    title: "Sparse Old Total Trap",
+    mediaType: "tv",
+    region: "US",
+    seasonNumber: 4,
+    episodeNumber: 220,
+    name: "Old Finale",
+    airDate: "2007-02-08T00:00:00.000Z",
+    providers: { tmdbId: 1012 },
   },
 ];
 
@@ -460,6 +485,7 @@ function initDb(db) {
       mal_id INTEGER,
       imdb_id TEXT,
       first_aired TEXT,
+      last_watched_at INTEGER,
       imported_at INTEGER NOT NULL
     );
 
@@ -569,6 +595,7 @@ function initDb(db) {
     CREATE INDEX IF NOT EXISTS idx_audit_type ON audit_issues(issue_type);
     CREATE INDEX IF NOT EXISTS idx_manual_provider_media_title ON manual_provider_links(media_type, title);
   `);
+  addColumnIfMissing(db, "library_items", "last_watched_at", "INTEGER");
   addColumnIfMissing(db, "audit_issues", "run_id", "TEXT");
   addColumnIfMissing(db, "audit_issues", "issue_key", "TEXT");
   db.exec(`
@@ -698,9 +725,10 @@ function upsertLibraryItem(db, item, importedAt = Date.now()) {
     INSERT INTO library_items (
       id, user_id, show_id, projection_id, user_show_id, title, normalized_title,
       media_type, status, watched_episodes_count, total_episodes, released_episodes,
-      tmdb_id, tvmaze_id, anilist_id, mal_id, imdb_id, first_aired, imported_at
+      tmdb_id, tvmaze_id, anilist_id, mal_id, imdb_id, first_aired, last_watched_at,
+      imported_at
     ) VALUES (
-      ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+      ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
     )
     ON CONFLICT(id) DO UPDATE SET
       user_id = excluded.user_id,
@@ -720,6 +748,7 @@ function upsertLibraryItem(db, item, importedAt = Date.now()) {
       mal_id = excluded.mal_id,
       imdb_id = excluded.imdb_id,
       first_aired = excluded.first_aired,
+      last_watched_at = excluded.last_watched_at,
       imported_at = excluded.imported_at
   `).run(
     item.id ?? `${item.showId}:${item.userId ?? "unknown"}`,
@@ -740,6 +769,7 @@ function upsertLibraryItem(db, item, importedAt = Date.now()) {
     providerIds.malId,
     providerIds.imdbId,
     stringOrNull(item.firstAired ?? item.first_aired),
+    numberOrNull(item.lastWatchedAt ?? item.last_watched_at),
     importedAt
   );
 }
@@ -1128,8 +1158,18 @@ function buildReleaseFact(item, match, nowMs, reconciledAt) {
     imdbId: item.imdb_id ?? match.rows.find((row) => row.imdb_id)?.imdb_id,
   });
   const hasKnownFutureEvents = allFutureEvents.length > 0;
+  const latestReleaseIsAlreadyWatched =
+    latestReleased &&
+    typeof item.last_watched_at === "number" &&
+    latestReleased.air_timestamp <= item.last_watched_at;
+  const hasSparseOldReleaseHistory =
+    !hasKnownFutureEvents &&
+    releasedEvents.length <= 1 &&
+    latestReleaseIsAlreadyWatched;
   const releasedEpisodes = hasKnownFutureEvents
     ? Math.max(item.watched_episodes_count ?? 0, releasedEvents.length)
+    : hasSparseOldReleaseHistory
+      ? Math.max(item.watched_episodes_count ?? 0, releasedEvents.length)
     : Math.max(
         item.released_episodes ?? 0,
         item.watched_episodes_count ?? 0,
@@ -1737,6 +1777,7 @@ async function importConvex(db, options) {
         malId: item.malId,
         imdbId: item.imdbId,
         firstAired: item.firstAired,
+        lastWatchedAt: item.lastWatchedAt,
       });
       imported += 1;
     }
@@ -2264,6 +2305,7 @@ function validateDevWorkflowResults({
   const titleFallback = getSnapshotRow(afterSnapshot, "Title Fallback Only");
   const conflict = getSnapshotRow(afterSnapshot, "Conflicting Provider Audit");
   const futureSeasonTotal = getSnapshotRow(afterSnapshot, "Future Season Total Trap");
+  const sparseOldTotal = getSnapshotRow(afterSnapshot, "Sparse Old Total Trap");
   const staleProjectionBefore = getSnapshotRow(beforeSnapshot, "Stale Projection Repair");
   const staleProjectionAfter = getSnapshotRow(afterSnapshot, "Stale Projection Repair");
 
@@ -2355,6 +2397,12 @@ function validateDevWorkflowResults({
     "Future season total was incorrectly treated as released watchlist work."
   );
   assertValidation(
+    sparseOldTotal?.releasedEpisodes === 220 &&
+      sparseOldTotal.totalEpisodes === 378 &&
+      firstProjection(sparseOldTotal)?.remainingEpisodes === 0,
+    "Sparse old provider history incorrectly trusted a mismatched total episode count."
+  );
+  assertValidation(
     firstProjection(staleProjectionBefore)?.remainingEpisodes === 0 &&
       firstProjection(staleProjectionAfter)?.remainingEpisodes === 1 &&
       typeof firstProjection(staleProjectionAfter)?.newEpisodeSignalAt === "number",
@@ -2362,7 +2410,7 @@ function validateDevWorkflowResults({
   );
 
   return {
-    checks: 14,
+    checks: 15,
     imported: importResult.imported,
     reconciled: reconcileSummary.scannedItems,
     deltas: reconcileSummary.deltas,
