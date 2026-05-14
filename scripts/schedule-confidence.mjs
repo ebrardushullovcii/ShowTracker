@@ -194,6 +194,19 @@ const fixtureLibrary = [
     tmdbId: 1012,
     lastWatchedAt: Date.UTC(2026, 4, 1),
   },
+  {
+    id: "fixture-post-watch-count-drift",
+    userId: "fixture-user",
+    showId: "show-post-watch-count-drift",
+    title: "Post Watch Count Drift",
+    mediaType: "tv",
+    status: "watching",
+    watchedEpisodesCount: 2,
+    totalEpisodes: 3,
+    releasedEpisodes: null,
+    tmdbId: 1013,
+    lastWatchedAt: Date.UTC(2026, 4, 20),
+  },
 ];
 
 const fixtureProviderEvents = [
@@ -304,6 +317,42 @@ const fixtureProviderEvents = [
     name: "Old Finale",
     airDate: "2007-02-08T00:00:00.000Z",
     providers: { tmdbId: 1012 },
+  },
+  {
+    sourceProvider: "tvmaze",
+    providerShowId: "tvmaze:1013",
+    title: "Post Watch Count Drift",
+    mediaType: "tv",
+    region: "US",
+    seasonNumber: 1,
+    episodeNumber: 1,
+    name: "First",
+    airDate: "2026-05-01T00:00:00.000Z",
+    providers: { tmdbId: 1013 },
+  },
+  {
+    sourceProvider: "tvmaze",
+    providerShowId: "tvmaze:1013",
+    title: "Post Watch Count Drift",
+    mediaType: "tv",
+    region: "US",
+    seasonNumber: 1,
+    episodeNumber: 2,
+    name: "Second",
+    airDate: "2026-05-08T00:00:00.000Z",
+    providers: { tmdbId: 1013 },
+  },
+  {
+    sourceProvider: "tvmaze",
+    providerShowId: "tvmaze:1013",
+    title: "Post Watch Count Drift",
+    mediaType: "tv",
+    region: "US",
+    seasonNumber: 1,
+    episodeNumber: 3,
+    name: "Count Drift",
+    airDate: "2026-05-10T00:00:00.000Z",
+    providers: { tmdbId: 1013 },
   },
 ];
 
@@ -1166,7 +1215,7 @@ function buildReleaseFact(item, match, nowMs, reconciledAt) {
     !hasKnownFutureEvents &&
     releasedEvents.length <= 1 &&
     latestReleaseIsAlreadyWatched;
-  const releasedEpisodes = hasKnownFutureEvents
+  const rawReleasedEpisodes = hasKnownFutureEvents
     ? Math.max(item.watched_episodes_count ?? 0, releasedEvents.length)
     : hasSparseOldReleaseHistory
       ? Math.max(item.watched_episodes_count ?? 0, releasedEvents.length)
@@ -1177,6 +1226,12 @@ function buildReleaseFact(item, match, nowMs, reconciledAt) {
         releasedEvents.length,
         ...releasedEvents.map((row) => row.episode_number)
       );
+  const releasedEpisodes =
+    latestReleaseIsAlreadyWatched &&
+    (releasedEvents.length <= (item.watched_episodes_count ?? 0) ||
+      rawReleasedEpisodes - (item.watched_episodes_count ?? 0) <= 1)
+      ? item.watched_episodes_count ?? rawReleasedEpisodes
+      : rawReleasedEpisodes;
   const totalEpisodes = Math.max(
     item.total_episodes ?? 0,
     releasedEpisodes,
@@ -2306,6 +2361,7 @@ function validateDevWorkflowResults({
   const conflict = getSnapshotRow(afterSnapshot, "Conflicting Provider Audit");
   const futureSeasonTotal = getSnapshotRow(afterSnapshot, "Future Season Total Trap");
   const sparseOldTotal = getSnapshotRow(afterSnapshot, "Sparse Old Total Trap");
+  const postWatchCountDrift = getSnapshotRow(afterSnapshot, "Post Watch Count Drift");
   const staleProjectionBefore = getSnapshotRow(beforeSnapshot, "Stale Projection Repair");
   const staleProjectionAfter = getSnapshotRow(afterSnapshot, "Stale Projection Repair");
 
@@ -2403,6 +2459,12 @@ function validateDevWorkflowResults({
     "Sparse old provider history incorrectly trusted a mismatched total episode count."
   );
   assertValidation(
+    postWatchCountDrift?.releasedEpisodes === 2 &&
+      postWatchCountDrift.totalEpisodes === 3 &&
+      firstProjection(postWatchCountDrift)?.remainingEpisodes === 0,
+    "Post-watch provider count drift incorrectly kept the watchlist row active."
+  );
+  assertValidation(
     firstProjection(staleProjectionBefore)?.remainingEpisodes === 0 &&
       firstProjection(staleProjectionAfter)?.remainingEpisodes === 1 &&
       typeof firstProjection(staleProjectionAfter)?.newEpisodeSignalAt === "number",
@@ -2410,7 +2472,7 @@ function validateDevWorkflowResults({
   );
 
   return {
-    checks: 15,
+    checks: 16,
     imported: importResult.imported,
     reconciled: reconcileSummary.scannedItems,
     deltas: reconcileSummary.deltas,
