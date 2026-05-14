@@ -1016,12 +1016,19 @@ function isHomeFeedPausedSectionEntry(
   >,
   pausedSectionMode: HomePausedSectionMode
 ) {
+  if (entry.status !== "paused") {
+    return false;
+  }
+
+  if (pausedSectionMode === "all_paused") {
+    return true;
+  }
+
   return (
-    entry.status === "paused" &&
+    typeof entry.autoPausedAt === "number" &&
     typeof entry.remainingEpisodes === "number" &&
     entry.remainingEpisodes > 0 &&
-    hasWatchlistProgress(entry) &&
-    (pausedSectionMode === "all_paused" || typeof entry.autoPausedAt === "number")
+    hasWatchlistProgress(entry)
   );
 }
 

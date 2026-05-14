@@ -316,7 +316,10 @@ function WatchlistCard({
       ? Math.min(item.watchedEpisodes, item.totalEpisodes)
       : item.watchedEpisodes;
   const cornerLabel =
-    item.remainingEpisodes === null
+    item.status === "paused" &&
+    (item.remainingEpisodes === null || item.remainingEpisodes <= 0)
+      ? "Paused"
+      : item.remainingEpisodes === null
       ? item.trackingState === "tba"
         ? "TBA"
         : "Upcoming"
@@ -1556,22 +1559,22 @@ export function HomeScreen() {
       if (item.status !== "paused") {
         return false;
       }
+      if (mediaFilter !== "all" && item.mediaType !== mediaFilter) {
+        return false;
+      }
+      if (pausedSectionMode === "all_paused") {
+        return true;
+      }
       if (typeof item.remainingEpisodes !== "number" || item.remainingEpisodes <= 0) {
         return false;
       }
       if (typeof item.watchedEpisodes !== "number" || item.watchedEpisodes <= 0) {
         return false;
       }
-      if (
-        pausedSectionMode === "auto_paused_only" &&
-        typeof item.autoPausedAt !== "number"
-      ) {
+      if (typeof item.autoPausedAt !== "number") {
         return false;
       }
       if (item.trackingState === "upcoming") {
-        return false;
-      }
-      if (mediaFilter !== "all" && item.mediaType !== mediaFilter) {
         return false;
       }
       return true;
