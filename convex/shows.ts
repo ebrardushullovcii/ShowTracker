@@ -34,6 +34,7 @@ const RELATION_SYNC_BATCH_LIMIT = 6;
 const RELATION_SYNC_MAX_GRAPH_NODES = 30;
 const IMPORT_TRACKED_SHOWS_MAX_ITEMS = 20;
 const HOME_FEED_MAX_RESULTS = 40;
+const HOME_FEED_SECONDARY_MAX_RESULTS = 120;
 const TARGETED_TRACKING_REPAIR_PAGE_SIZE = 20;
 const TARGETED_TRACKING_REPAIR_PAGE_SIZE_MAX = 30;
 const COMPLETED_SHOW_METADATA_REFRESH_PAGE_SIZE = 100;
@@ -983,6 +984,10 @@ function isCompletedWatchlistEntry(
     return false;
   }
 
+  if (entry.status === "plan_to_watch") {
+    return false;
+  }
+
   return (
     typeof entry.remainingEpisodes === "number" && entry.remainingEpisodes <= 0
   );
@@ -1035,23 +1040,10 @@ function isHomeFeedPausedSectionEntry(
 function isHomeFeedNotStartedSectionEntry(
   entry: Pick<
     WatchlistEntryLike,
-    | "mediaType"
-    | "status"
-    | "watchedEpisodes"
-    | "remainingEpisodes"
-    | "lastWatchedAt"
-    | "newEpisodeSignalAt"
+    "status" | "watchedEpisodes"
   >
 ) {
-  return (
-    !isCompletedWatchlistEntry(entry) &&
-    typeof entry.remainingEpisodes === "number" &&
-    entry.remainingEpisodes > 0 &&
-    !hasWatchlistProgress(entry) &&
-    entry.status !== "watching" &&
-    entry.status !== "paused" &&
-    entry.status !== "dropped"
-  );
+  return entry.status === "plan_to_watch" && !hasWatchlistProgress(entry);
 }
 
 type AnimeFranchiseSelectionEntry = ProjectionFeedEntry &
@@ -1749,9 +1741,11 @@ async function getHomeFeedSection(ctx: QueryCtx, args: {
   }
 
   const typedUserId = userId as Id<"users">;
+  const maxResults =
+    args.section === "active" ? HOME_FEED_MAX_RESULTS : HOME_FEED_SECONDARY_MAX_RESULTS;
   const safeLimit = Math.max(
     1,
-    Math.min(args.limit ?? HOME_FEED_MAX_RESULTS, HOME_FEED_MAX_RESULTS)
+    Math.min(args.limit ?? maxResults, maxResults)
   );
   const perStatusLimit =
     args.section === "active"

@@ -315,15 +315,23 @@ function WatchlistCard({
     item.totalEpisodes !== null
       ? Math.min(item.watchedEpisodes, item.totalEpisodes)
       : item.watchedEpisodes;
-  const cornerLabel =
-    item.status === "paused" &&
-    (item.remainingEpisodes === null || item.remainingEpisodes <= 0)
+  const hasRemainingEpisodes =
+    typeof item.remainingEpisodes === "number" && item.remainingEpisodes > 0;
+  const cornerLabel = hasRemainingEpisodes
+    ? `${item.remainingEpisodes} left`
+    : item.status === "paused"
       ? "Paused"
-      : item.remainingEpisodes === null
-      ? item.trackingState === "tba"
-        ? "TBA"
-        : "Upcoming"
-      : `${item.remainingEpisodes} left`;
+      : item.status === "plan_to_watch"
+        ? item.trackingState === "tba"
+          ? "TBA"
+          : item.trackingState === "upcoming"
+            ? "Upcoming"
+            : "Queued"
+        : item.remainingEpisodes === null
+          ? item.trackingState === "tba"
+            ? "TBA"
+            : "Upcoming"
+          : "Caught up";
   const progressLabel =
     item.totalEpisodes === null
       ? safeWatchedEpisodes > 0
@@ -1597,10 +1605,7 @@ export function HomeScreen() {
   const notStartedSectionWatchlist = useMemo(() => {
     return notStartedFeedItems
       .filter((item) => {
-        if (item.status === "paused" || item.status === "dropped" || item.status === "completed") {
-          return false;
-        }
-        if (item.trackingState === "upcoming" || item.trackingState === "tba") {
+        if (item.status !== "plan_to_watch") {
           return false;
         }
         if (item.watchedEpisodes > 0) {
@@ -2063,7 +2068,8 @@ export function HomeScreen() {
 
             <View className="rounded-full border border-amber-300/25 bg-amber-400/10 px-3 py-1.5">
               <Text className="text-[10px] font-black uppercase tracking-[1.2px] text-amber-100">
-                {pausedSectionWatchlist.length} paused
+                {pausedSectionWatchlist.length}
+                {hasMorePausedSection ? "+" : ""} paused
               </Text>
             </View>
           </View>
@@ -2140,7 +2146,8 @@ export function HomeScreen() {
 
             <View className="rounded-full border border-sky-300/25 bg-sky-400/10 px-3 py-1.5">
               <Text className="text-[10px] font-black uppercase tracking-[1.2px] text-sky-100">
-                {notStartedSectionWatchlist.length} queued
+                {notStartedSectionWatchlist.length}
+                {hasMoreNotStartedSection ? "+" : ""} queued
               </Text>
             </View>
           </View>
