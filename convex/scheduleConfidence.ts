@@ -301,6 +301,48 @@ function getRouteProviderShowId(delta: {
   return `title:${delta.mediaType}:${normalizeTitle(delta.title)}`;
 }
 
+function getRouteProviderShowIds(delta: {
+  title: string;
+  mediaType: "tv" | "anime" | "movie";
+  providerIds: {
+    tvmazeId?: number;
+    anilistId?: number;
+    malId?: number;
+    tmdbId?: number;
+    imdbId?: string;
+  };
+}) {
+  const ids = new Set<string>();
+  const primaryId = getRouteProviderShowId(delta);
+  ids.add(primaryId);
+
+  if (delta.mediaType === "anime") {
+    if (typeof delta.providerIds.anilistId === "number") {
+      ids.add(`anilist:${delta.providerIds.anilistId}`);
+    }
+    if (typeof delta.providerIds.malId === "number") {
+      ids.add(`jikan:${delta.providerIds.malId}`);
+    }
+  }
+
+  if (delta.mediaType === "tv" || delta.mediaType === "movie") {
+    if (typeof delta.providerIds.tmdbId === "number") {
+      ids.add(`tmdb:${delta.mediaType}:${delta.providerIds.tmdbId}`);
+    }
+  }
+
+  if (delta.mediaType === "tv" && typeof delta.providerIds.tvmazeId === "number") {
+    ids.add(`tvmaze:${delta.providerIds.tvmazeId}`);
+  }
+
+  if (typeof delta.providerIds.imdbId === "string") {
+    ids.add(`imdb:${delta.mediaType}:${delta.providerIds.imdbId}`);
+  }
+
+  ids.add(`title:${delta.mediaType}:${normalizeTitle(delta.title)}`);
+  return ids;
+}
+
 async function findShowByProviderIds(
   ctx: QueryCtx | MutationCtx,
   delta: {
@@ -568,6 +610,7 @@ async function upsertScheduleCacheEntry(
   }
   const mediaType = delta.mediaType;
   const showId = getRouteProviderShowId(delta);
+  const routeProviderShowIds = getRouteProviderShowIds(delta);
   const normalizedTitle = normalizeTitle(delta.title);
 
   const upcomingFacts =
@@ -584,42 +627,42 @@ async function upsertScheduleCacheEntry(
       airDate?: string;
     } => Boolean(fact)
   );
-  const seenEpisodeKeys = new Set<string>();
   let rowsUpdated = 0;
   let skippedUnchanged = 0;
+  const factsByDate = new Map<
+    string,
+    Array<{
+      seasonNumber: number;
+      episodeNumber: number;
+      name?: string;
+      airDate?: string;
+    }>
+  >();
 
   for (const fact of facts) {
     const date = parseDateKey(fact.airDate);
     if (!date) {
       continue;
     }
-    const episodeKey = `${showId}:${fact.seasonNumber}:${fact.episodeNumber}`;
-    if (seenEpisodeKeys.has(episodeKey)) {
-      continue;
+    const existing = factsByDate.get(date) ?? [];
+    const episodeKey = `${fact.seasonNumber}:${fact.episodeNumber}`;
+    const alreadyQueued = existing.some(
+      (queued) => `${queued.seasonNumber}:${queued.episodeNumber}` === episodeKey
+    );
+    if (!alreadyQueued) {
+      existing.push(fact);
+      factsByDate.set(date, existing);
     }
-    seenEpisodeKeys.add(episodeKey);
-    const episodeNameKey = fact.name ? normalizeTitle(fact.name) : "";
+  }
 
+  for (const [date, dateFacts] of factsByDate) {
     const rows = await ctx.db
       .query("scheduleCache")
       .withIndex("by_date_type", (q) => q.eq("date", date).eq("mediaType", mediaType))
       .collect();
     const [row, ...duplicates] = rows;
     const existingEntries = row ? parseCompactScheduleEntries(row.episodes) : [];
-    const entries = existingEntries.filter((entry) => {
-      const key = `${entry.showId}:${entry.episode.seasonNumber}:${entry.episode.episodeNumber}`;
-      const sameNumber = key === episodeKey;
-      const sameTitleEpisodeNumber =
-        entry.normalizedTitle === normalizedTitle &&
-        entry.episode.seasonNumber === fact.seasonNumber &&
-        entry.episode.episodeNumber === fact.episodeNumber;
-      const sameNamedEpisode =
-        episodeNameKey.length > 0 &&
-        entry.normalizedTitle === normalizedTitle &&
-        normalizeTitle(entry.episode.name ?? "") === episodeNameKey;
-      return !sameNumber && !sameTitleEpisodeNumber && !sameNamedEpisode;
-    });
-    entries.push({
+    const desiredEntries = dateFacts.map((fact) => ({
       showId,
       normalizedTitle,
       episode: {
@@ -628,7 +671,44 @@ async function upsertScheduleCacheEntry(
         ...(fact.name ? { name: fact.name } : {}),
         ...(fact.airDate ? { airDate: fact.airDate } : {}),
       },
+    }));
+    const desiredEpisodeNumbers = new Set(
+      desiredEntries.map(
+        (entry) => `${entry.episode.seasonNumber}:${entry.episode.episodeNumber}`
+      )
+    );
+    const desiredEpisodeNames = new Set(
+      desiredEntries
+        .map((entry) => normalizeTitle(entry.episode.name ?? ""))
+        .filter(Boolean)
+    );
+    const entries = existingEntries.filter((entry) => {
+      const entryEpisodeNumber = `${entry.episode.seasonNumber}:${entry.episode.episodeNumber}`;
+      const entryEpisodeName = normalizeTitle(entry.episode.name ?? "");
+      const sameNumber =
+        routeProviderShowIds.has(entry.showId) &&
+        desiredEpisodeNumbers.has(entryEpisodeNumber);
+      const sameTitleEpisodeNumber =
+        entry.normalizedTitle === normalizedTitle &&
+        desiredEpisodeNumbers.has(entryEpisodeNumber);
+      const sameNamedEpisode =
+        entry.normalizedTitle === normalizedTitle &&
+        entryEpisodeName.length > 0 &&
+        desiredEpisodeNames.has(entryEpisodeName);
+      const staleSameShowSameDate =
+        (routeProviderShowIds.has(entry.showId) ||
+          entry.normalizedTitle === normalizedTitle) &&
+        !desiredEpisodeNumbers.has(entryEpisodeNumber) &&
+        (!entryEpisodeName || !desiredEpisodeNames.has(entryEpisodeName));
+
+      return (
+        !sameNumber &&
+        !sameTitleEpisodeNumber &&
+        !sameNamedEpisode &&
+        !staleSameShowSameDate
+      );
     });
+    entries.push(...desiredEntries);
     const nextEpisodes = serializeCompactScheduleEntries(entries);
 
     const payload = {

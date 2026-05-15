@@ -1054,6 +1054,11 @@ function eventNameDedupeKey(row) {
   return null;
 }
 
+function eventDateDedupeKey(row) {
+  const dateKey = dateKeyFromValue(row.air_date);
+  return dateKey ? `${row.media_type}:${row.normalized_title}:date:${dateKey}` : null;
+}
+
 function eventSourcePriority(row) {
   if (row.source_provider === "tvmaze") {
     return 3;
@@ -1065,6 +1070,23 @@ function eventSourcePriority(row) {
     return 1;
   }
   return 0;
+}
+
+function isCrossProviderSameDayDuplicate(next, current) {
+  if (next.source_provider === current.source_provider) {
+    return false;
+  }
+
+  const nextDateKey = eventDateDedupeKey(next);
+  if (!nextDateKey || nextDateKey !== eventDateDedupeKey(current)) {
+    return false;
+  }
+
+  return (
+    isGenericEpisodeName(next.name) ||
+    isGenericEpisodeName(current.name) ||
+    String(next.air_date).includes("T") !== String(current.air_date).includes("T")
+  );
 }
 
 function preferEventCandidate(next, current, matchKind = "name") {
@@ -1096,7 +1118,7 @@ function dedupeProviderEventsForSchedule(rows) {
     const existingIndex = deduped.findIndex((candidate) => {
       const sameNumber = eventNumberDedupeKey(candidate) === numberKey;
       const sameName = nameKey !== null && eventNameDedupeKey(candidate) === nameKey;
-      return sameNumber || sameName;
+      return sameNumber || sameName || isCrossProviderSameDayDuplicate(row, candidate);
     });
     if (existingIndex === -1) {
       deduped.push(row);
@@ -1104,11 +1126,53 @@ function dedupeProviderEventsForSchedule(rows) {
     }
 
     const existing = deduped[existingIndex];
-    const matchKind = eventNumberDedupeKey(existing) === numberKey ? "number" : "name";
+    const matchKind = eventNumberDedupeKey(existing) === numberKey ? "number" : "date";
     if (preferEventCandidate(row, existing, matchKind)) {
       deduped[existingIndex] = row;
     }
   }
+  return deduped.sort((a, b) => a.air_timestamp - b.air_timestamp);
+}
+
+function dedupeSingleShowEventsForSchedule(rows) {
+  const deduped = [];
+  for (const row of rows) {
+    const dateKey = dateKeyFromValue(row.air_date);
+    const nameKey = !isGenericEpisodeName(row.name)
+      ? `${dateKey ?? ""}:name:${normalizeTitle(row.name ?? "")}`
+      : null;
+    const existingIndex = deduped.findIndex((candidate) => {
+      const sameNumber =
+        candidate.season_number === row.season_number &&
+        candidate.episode_number === row.episode_number;
+      const sameName =
+        nameKey !== null &&
+        dateKeyFromValue(candidate.air_date) === dateKey &&
+        !isGenericEpisodeName(candidate.name) &&
+        normalizeTitle(candidate.name ?? "") === normalizeTitle(row.name ?? "");
+      return (
+        sameNumber ||
+        sameName ||
+        isCrossProviderSameDayDuplicate(row, candidate)
+      );
+    });
+
+    if (existingIndex === -1) {
+      deduped.push(row);
+      continue;
+    }
+
+    const existing = deduped[existingIndex];
+    const matchKind =
+      existing.season_number === row.season_number &&
+      existing.episode_number === row.episode_number
+        ? "number"
+        : "date";
+    if (preferEventCandidate(row, existing, matchKind)) {
+      deduped[existingIndex] = row;
+    }
+  }
+
   return deduped.sort((a, b) => a.air_timestamp - b.air_timestamp);
 }
 
@@ -1195,7 +1259,9 @@ function needsMissingProviderAudit(item) {
 function buildReleaseFact(item, match, nowMs, reconciledAt) {
   const scheduleRows = dedupeProviderEventsForSchedule(match.rows);
   const releasedEvents = scheduleRows.filter((row) => row.air_timestamp <= nowMs);
-  const allFutureEvents = scheduleRows.filter((row) => row.air_timestamp > nowMs);
+  const allFutureEvents = dedupeSingleShowEventsForSchedule(
+    scheduleRows.filter((row) => row.air_timestamp > nowMs)
+  );
   const futureEvents = allFutureEvents.filter((row) => row.air_timestamp <= nowMs + scheduleLookaheadMs);
   const latestReleased = releasedEvents.at(-1);
   const nextScheduled = futureEvents[0];
