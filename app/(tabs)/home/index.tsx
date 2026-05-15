@@ -211,7 +211,8 @@ function endOfMonthDate(date: Date) {
 }
 
 function startOfWeekDate(date: Date) {
-  return addDaysToDate(date, -date.getDay());
+  const mondayFirstDayOffset = (date.getDay() + 6) % 7;
+  return addDaysToDate(date, -mondayFirstDayOffset);
 }
 
 function endOfWeekDate(date: Date) {
@@ -1087,7 +1088,7 @@ function WebUpcomingCalendar({
           showsVerticalScrollIndicator
         >
           <View className="mb-3 flex-row">
-            {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((label) => (
+            {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((label) => (
               <View key={label} className="flex-1 px-1">
                 <Text className="text-center text-[10px] font-black uppercase tracking-[1.6px] text-zinc-500">
                   {label}
