@@ -17,10 +17,10 @@ The abnormal backfill path is handled separately in `docs/TRACKED_METADATA_REFRE
 
 `AGENTS.md` marks watchlist, schedule, schedule cache, episode availability, provider matching, dedupe, projections, and reconciler boundaries as critical. Any implementation that affects those areas requires a new ADR before or in the same PR as the code change.
 
-This planning file is not the ADR. The implementation PR should add a new file like:
+This planning file is not the ADR. The schedule projection implementation PR should add a new ADR using the next unused number, for example:
 
 ```text
-docs/ADR-0003-user-schedule-projections.md
+docs/ADR-0005-user-schedule-projections.md
 ```
 
 The ADR must cover behavior, provider assumptions, title fallback rules, same-day dedupe, completed-show reactivation, stale provider totals, verification, and rollback notes.
@@ -275,6 +275,7 @@ Scope:
 - Refactor `shows.getTrackedIds` to use `feedProjections`.
 - Audit and, if safe, refactor `shows.getLibrary` to use `feedProjections`.
 - Add or update focused tests/fixtures for anime fallback IDs, completed status, partial progress, and duplicate identities.
+- Record the tracked-ID read decision in `docs/ADR-0004-tracked-ids-projection-read.md`.
 
 Why first:
 
