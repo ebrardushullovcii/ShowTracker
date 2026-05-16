@@ -24,6 +24,7 @@ import { useHorizontalSectionSwipe } from "@/hooks/use-horizontal-section-swipe"
 import { useStableDisplayPair } from "@/hooks/use-stable-display-value";
 import type { MediaType } from "@/lib/api/types";
 import { toHttpsImageUrl } from "@/lib/image-url";
+import { parseShowRouteId } from "@/lib/show-route";
 
 type HomeTab = "watchlist" | "upcoming";
 type HomeMediaFilter = "all" | "tv" | "anime";
@@ -38,6 +39,8 @@ type WatchlistItem = {
   tmdbId: number | null;
   anilistId: number | null;
   malId: number | null;
+  tvmazeId?: number | null;
+  imdbId?: string | null;
   status: "watching" | "paused" | "dropped" | "completed" | "plan_to_watch";
   isAutoTracked: boolean;
   trackingState: "not_started" | "in_progress" | "upcoming" | "tba";
@@ -291,6 +294,9 @@ function getInclusiveDayCount(startDate: string, endDate: string): number {
 }
 
 function getWatchlistRouteId(item: WatchlistItem) {
+  if (parseShowRouteId(item.id)) {
+    return item.id;
+  }
   if (
     typeof item.tmdbId === "number" &&
     (item.mediaType === "tv" || item.mediaType === "movie")
@@ -302,6 +308,12 @@ function getWatchlistRouteId(item: WatchlistItem) {
   }
   if (typeof item.malId === "number" && item.mediaType === "anime") {
     return `jikan:anime:${item.malId}`;
+  }
+  if (typeof item.tvmazeId === "number" && item.mediaType === "tv") {
+    return `tvmaze:tv:${item.tvmazeId}`;
+  }
+  if (typeof item.imdbId === "string" && item.imdbId.trim()) {
+    return `imdb:${item.mediaType}:${item.imdbId.trim().toLowerCase()}`;
   }
   return null;
 }

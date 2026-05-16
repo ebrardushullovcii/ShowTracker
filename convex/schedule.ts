@@ -70,6 +70,8 @@ type ScheduledWatchlistItem = {
   tmdbId: number | null;
   anilistId: number | null;
   malId: number | null;
+  tvmazeId: number | null;
+  imdbId: string | null;
   status: "watching" | "paused" | "dropped" | "completed" | "plan_to_watch";
   isAutoTracked: boolean;
   trackingState: "not_started" | "in_progress" | "upcoming" | "tba";
@@ -344,10 +346,6 @@ function normalizeTitle(title: string) {
   return title.toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
-function getTitleLookupKey(mediaType: "tv" | "anime", normalizedTitle: string) {
-  return `${mediaType}:${normalizedTitle}`;
-}
-
 function isAnimeSeasonTitleVariant(
   scheduleNormalizedTitle: string,
   trackedNormalizedTitle: string
@@ -506,7 +504,8 @@ function getScheduleStatusPriority(status?: string) {
 
 function shouldPreferScheduleCandidate(
   next: { mediaType: "tv" | "anime"; status?: string; lastWatchedAt?: number | null },
-  current: { mediaType: "tv" | "anime"; status?: string; lastWatchedAt?: number | null }
+  current: { mediaType: "tv" | "anime"; status?: string; lastWatchedAt?: number | null },
+  scheduleMediaType?: "tv" | "anime"
 ) {
   const statusDelta =
     getScheduleStatusPriority(next.status) - getScheduleStatusPriority(current.status);
@@ -520,6 +519,12 @@ function shouldPreferScheduleCandidate(
   }
 
   if (next.mediaType !== current.mediaType) {
+    if (scheduleMediaType && next.mediaType === scheduleMediaType) {
+      return true;
+    }
+    if (scheduleMediaType && current.mediaType === scheduleMediaType) {
+      return false;
+    }
     return next.mediaType === "tv";
   }
 
@@ -538,16 +543,11 @@ function findTrackedScheduleMatch<T extends {
   entry: CompactScheduleEntry,
   mediaType: "tv" | "anime",
   trackedShows: T[],
-  byExternalKey: Map<string, T>,
-  byTitle: Map<string, T>
+  byExternalKey: Map<string, T>
 ) {
   const externalMatch = byExternalKey.get(entry.showId);
   if (externalMatch) {
     return externalMatch;
-  }
-
-  if (mediaType !== "anime") {
-    return byTitle.get(getTitleLookupKey(mediaType, entry.normalizedTitle)) ?? null;
   }
 
   const titleCandidates = trackedShows.filter((tracked) => {
@@ -556,7 +556,8 @@ function findTrackedScheduleMatch<T extends {
     }
     return (
       entry.normalizedTitle === tracked.normalizedTitle ||
-      isAnimeSeasonTitleVariant(entry.normalizedTitle, tracked.normalizedTitle)
+      (mediaType === "anime" &&
+        isAnimeSeasonTitleVariant(entry.normalizedTitle, tracked.normalizedTitle))
     );
   });
 
@@ -565,10 +566,10 @@ function findTrackedScheduleMatch<T extends {
   }
 
   titleCandidates.sort((a, b) => {
-    if (shouldPreferScheduleCandidate(b, a)) {
+    if (shouldPreferScheduleCandidate(b, a, mediaType)) {
       return 1;
     }
-    if (shouldPreferScheduleCandidate(a, b)) {
+    if (shouldPreferScheduleCandidate(a, b, mediaType)) {
       return -1;
     }
 
@@ -747,8 +748,8 @@ function getWatchlistIdForProjection(p: {
   if (typeof p.tvmazeId === "number") {
     return `tvmaze:tv:${p.tvmazeId}`;
   }
-  if (typeof p.imdbId === "string") {
-    return `imdb:${p.mediaType}:${p.imdbId}`;
+  if (typeof p.imdbId === "string" && p.imdbId.trim()) {
+    return `imdb:${p.mediaType}:${p.imdbId.trim().toLowerCase()}`;
   }
   return null;
 }
@@ -784,6 +785,8 @@ function serializeScheduledWatchlistItem(
     tmdbId: projection.tmdbId ?? null,
     anilistId: projection.anilistId ?? null,
     malId: projection.malId ?? null,
+    tvmazeId: projection.tvmazeId ?? null,
+    imdbId: projection.imdbId ?? null,
     status: projection.status,
     isAutoTracked: projection.isAutoTracked ?? false,
     trackingState,
@@ -1201,7 +1204,6 @@ export const getHomeScheduleSignalMatches = internalQuery({
     }
 
     const byExternalKey = new Map<string, (typeof trackedShows)[number]>();
-    const byTitle = new Map<string, (typeof trackedShows)[number]>();
 
     for (const tracked of trackedShows) {
       if (typeof tracked.anilistId === "number") {
@@ -1213,10 +1215,6 @@ export const getHomeScheduleSignalMatches = internalQuery({
       if (typeof tracked.tvmazeId === "number") {
         byExternalKey.set(`tvmaze:${tracked.tvmazeId}`, tracked);
       }
-      byTitle.set(
-        getTitleLookupKey(tracked.mediaType, tracked.normalizedTitle),
-        tracked
-      );
     }
 
     const rows = await ctx.db
@@ -1254,8 +1252,7 @@ export const getHomeScheduleSignalMatches = internalQuery({
           entry,
           rowMediaType,
           trackedShows,
-          byExternalKey,
-          byTitle
+          byExternalKey
         );
 
         if (!tracked) {
@@ -1963,7 +1960,6 @@ export const getTodayScheduledWatchlistFeed = query({
     }
 
     const byExternalKey = new Map<string, (typeof trackedShows)[number]>();
-    const byTitle = new Map<string, (typeof trackedShows)[number]>();
 
     for (const tracked of trackedShows) {
       if (typeof tracked.anilistId === "number") {
@@ -1975,10 +1971,6 @@ export const getTodayScheduledWatchlistFeed = query({
       if (typeof tracked.tvmazeId === "number") {
         byExternalKey.set(`tvmaze:${tracked.tvmazeId}`, tracked);
       }
-      byTitle.set(
-        getTitleLookupKey(tracked.mediaType, tracked.normalizedTitle),
-        tracked
-      );
     }
 
     const rows = await ctx.db
@@ -2002,8 +1994,7 @@ export const getTodayScheduledWatchlistFeed = query({
           entry,
           rowMediaType,
           trackedShows,
-          byExternalKey,
-          byTitle
+          byExternalKey
         );
 
         if (!tracked) {
@@ -2169,7 +2160,6 @@ export const getUpcomingSchedule = query({
     }));
 
     const byExternalKey = new Map<string, (typeof trackedShows)[number]>();
-    const byTitle = new Map<string, (typeof trackedShows)[number]>();
 
     for (const tracked of trackedShows) {
       if (typeof tracked.anilistId === "number") {
@@ -2181,10 +2171,6 @@ export const getUpcomingSchedule = query({
       if (typeof tracked.tvmazeId === "number") {
         byExternalKey.set(`tvmaze:${tracked.tvmazeId}`, tracked);
       }
-      byTitle.set(
-        getTitleLookupKey(tracked.mediaType, tracked.normalizedTitle),
-        tracked
-      );
     }
 
     const rows = await ctx.db
@@ -2240,8 +2226,7 @@ export const getUpcomingSchedule = query({
           entry,
           rowMediaType,
           trackedShows,
-          byExternalKey,
-          byTitle
+          byExternalKey
         );
 
         if (!tracked) continue;
@@ -2455,7 +2440,6 @@ async function getFutureUpcomingCountsForUser(
     }));
 
     const byExternalKey = new Map<string, (typeof trackedShows)[number]>();
-    const byTitle = new Map<string, (typeof trackedShows)[number]>();
 
     for (const tracked of trackedShows) {
       if (typeof tracked.anilistId === "number") {
@@ -2467,10 +2451,6 @@ async function getFutureUpcomingCountsForUser(
       if (typeof tracked.tvmazeId === "number") {
         byExternalKey.set(`tvmaze:${tracked.tvmazeId}`, tracked);
       }
-      byTitle.set(
-        getTitleLookupKey(tracked.mediaType, tracked.normalizedTitle),
-        tracked
-      );
     }
 
     const rows = await ctx.db
@@ -2497,8 +2477,7 @@ async function getFutureUpcomingCountsForUser(
           entry,
           rowMediaType,
           trackedShows,
-          byExternalKey,
-          byTitle
+          byExternalKey
         );
 
         if (!tracked || !tracked.watchlistId) continue;
