@@ -550,6 +550,29 @@ function findTrackedScheduleMatch<T extends {
     return externalMatch;
   }
 
+  // Only anime schedule rows bridge TV/anime title aliases. TVMaze rows stay
+  // same-media unless provider IDs match, which avoids cross-provider duplicates.
+  if (mediaType !== "anime") {
+    const sameMediaTitleCandidates = trackedShows.filter(
+      (tracked) =>
+        tracked.mediaType === mediaType &&
+        entry.normalizedTitle === tracked.normalizedTitle
+    );
+
+    sameMediaTitleCandidates.sort((a, b) => {
+      if (shouldPreferScheduleCandidate(b, a, mediaType)) {
+        return 1;
+      }
+      if (shouldPreferScheduleCandidate(a, b, mediaType)) {
+        return -1;
+      }
+
+      return b.normalizedTitle.length - a.normalizedTitle.length;
+    });
+
+    return sameMediaTitleCandidates[0] ?? null;
+  }
+
   const titleCandidates = trackedShows.filter((tracked) => {
     if (tracked.mediaType !== "tv" && tracked.mediaType !== "anime") {
       return false;
