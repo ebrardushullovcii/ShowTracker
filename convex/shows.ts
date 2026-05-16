@@ -4058,8 +4058,25 @@ export const refreshTrackedShowMetadata = action({
       };
     }
 
+    const userShow: Doc<"userShows"> | null = await ctx.runQuery(
+      internal.shows.findUserShowByUserAndShowId,
+      {
+        userId,
+        showId: show._id,
+      }
+    );
+    if (!userShow) {
+      return {
+        refreshed: false,
+        repairedUsers: 0,
+        resumedUserShows: 0,
+        externalShowId: getShowRouteId(show),
+        reason: "not_tracked" as const,
+      };
+    }
+
     return refreshShowMetadataAndRepairTracking(ctx, show._id, {
-      repairUserId: userId,
+      skipBroadAggregateRepair: true,
     });
   },
 });
