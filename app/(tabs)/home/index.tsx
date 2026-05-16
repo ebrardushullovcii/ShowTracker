@@ -13,7 +13,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { Link } from "expo-router";
-import { useQuery } from "convex/react";
+import { useAction, useQuery } from "convex/react";
 import { FlashList, type ListRenderItem } from "@shopify/flash-list";
 import { api } from "@/convex/_generated/api";
 import { FilterBar } from "@/components/FilterBar";
@@ -71,6 +71,7 @@ type UpcomingGroup = {
 const DAY_IN_MS = 1000 * 60 * 60 * 24;
 const GRID_GAP = 12;
 const WATCHLIST_FUTURE_LOOKAHEAD_DAYS = 90;
+const HOME_SCHEDULE_SIGNAL_SYNC_INTERVAL_MS = 1000 * 60 * 30;
 const homeModeOptions = [
   { value: "watchlist" as const, label: "Watchlist" },
   { value: "upcoming" as const, label: "Schedule" },
@@ -1364,6 +1365,35 @@ export function HomeScreen() {
   );
   const homeFeedMediaFilter =
     mediaFilter === "all" ? undefined : mediaFilter;
+  const syncHomeCachedScheduleSignals = useAction(
+    api.schedule.syncHomeCachedScheduleSignals
+  );
+
+  useEffect(() => {
+    if (activeTab !== "watchlist") {
+      return;
+    }
+
+    let cancelled = false;
+    const runSync = () => {
+      void syncHomeCachedScheduleSignals({ todayDate: todayKey }).catch((error) => {
+        if (!cancelled) {
+          console.warn("Failed to sync cached home schedule signals", error);
+        }
+      });
+    };
+
+    runSync();
+    const interval = setInterval(
+      runSync,
+      HOME_SCHEDULE_SIGNAL_SYNC_INTERVAL_MS
+    );
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [activeTab, syncHomeCachedScheduleSignals, todayKey]);
 
   const watchlistLoadMoreTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [resolvedFutureCountsQueryKey, setResolvedFutureCountsQueryKey] = useState<
@@ -1403,6 +1433,16 @@ export function HomeScreen() {
     api.shows.getHomeActiveFeed,
     activeTab === "watchlist"
       ? {
+          limit: watchlistQueryLimit,
+          mediaFilter: homeFeedMediaFilter,
+        }
+      : "skip"
+  );
+  const todayScheduledWatchlistFeed = useQuery(
+    api.schedule.getTodayScheduledWatchlistFeed,
+    activeTab === "watchlist"
+      ? {
+          date: todayKey,
           limit: watchlistQueryLimit,
           mediaFilter: homeFeedMediaFilter,
         }
@@ -1455,8 +1495,22 @@ export function HomeScreen() {
     "same_day";
 
   const activeFeedItems = useMemo(
-    () => (activeFeed ?? []) as WatchlistItem[],
-    [activeFeed]
+    () => {
+      const merged = new Map<string, WatchlistItem>();
+
+      for (const item of (activeFeed ?? []) as WatchlistItem[]) {
+        merged.set(item.id, item);
+      }
+
+      for (const item of (todayScheduledWatchlistFeed ?? []) as WatchlistItem[]) {
+        if (!merged.has(item.id)) {
+          merged.set(item.id, item);
+        }
+      }
+
+      return Array.from(merged.values());
+    },
+    [activeFeed, todayScheduledWatchlistFeed]
   );
   const pausedFeedItems = useMemo(
     () => (pausedFeed ?? []) as WatchlistItem[],
@@ -1527,6 +1581,8 @@ export function HomeScreen() {
       const hasAvailableScheduleSignal =
         typeof item.newEpisodeSignalAt === "number" &&
         item.newEpisodeSignalAt > (item.lastWatchedAt ?? 0);
+      const hasSameDayScheduleAttention =
+        watchlistAirtimeMode === "same_day" && availableScheduleCount > 0;
       const allRemainingEpisodesAreFuture =
         watchlistAirtimeMode === "after_airtime" &&
         typeof item.remainingEpisodes === "number" &&
@@ -1537,7 +1593,13 @@ export function HomeScreen() {
       if (item.status === "paused") return false;
       if (item.status === "dropped") return false;
       if (item.trackingState === "upcoming") return false;
-      if (item.status === "completed" && !hasAvailableScheduleSignal) return false;
+      if (
+        item.status === "completed" &&
+        !hasAvailableScheduleSignal &&
+        !hasSameDayScheduleAttention
+      ) {
+        return false;
+      }
       if (item.watchedEpisodes <= 0) {
         return false;
       }
@@ -1548,7 +1610,8 @@ export function HomeScreen() {
       if (
         typeof item.remainingEpisodes === "number" &&
         item.remainingEpisodes <= 0 &&
-        !hasAvailableScheduleSignal
+        !hasAvailableScheduleSignal &&
+        !hasSameDayScheduleAttention
       ) {
         return false;
       }
