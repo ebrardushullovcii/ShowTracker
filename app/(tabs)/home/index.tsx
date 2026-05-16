@@ -49,6 +49,12 @@ type WatchlistItem = {
   newEpisodeSignalAt?: number | null;
 };
 
+type WatchlistScheduleCounts = {
+  availableCount: number;
+  futureCount: number;
+  unavailableCount: number;
+};
+
 type UpcomingEpisode = {
   routeId: string | null;
   showTitle: string;
@@ -114,6 +120,24 @@ function getUpcomingDistanceLabel(daysUntil: number) {
   if (daysUntil === -1) return "Yesterday";
   if (daysUntil > 1) return `In ${daysUntil}d`;
   return `${Math.abs(daysUntil)}d ago`;
+}
+
+function getWatchlistScheduleAttentionCount(
+  counts: WatchlistScheduleCounts | undefined,
+  mode: WatchlistAirtimeMode
+) {
+  if (!counts) {
+    return 0;
+  }
+
+  if (mode === "after_airtime") {
+    return counts.availableCount;
+  }
+
+  return Math.max(
+    0,
+    counts.availableCount + (counts.unavailableCount - counts.futureCount)
+  );
 }
 
 function parseEpisodeAirtime(airDate?: string | null) {
@@ -292,10 +316,12 @@ function WatchlistCard({
   item,
   isCompact,
   isSmallPhone,
+  scheduleAttentionCount = 0,
 }: {
   item: WatchlistItem;
   isCompact: boolean;
   isSmallPhone: boolean;
+  scheduleAttentionCount?: number;
 }) {
   const isFabricEnabled =
     "NativeFabricUIManager" in globalThis || "__turboModuleProxy" in globalThis;
@@ -319,9 +345,15 @@ function WatchlistCard({
       : item.watchedEpisodes;
   const hasRemainingEpisodes =
     typeof item.remainingEpisodes === "number" && item.remainingEpisodes > 0;
+  const scheduledAttentionEpisodes = Math.max(
+    0,
+    Math.floor(scheduleAttentionCount)
+  );
   const cornerLabel = hasRemainingEpisodes
     ? `${item.remainingEpisodes} left`
-    : item.status === "paused"
+    : scheduledAttentionEpisodes > 0
+      ? `${scheduledAttentionEpisodes} left`
+      : item.status === "paused"
       ? "Paused"
       : item.status === "plan_to_watch"
         ? item.trackingState === "tba"
@@ -1528,15 +1560,12 @@ export function HomeScreen() {
   const upcomingAvailabilityByRoute = useMemo(() => {
     const counts = new Map<
       string,
-      { availableCount: number; futureCount: number; unavailableCount: number }
+      WatchlistScheduleCounts
     >();
 
-    for (const entry of (watchlistFutureUpcomingCounts ?? []) as {
+    for (const entry of (watchlistFutureUpcomingCounts ?? []) as (WatchlistScheduleCounts & {
       routeId: string;
-      availableCount?: number;
-      futureCount: number;
-      unavailableCount?: number;
-    }[]) {
+    })[]) {
       counts.set(entry.routeId, {
         availableCount: entry.availableCount ?? 0,
         futureCount: entry.futureCount,
@@ -1546,6 +1575,15 @@ export function HomeScreen() {
 
     return counts;
   }, [watchlistFutureUpcomingCounts]);
+
+  const getScheduleAttentionCountForItem = useCallback(
+    (item: WatchlistItem) =>
+      getWatchlistScheduleAttentionCount(
+        upcomingAvailabilityByRoute.get(item.id),
+        watchlistAirtimeMode
+      ),
+    [upcomingAvailabilityByRoute, watchlistAirtimeMode]
+  );
 
   useEffect(() => {
     if (
@@ -1572,12 +1610,10 @@ export function HomeScreen() {
         watchlistAirtimeMode === "after_airtime"
           ? upcomingCounts?.unavailableCount ?? 0
           : upcomingCounts?.futureCount ?? 0;
-      const availableScheduleCount =
-        watchlistAirtimeMode === "after_airtime"
-          ? upcomingCounts?.availableCount ?? 0
-          : (upcomingCounts?.availableCount ?? 0) +
-            ((upcomingCounts?.unavailableCount ?? 0) -
-              (upcomingCounts?.futureCount ?? 0));
+      const availableScheduleCount = getWatchlistScheduleAttentionCount(
+        upcomingCounts,
+        watchlistAirtimeMode
+      );
       const hasAvailableScheduleSignal =
         typeof item.newEpisodeSignalAt === "number" &&
         item.newEpisodeSignalAt > (item.lastWatchedAt ?? 0);
@@ -2051,11 +2087,12 @@ export function HomeScreen() {
             item={item}
             isCompact={isCompactHomeLayout}
             isSmallPhone={isSmallPhone}
+            scheduleAttentionCount={getScheduleAttentionCountForItem(item)}
           />
         </View>
       );
     },
-    [columns, isCompactHomeLayout, isSmallPhone]
+    [columns, getScheduleAttentionCountForItem, isCompactHomeLayout, isSmallPhone]
   );
 
   const watchlistHeader = (
@@ -2357,6 +2394,7 @@ export function HomeScreen() {
                             item={item}
                             isCompact={isCompactHomeLayout}
                             isSmallPhone={isSmallPhone}
+                            scheduleAttentionCount={getScheduleAttentionCountForItem(item)}
                           />
                         </View>
                       ))}
