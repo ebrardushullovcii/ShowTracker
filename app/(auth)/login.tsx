@@ -23,6 +23,29 @@ const gradientDivider = "h-1 w-full";
 
 const fieldBase =
   "flex-row items-center gap-2 rounded-lg border-2 border-border-default bg-bg-base/70 px-3 py-2.5";
+const fallbackRedirect = "/home";
+
+function getSafeRedirectTarget(redirect: URL | string) {
+  const redirectValue = redirect.toString();
+
+  if (Platform.OS === "web" && typeof window !== "undefined") {
+    try {
+      const url = new URL(redirectValue, window.location.origin);
+      if (url.origin !== window.location.origin) {
+        return fallbackRedirect;
+      }
+      return `${url.pathname}${url.search}${url.hash}`;
+    } catch {
+      return fallbackRedirect;
+    }
+  }
+
+  if (/^[a-z][a-z0-9+.-]*:/i.test(redirectValue)) {
+    return fallbackRedirect;
+  }
+
+  return redirectValue || fallbackRedirect;
+}
 
 function FeatureRow({
   icon,
@@ -62,7 +85,7 @@ export function LoginScreen() {
     const { redirect, signingIn } = result;
 
     if (redirect instanceof URL || typeof redirect === "string") {
-      const redirectTarget = redirect.toString();
+      const redirectTarget = getSafeRedirectTarget(redirect);
       if (Platform.OS === "web" && typeof window !== "undefined") {
         window.location.href = redirectTarget;
       } else {
@@ -73,6 +96,9 @@ export function LoginScreen() {
 
     if (signingIn === true) {
       setSuccess("Signed in. Opening your dashboard...");
+      setTimeout(() => {
+        router.replace("/home");
+      }, 250);
       return;
     }
 
@@ -305,6 +331,9 @@ export function LoginScreen() {
                   <Pressable
                     onPress={handleSignIn}
                     disabled={isPending}
+                    accessibilityRole="button"
+                    accessibilityLabel="Sign in"
+                    testID="sign-in-button"
                     className="mt-4 items-center justify-center border-2 border-primary bg-primary py-3 active:opacity-90"
                   >
                     {isPending ? (
@@ -317,6 +346,9 @@ export function LoginScreen() {
                   <Pressable
                     onPress={handleAnonymousSignIn}
                     disabled={isPending}
+                    accessibilityRole="button"
+                    accessibilityLabel="Continue as guest"
+                    testID="continue-as-guest-button"
                     className="mt-2 flex-row items-center justify-center gap-2 rounded-lg border-2 border-border-bright bg-bg-elevated/70 py-3 active:opacity-90"
                   >
                     <Ionicons name="person-outline" size={15} color="#a1a1aa" />

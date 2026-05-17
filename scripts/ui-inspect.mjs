@@ -124,13 +124,13 @@ const UI_READY_CUES = [
 function getRouteReadyCues(route) {
   switch (route) {
     case "/":
-      return ["watch board", "tv + anime", "loading your dashboard"];
+      return ["track what you watch", "why showtracker", "start free"];
     case "/discover":
       return ["discover"];
     case "/search":
       return ["search"];
     case "/profile":
-      return ["preferences", "current status", "appearance"];
+      return ["stats", "total watch time", "showtracker plus"];
     default:
       return UI_READY_CUES;
   }
@@ -181,6 +181,23 @@ function shouldIgnoreWarning(messageText) {
   return IGNORED_WARNING_SUBSTRINGS.some((pattern) =>
     messageText.includes(pattern)
   );
+}
+
+function shouldIgnoreRequestFailure(request, errorText) {
+  if (errorText === "net::ERR_ABORTED") {
+    return true;
+  }
+
+  try {
+    const url = new URL(request.url());
+    return (
+      errorText === "net::ERR_BLOCKED_BY_ORB" &&
+      url.hostname === "www.google.com" &&
+      url.pathname === "/ads/measurement/l"
+    );
+  } catch {
+    return false;
+  }
 }
 
 async function waitForUiReady(page, contextName, route, themeKey) {
@@ -460,7 +477,7 @@ async function captureSet(browser, contextName, contextOptions, routes) {
 
       const handleRequestFailed = (request) => {
         const errorText = request.failure()?.errorText ?? "unknown";
-        if (errorText === "net::ERR_ABORTED") {
+        if (shouldIgnoreRequestFailure(request, errorText)) {
           return;
         }
 

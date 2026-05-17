@@ -102,6 +102,24 @@ export function Sidebar() {
             </Pressable>
           </Link>
 
+          <Link href="/subscribe" asChild>
+            <Pressable
+              className={`items-center justify-center rounded-lg px-2 py-3 ${pathname === "/subscribe" ? "border-l-2 border-primary bg-primary/15" : ""}`}
+            >
+              <Ionicons
+                name={pathname === "/subscribe" ? "sparkles" : "sparkles-outline"}
+                size={22}
+                color={pathname === "/subscribe" ? "#ef4444" : "#a1a1aa"}
+              />
+              <Text
+                className={`mt-1 text-[10px] font-medium tracking-tight ${pathname === "/subscribe" ? "text-text-primary" : "text-text-secondary"}`}
+                numberOfLines={1}
+              >
+                Plus
+              </Text>
+            </Pressable>
+          </Link>
+
           {/* Profile */}
           <Link href="/profile" asChild>
             <Pressable

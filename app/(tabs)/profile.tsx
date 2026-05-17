@@ -20,7 +20,9 @@ import { Link } from "expo-router";
 import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { useAuthActions } from "@convex-dev/auth/react";
 import { api } from "@/convex/_generated/api";
+import { NetworkAdPlacement } from "@/components/monetization/network-ad-placement";
 import { ScreenWrapper } from "@/components/ScreenWrapper";
+import { SubscriptionCallout } from "@/components/monetization/subscription-callout";
 import { useStableCount } from "@/hooks/use-stable-display-value";
 import { toHttpsImageUrl } from "@/lib/image-url";
 
@@ -1141,6 +1143,9 @@ export default function ProfileScreen() {
         {!isEditingProfile && profileSuccess ? (
           <Text className="mt-3 text-sm text-success">{profileSuccess}</Text>
         ) : null}
+
+        <SubscriptionCallout className="mt-4" />
+        <NetworkAdPlacement placement="profile" className="mt-3" />
 
         <View className="mt-6">
           <View className="mb-3 flex-row items-center justify-between">

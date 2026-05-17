@@ -15,6 +15,35 @@ export default defineSchema({
   })
     .index("by_userId", ["userId"])
     .index("by_tokenIdentifier", ["tokenIdentifier"]),
+  userEntitlements: defineTable({
+    userId: v.id("users"),
+    key: v.union(v.literal("ad_free")),
+    status: v.union(
+      v.literal("active"),
+      v.literal("past_due"),
+      v.literal("canceled"),
+      v.literal("expired")
+    ),
+    provider: v.union(
+      v.literal("manual"),
+      v.literal("revenuecat"),
+      v.literal("clerk_billing"),
+      v.literal("stripe"),
+      v.literal("app_store"),
+      v.literal("play_store")
+    ),
+    providerEntitlementId: v.optional(v.string()),
+    providerProductId: v.optional(v.string()),
+    providerEventId: v.optional(v.string()),
+    planId: v.optional(v.string()),
+    startedAt: v.optional(v.number()),
+    currentPeriodEnd: v.optional(v.number()),
+    expiresAt: v.optional(v.number()),
+    updatedAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_user_key", ["userId", "key"])
+    .index("by_provider_event", ["provider", "providerEventId"]),
   userFavorites: defineTable({
     userId: v.id("users"),
     showId: v.id("shows"),

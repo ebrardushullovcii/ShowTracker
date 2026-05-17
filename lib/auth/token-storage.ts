@@ -15,6 +15,7 @@ function getWebStorage() {
 }
 
 const inMemoryWebStorage = new Map<string, string>();
+const inMemoryNativeStorage = new Map<string, string>();
 
 export const tokenStorage: TokenStorage = {
   async getItem(key) {
@@ -32,10 +33,15 @@ export const tokenStorage: TokenStorage = {
       }
     }
     try {
-      return await SecureStore.getItemAsync(key);
+      const value = await SecureStore.getItemAsync(key);
+      if (value !== null) {
+        inMemoryNativeStorage.set(key, value);
+        return value;
+      }
+      return inMemoryNativeStorage.get(key) ?? null;
     } catch (error) {
       console.error("SecureStore getItem failed", error);
-      return null;
+      return inMemoryNativeStorage.get(key) ?? null;
     }
   },
   async setItem(key, value) {
@@ -53,6 +59,8 @@ export const tokenStorage: TokenStorage = {
       await SecureStore.setItemAsync(key, value);
     } catch (error) {
       console.error("SecureStore setItem failed", error);
+    } finally {
+      inMemoryNativeStorage.set(key, value);
     }
   },
   async removeItem(key) {
@@ -70,6 +78,8 @@ export const tokenStorage: TokenStorage = {
       await SecureStore.deleteItemAsync(key);
     } catch (error) {
       console.error("SecureStore removeItem failed", error);
+    } finally {
+      inMemoryNativeStorage.delete(key);
     }
   },
 };

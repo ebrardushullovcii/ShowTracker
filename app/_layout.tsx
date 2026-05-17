@@ -28,6 +28,7 @@ function RootLayoutContent() {
     pathname === "/library" ||
     pathname === "/profile" ||
     pathname === "/profile/settings" ||
+    pathname === "/subscribe" ||
     pathname === "/import" ||
     pathname.startsWith("/list/") ||
     pathname.startsWith("/show/");
@@ -62,6 +63,7 @@ function RootLayoutContent() {
                 contentStyle: { backgroundColor: "transparent" },
               }}
             />
+            <Stack.Screen name="subscribe" />
           </Stack>
         </AppErrorBoundary>
       </View>

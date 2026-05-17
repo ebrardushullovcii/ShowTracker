@@ -160,7 +160,7 @@ export default function LandingPage() {
                   style={{ transform: [{ rotate: "-2deg" }] }}
                 >
                   <Text className="text-xs font-black uppercase tracking-wide text-white">
-                    Open source and fully free
+                    Open source with optional Plus
                   </Text>
                 </View>
 
@@ -179,7 +179,7 @@ export default function LandingPage() {
 
                 <Text className="mt-4 max-w-2xl text-base leading-7 text-text-secondary">
                   ShowTracker is a personal project for tracking shows, anime, and movies in one place.
-                  It is fully free, open source, and built for day-to-day use.
+                  It is free to start, open source, and built for day-to-day use.
                 </Text>
 
                 <View className="mt-5 flex-row flex-wrap gap-2">
@@ -202,7 +202,7 @@ export default function LandingPage() {
                 <View className="mt-6 flex-row gap-2">
                   <StatBlock value="3" label="Media Types" />
                   <StatBlock value="1" label="Unified Queue" />
-                  <StatBlock value="100%" label="Free" />
+                  <StatBlock value="$4.99" label="Ad-Free Plus" />
                 </View>
               </View>
 
@@ -235,7 +235,7 @@ export default function LandingPage() {
                     Project note
                   </Text>
                   <Text className="mt-2 text-lg font-black text-white">
-                    Personal, open source, and intentionally fast.
+                    Core tracking stays free and intentionally fast.
                   </Text>
                 </LinearGradient>
               </View>
@@ -314,11 +314,11 @@ export default function LandingPage() {
                 className="mt-2 text-4xl leading-[44px] text-white"
                 style={{ fontFamily: "Courier New", fontWeight: "900" }}
               >
-                Use ShowTracker for free.
+                Start free. Upgrade only to remove ads.
               </Text>
               <Text className="mt-2 max-w-2xl text-sm leading-6 text-zinc-300">
-                No ads and no subscriptions. Create an account to sync your data, or sign in if you
-                already have one.
+                Create an account to sync your data. Plus is optional and removes ads
+                for $4.99/month.
               </Text>
 
               <View className="mt-4 flex-row flex-wrap gap-2">

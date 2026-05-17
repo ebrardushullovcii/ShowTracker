@@ -12,6 +12,7 @@ import type * as auth from "../auth.js";
 import type * as crons from "../crons.js";
 import type * as http from "../http.js";
 import type * as lists from "../lists.js";
+import type * as monetization from "../monetization.js";
 import type * as schedule from "../schedule.js";
 import type * as scheduleConfidence from "../scheduleConfidence.js";
 import type * as shows from "../shows.js";
@@ -28,6 +29,7 @@ declare const fullApi: ApiFromModules<{
   crons: typeof crons;
   http: typeof http;
   lists: typeof lists;
+  monetization: typeof monetization;
   schedule: typeof schedule;
   scheduleConfidence: typeof scheduleConfidence;
   shows: typeof shows;

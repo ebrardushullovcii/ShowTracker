@@ -18,6 +18,7 @@ import { FlashList, type ListRenderItem } from "@shopify/flash-list";
 import { api } from "@/convex/_generated/api";
 import { FilterBar } from "@/components/FilterBar";
 import { HomeModeSwitch } from "@/components/HomeModeSwitch";
+import { NetworkAdPlacement } from "@/components/monetization/network-ad-placement";
 import { PageIntro } from "@/components/PageIntro";
 import { ScreenWrapper } from "@/components/ScreenWrapper";
 import { useHorizontalSectionSwipe } from "@/hooks/use-horizontal-section-swipe";
@@ -2136,6 +2137,12 @@ export function HomeScreen() {
         compact={isCompactHomeLayout}
       />
 
+      <NetworkAdPlacement
+        placement="home_top"
+        className="mb-2.5"
+        compact={isCompactHomeLayout}
+      />
+
       {!isWatchlistVisualLoading &&
       filteredWatchlist.length === 0 &&
       pausedSectionWatchlist.length === 0 &&
@@ -2150,6 +2157,14 @@ export function HomeScreen() {
         </View>
       ) : null}
     </View>
+  );
+
+  const watchlistInlineAd = (
+    <NetworkAdPlacement
+      placement="home_inline"
+      className="mt-6"
+      compact={isCompactHomeLayout}
+    />
   );
 
   const autoPausedSection =
@@ -2443,6 +2458,7 @@ export function HomeScreen() {
                   ) : null}
                 </View>
 
+                {watchlistInlineAd}
                 {autoPausedSection}
                 {notStartedSection}
 
@@ -2463,6 +2479,7 @@ export function HomeScreen() {
                 ListHeaderComponent={watchlistHeader}
                 ListFooterComponent={
                   <>
+                    {watchlistInlineAd}
                     {autoPausedSection}
                     {notStartedSection}
                     {isWatchlistFilterSettling ? watchlistSettlingFooter : watchlistFooter}
@@ -2497,6 +2514,12 @@ export function HomeScreen() {
                   options={homeMediaFilterOptions}
                   value={mediaFilter}
                   onValueChange={(value: HomeMediaFilter) => setMediaFilter(value)}
+                  compact={isCompactHomeLayout}
+                />
+
+                <NetworkAdPlacement
+                  placement="schedule_top"
+                  className="mb-2.5"
                   compact={isCompactHomeLayout}
                 />
 
