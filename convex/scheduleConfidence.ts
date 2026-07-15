@@ -88,6 +88,7 @@ const scheduleCacheProviderPruneValidator = v.object({
 });
 
 const releaseDeltaValidator = v.object({
+  showId: v.optional(v.id("shows")),
   canonicalKey: v.string(),
   title: v.string(),
   mediaType: mediaTypeValidator,
@@ -104,6 +105,8 @@ const releaseDeltaValidator = v.object({
   scheduleCacheMaintenance: v.optional(v.boolean()),
   scheduleCacheMaintenanceVersion: v.optional(v.number()),
   projectionRepair: v.optional(projectionRepairValidator),
+  feedProjectionRepair: v.optional(v.boolean()),
+  trackingAggregateRepair: v.optional(v.boolean()),
   sourceProvider: v.optional(v.string()),
   reconciledAt: v.number(),
 });
@@ -825,6 +828,7 @@ function getScheduleCacheProviderPruneShowIds(delta: {
 async function findShowByProviderIds(
   ctx: QueryCtx | MutationCtx,
   delta: {
+    showId?: Id<"shows">;
     mediaType: "tv" | "anime" | "movie";
     providerIds: {
       tmdbId?: number;
@@ -834,6 +838,13 @@ async function findShowByProviderIds(
     };
   }
 ) {
+  if (delta.showId !== undefined) {
+    const directShow = await ctx.db.get(delta.showId);
+    if (directShow && directShow.mediaType === delta.mediaType) {
+      return directShow;
+    }
+  }
+
   const candidates: Array<Promise<Doc<"shows"> | null>> = [];
   if (typeof delta.providerIds.tmdbId === "number") {
     candidates.push(
@@ -1652,38 +1663,50 @@ export const exportTrackedLibrary = query({
         }));
       })
     );
-    const showStatusById = new Map(
-      page.page.map((projection, index) => [
-        projection.showId,
-        shows[index]?.status ?? null,
-      ])
-    );
-
     return {
       ...page,
-      page: page.page.map((projection, index) => ({
-        projectionId: projection._id,
-        userId: projection.userId,
-        showId: projection.showId,
-        userShowId: projection.userShowId,
-        title: projection.title,
-        mediaType: projection.mediaType,
-        posterUrl: projection.posterUrl ?? null,
-        status: projection.status,
-        showStatus: showStatusById.get(projection.showId) ?? null,
-        watchedEpisodesCount: projection.watchedEpisodesCount,
-        watchedEpisodeAnchors: watchedEpisodeAnchors[index],
-        totalEpisodes: projection.totalEpisodes ?? null,
-        remainingEpisodes: projection.remainingEpisodes ?? null,
-        tmdbId: projection.tmdbId ?? null,
-        tvmazeId: projection.tvmazeId ?? null,
-        anilistId: projection.anilistId ?? null,
-        malId: projection.malId ?? null,
-        imdbId: projection.imdbId ?? null,
-        firstAired: projection.firstAired ?? null,
-        lastWatchedAt: projection.lastWatchedAt,
-        newEpisodeSignalAt: projection.newEpisodeSignalAt ?? null,
-      })),
+      page: page.page.map((projection, index) => {
+        const show = shows[index];
+        const projectionNeedsRepair = Boolean(
+          show &&
+            (projection.title !== show.title ||
+              projection.mediaType !== show.mediaType ||
+              (projection.posterUrl ?? null) !== (show.posterUrl ?? null) ||
+              (projection.backdropUrl ?? null) !== (show.backdropUrl ?? null) ||
+              (projection.totalEpisodes ?? null) !== (show.totalEpisodes ?? null) ||
+              (projection.tmdbId ?? null) !== (show.tmdbId ?? null) ||
+              (projection.tvmazeId ?? null) !== (show.tvmazeId ?? null) ||
+              (projection.anilistId ?? null) !== (show.anilistId ?? null) ||
+              (projection.malId ?? null) !== (show.malId ?? null) ||
+              (projection.imdbId ?? null) !== (show.imdbId ?? null) ||
+              (projection.firstAired ?? null) !== (show.firstAired ?? null))
+        );
+
+        return {
+          projectionId: projection._id,
+          userId: projection.userId,
+          showId: projection.showId,
+          userShowId: projection.userShowId,
+          title: show?.title ?? projection.title,
+          mediaType: show?.mediaType ?? projection.mediaType,
+          posterUrl: show?.posterUrl ?? projection.posterUrl ?? null,
+          status: projection.status,
+          showStatus: show?.status ?? null,
+          projectionNeedsRepair,
+          watchedEpisodesCount: projection.watchedEpisodesCount,
+          watchedEpisodeAnchors: watchedEpisodeAnchors[index],
+          totalEpisodes: show?.totalEpisodes ?? projection.totalEpisodes ?? null,
+          remainingEpisodes: projection.remainingEpisodes ?? null,
+          tmdbId: show?.tmdbId ?? projection.tmdbId ?? null,
+          tvmazeId: show?.tvmazeId ?? projection.tvmazeId ?? null,
+          anilistId: show?.anilistId ?? projection.anilistId ?? null,
+          malId: show?.malId ?? projection.malId ?? null,
+          imdbId: show?.imdbId ?? projection.imdbId ?? null,
+          firstAired: show?.firstAired ?? projection.firstAired ?? null,
+          lastWatchedAt: projection.lastWatchedAt,
+          newEpisodeSignalAt: projection.newEpisodeSignalAt ?? null,
+        };
+      }),
     };
   },
 });
@@ -2154,7 +2177,8 @@ export const applyReleaseDeltas = mutation({
       }
       const patchedShow = { ...show, ...showPatch };
       const shouldRepairTrackingAggregates =
-        shouldRepairTrackingAggregatesForShowPatch(show, patchedShow);
+        shouldRepairTrackingAggregatesForShowPatch(show, patchedShow) ||
+        delta.trackingAggregateRepair === true;
 
       if (!scheduleCacheAlreadyMaintained) {
         const scheduleCacheResult = await upsertScheduleCacheEntry(ctx, delta);
@@ -2169,6 +2193,8 @@ export const applyReleaseDeltas = mutation({
         Object.keys(showPatch).length > 0 ||
         delta.clearStaleEpisodeSignal === true ||
         Boolean(delta.projectionRepair) ||
+        delta.feedProjectionRepair === true ||
+        delta.trackingAggregateRepair === true ||
         delta.releaseState === "available_now" ||
         (delta.releaseState === "caught_up" &&
           isTerminalLifecycleStatus(patchedShow.status) &&
@@ -2203,6 +2229,12 @@ export const applyReleaseDeltas = mutation({
           trackingAggregate?.lastWatchedAt ?? userShow.lastWatchedAt;
         const hasReleasedUnwatched =
           typeof releasedEpisodes === "number" && watchedCount < releasedEpisodes;
+        const effectiveReleaseState =
+          delta.releaseState === "available_now" &&
+          typeof releasedEpisodes === "number" &&
+          watchedCount >= releasedEpisodes
+            ? "caught_up"
+            : delta.releaseState;
 
         if (hasReleasedUnwatched && signalAt !== null) {
           const nextSignalAt = Math.max(
@@ -2245,7 +2277,7 @@ export const applyReleaseDeltas = mutation({
             patchedShow,
             watchedCount,
             releasedEpisodes,
-            delta.releaseState
+            effectiveReleaseState
           )
         ) {
           userPatch.status = "completed";
@@ -2283,7 +2315,7 @@ export const applyReleaseDeltas = mutation({
         );
         if (projectionPatched) {
           result.patchedFeedProjections += 1;
-          if (delta.projectionRepair) {
+          if (delta.projectionRepair || delta.feedProjectionRepair === true) {
             result.repairedStaleProjections += 1;
           }
         } else {
