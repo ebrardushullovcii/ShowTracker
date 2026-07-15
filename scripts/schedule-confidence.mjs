@@ -2538,7 +2538,10 @@ function buildReleaseFact(item, match, nowMs, reconciledAt) {
     releasedEventEpisodeFloor
   );
   const totalEpisodes =
-    typeof providerConfirmedCurrentTotalEpisodes === "number"
+    hasAuthoritativeTerminalProviderMetadata &&
+    typeof providerMetadataTotalEpisodes === "number"
+      ? Math.max(releasedEpisodes, providerMetadataTotalEpisodes)
+      : typeof providerConfirmedCurrentTotalEpisodes === "number"
       ? Math.min(rawTotalEpisodes, providerConfirmedCurrentTotalEpisodes)
       : typeof providerMetadataImportedTotalCap === "number"
       ? Math.min(rawTotalEpisodes, providerMetadataImportedTotalCap)

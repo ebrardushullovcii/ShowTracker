@@ -86,6 +86,8 @@ the larger alternate catalogue.
 The authoritative marker also prevents an alternate imported watched count from
 raising the provider denominator. Watch history can remain stored for statistics
 without turning an `87`-episode regular catalogue back into `89` Home episodes.
+It also permits the stale global terminal total to decrease to the authoritative
+regular catalogue, keeping detail metadata aligned with the repaired projection.
 
 ## Reasoning
 
