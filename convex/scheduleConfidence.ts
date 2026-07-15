@@ -843,6 +843,7 @@ async function findShowByProviderIds(
     if (directShow && directShow.mediaType === delta.mediaType) {
       return directShow;
     }
+    return null;
   }
 
   const candidates: Array<Promise<Doc<"shows"> | null>> = [];
@@ -1689,20 +1690,26 @@ export const exportTrackedLibrary = query({
           userShowId: projection.userShowId,
           title: show?.title ?? projection.title,
           mediaType: show?.mediaType ?? projection.mediaType,
-          posterUrl: show?.posterUrl ?? projection.posterUrl ?? null,
+          posterUrl: show
+            ? show.posterUrl ?? null
+            : projection.posterUrl ?? null,
           status: projection.status,
           showStatus: show?.status ?? null,
           projectionNeedsRepair,
           watchedEpisodesCount: projection.watchedEpisodesCount,
           watchedEpisodeAnchors: watchedEpisodeAnchors[index],
-          totalEpisodes: show?.totalEpisodes ?? projection.totalEpisodes ?? null,
+          totalEpisodes: show
+            ? show.totalEpisodes ?? null
+            : projection.totalEpisodes ?? null,
           remainingEpisodes: projection.remainingEpisodes ?? null,
-          tmdbId: show?.tmdbId ?? projection.tmdbId ?? null,
-          tvmazeId: show?.tvmazeId ?? projection.tvmazeId ?? null,
-          anilistId: show?.anilistId ?? projection.anilistId ?? null,
-          malId: show?.malId ?? projection.malId ?? null,
-          imdbId: show?.imdbId ?? projection.imdbId ?? null,
-          firstAired: show?.firstAired ?? projection.firstAired ?? null,
+          tmdbId: show ? show.tmdbId ?? null : projection.tmdbId ?? null,
+          tvmazeId: show ? show.tvmazeId ?? null : projection.tvmazeId ?? null,
+          anilistId: show ? show.anilistId ?? null : projection.anilistId ?? null,
+          malId: show ? show.malId ?? null : projection.malId ?? null,
+          imdbId: show ? show.imdbId ?? null : projection.imdbId ?? null,
+          firstAired: show
+            ? show.firstAired ?? null
+            : projection.firstAired ?? null,
           lastWatchedAt: projection.lastWatchedAt,
           newEpisodeSignalAt: projection.newEpisodeSignalAt ?? null,
         };
