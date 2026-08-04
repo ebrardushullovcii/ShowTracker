@@ -148,3 +148,42 @@ test("maps source specials across provider special ordering", () => {
     ]
   );
 });
+
+test("maps a verified TVDB episode alias to its TMDB coordinate", () => {
+  const [result] = reconcileEpisodesWithProviderCatalogue(
+    [
+      {
+        season: 4,
+        episode: 28,
+        sourceEpisodeId: "7659644",
+      },
+    ],
+    [
+      {
+        id: "tmdb-episode:461496",
+        seasonNumber: 4,
+        episodeNumber: 27,
+        runtime: 51,
+      },
+    ],
+    24,
+    { tmdbId: 3498 }
+  );
+
+  assert.equal(result.providerEpisodeId, "tmdb-episode:461496");
+  assert.equal(result.season, 4);
+  assert.equal(result.episode, 27);
+  assert.equal(result.runtime, 51);
+  assert.equal(result.unmatched, false);
+});
+
+test("does not apply a TVDB episode alias to another show", () => {
+  const [result] = reconcileEpisodesWithProviderCatalogue(
+    [{ season: 4, episode: 28, sourceEpisodeId: "7659644" }],
+    [{ id: "other:28", seasonNumber: 4, episodeNumber: 28, runtime: 20 }],
+    20,
+    { tmdbId: 999 }
+  );
+
+  assert.equal(result.providerEpisodeId, "other:28");
+});

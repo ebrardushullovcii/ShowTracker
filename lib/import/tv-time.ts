@@ -13,6 +13,7 @@ export type ParsedImportEpisode = {
   sourceSeason?: number;
   sourceEpisode?: number;
   sourceEpisodeId?: string;
+  sourceEpisodeIds?: string[];
   providerEpisodeId?: string;
   importMatchMethod?: "exact" | "ordinal";
   unmatched?: boolean;

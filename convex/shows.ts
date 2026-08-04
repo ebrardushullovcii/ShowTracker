@@ -5864,6 +5864,7 @@ export const importTrackedShows = mutation({
             sourceSeason: v.optional(v.number()),
             sourceEpisode: v.optional(v.number()),
             sourceEpisodeId: v.optional(v.string()),
+            sourceEpisodeIds: v.optional(v.array(v.string())),
             isSpecial: v.optional(v.boolean()),
             providerEpisodeId: v.optional(v.string()),
             importMatchMethod: v.optional(
@@ -5990,6 +5991,7 @@ export const importTrackedShows = mutation({
           sourceSeason?: number;
           sourceEpisode?: number;
           sourceEpisodeId?: string;
+          sourceEpisodeIds?: string[];
           isSpecial?: boolean;
           providerEpisodeId?: string;
           importMatchMethod?: "exact" | "ordinal";
@@ -6029,6 +6031,7 @@ export const importTrackedShows = mutation({
             sourceSeason: episode.sourceSeason,
             sourceEpisode: episode.sourceEpisode,
             sourceEpisodeId: episode.sourceEpisodeId,
+            sourceEpisodeIds: episode.sourceEpisodeIds,
             isSpecial: episode.isSpecial,
             providerEpisodeId: episode.providerEpisodeId,
             importMatchMethod: episode.importMatchMethod,
@@ -6040,10 +6043,31 @@ export const importTrackedShows = mutation({
         const existingHistory = sortFiniteTimestamps(
           Array.isArray(existing.watchHistory) ? existing.watchHistory : []
         );
-        const mergedHistory = sortFiniteTimestamps([
-          ...existingHistory,
-          ...incomingHistory,
-        ]);
+        const existingSourceIds = existing.sourceEpisodeIds ??
+          (existing.sourceEpisodeId ? [existing.sourceEpisodeId] : []);
+        const incomingSourceIds = episode.sourceEpisodeIds ??
+          (episode.sourceEpisodeId ? [episode.sourceEpisodeId] : []);
+        const incomingSourceIdSet = new Set(incomingSourceIds);
+        const combinesProviderParts =
+          existing.providerEpisodeId !== undefined &&
+          existing.providerEpisodeId === episode.providerEpisodeId &&
+          existingSourceIds.length > 0 &&
+          incomingSourceIds.length > 0 &&
+          existingSourceIds.every((id) => !incomingSourceIdSet.has(id));
+        const mergedHistory = combinesProviderParts
+          ? sortFiniteTimestamps(
+              Array.from(
+                { length: Math.max(existingHistory.length, incomingHistory.length) },
+                (_, index) => Math.max(
+                  existingHistory[index] ?? Number.NEGATIVE_INFINITY,
+                  incomingHistory[index] ?? Number.NEGATIVE_INFINITY
+                )
+              ).filter(Number.isFinite)
+            )
+          : sortFiniteTimestamps(Array.from(new Set([
+              ...existingHistory,
+              ...incomingHistory,
+            ])));
         const mergedCount = Math.max(
           existing.watchCount ?? 1,
           incomingCount,
@@ -6071,6 +6095,14 @@ export const importTrackedShows = mutation({
           sourceSeason: episode.sourceSeason ?? existing.sourceSeason,
           sourceEpisode: episode.sourceEpisode ?? existing.sourceEpisode,
           sourceEpisodeId: episode.sourceEpisodeId ?? existing.sourceEpisodeId,
+          sourceEpisodeIds: Array.from(
+            new Set([
+              ...(existing.sourceEpisodeIds ??
+                (existing.sourceEpisodeId ? [existing.sourceEpisodeId] : [])),
+              ...(episode.sourceEpisodeIds ??
+                (episode.sourceEpisodeId ? [episode.sourceEpisodeId] : [])),
+            ])
+          ),
           isSpecial: episode.isSpecial ?? existing.isSpecial,
           providerEpisodeId: episode.providerEpisodeId ?? existing.providerEpisodeId,
           importMatchMethod: episode.importMatchMethod ?? existing.importMatchMethod,
@@ -6083,17 +6115,26 @@ export const importTrackedShows = mutation({
       for (const episode of uniqueIncomingEpisodes) {
         const sourceSeason = episode.sourceSeason ?? episode.season;
         const sourceEpisodeNumber = episode.sourceEpisode ?? episode.episode;
-        const sourceIdEpisode = episode.sourceEpisodeId
-          ? await ctx.db
+        const sourceEpisodeIds = episode.sourceEpisodeIds ??
+          (episode.sourceEpisodeId ? [episode.sourceEpisodeId] : []);
+        const sourceIdEpisodes = await Promise.all(
+          sourceEpisodeIds.map((sourceEpisodeId) =>
+            ctx.db
               .query("watchedEpisodes")
               .withIndex("by_user_source_episode", (q) =>
-                q.eq("userId", userId).eq("sourceEpisodeId", episode.sourceEpisodeId)
+                q.eq("userId", userId).eq("sourceEpisodeId", sourceEpisodeId)
               )
               .first()
-          : null;
+          )
+        );
+        const sourceIdEpisode = sourceIdEpisodes.find((entry) => entry !== null) ?? null;
         const provenanceEpisode = sourceIdEpisode ?? existingEpisodes.find(
           (entry) =>
-            (episode.sourceEpisodeId && entry.sourceEpisodeId === episode.sourceEpisodeId) ||
+            sourceEpisodeIds.some(
+              (sourceEpisodeId) =>
+                entry.sourceEpisodeId === sourceEpisodeId ||
+                entry.sourceEpisodeIds?.includes(sourceEpisodeId)
+            ) ||
             (entry.sourceSeason === sourceSeason && entry.sourceEpisode === sourceEpisodeNumber)
         );
         const providerEpisode = episode.providerEpisodeId
@@ -6197,6 +6238,8 @@ export const importTrackedShows = mutation({
             existingEpisode.sourceSeason !== episode.sourceSeason ||
             existingEpisode.sourceEpisode !== episode.sourceEpisode ||
             existingEpisode.sourceEpisodeId !== episode.sourceEpisodeId ||
+            JSON.stringify(existingEpisode.sourceEpisodeIds ?? []) !==
+              JSON.stringify(episode.sourceEpisodeIds ?? []) ||
             existingEpisode.providerEpisodeId !== episode.providerEpisodeId ||
             existingEpisode.importMatchMethod !== episode.importMatchMethod;
 
@@ -6212,6 +6255,7 @@ export const importTrackedShows = mutation({
               sourceSeason: episode.sourceSeason,
               sourceEpisode: episode.sourceEpisode,
               sourceEpisodeId: episode.sourceEpisodeId,
+              sourceEpisodeIds: episode.sourceEpisodeIds,
               providerEpisodeId: episode.providerEpisodeId,
               importMatchMethod: episode.importMatchMethod,
             });
@@ -6228,6 +6272,7 @@ export const importTrackedShows = mutation({
               sourceSeason: episode.sourceSeason,
               sourceEpisode: episode.sourceEpisode,
               sourceEpisodeId: episode.sourceEpisodeId,
+              sourceEpisodeIds: episode.sourceEpisodeIds,
               providerEpisodeId: episode.providerEpisodeId,
               importMatchMethod: episode.importMatchMethod,
               watchedAt: mergedWatchedAt,
@@ -6250,6 +6295,7 @@ export const importTrackedShows = mutation({
           sourceSeason: episode.sourceSeason,
           sourceEpisode: episode.sourceEpisode,
           sourceEpisodeId: episode.sourceEpisodeId,
+          sourceEpisodeIds: episode.sourceEpisodeIds,
           providerEpisodeId: episode.providerEpisodeId,
           importMatchMethod: episode.importMatchMethod,
           watchedAt: normalizedWatchedAt,
