@@ -125,6 +125,7 @@ Most frequently relevant:
 | [ADR-0053](ADR-0053-provider-spanning-tv-time-import.md) | TV Time imports flatten season groups, score provider catalogues by episode coverage, and split combined source histories across verified companion shows. |
 | [ADR-0054](ADR-0054-terminal-provider-count-and-projection-repair.md) | Complete terminal TMDB counts and exact bounded projection repair prevent provider catalogue inflation from reactivating caught-up shows. |
 | [ADR-0055](ADR-0055-multilingual-tv-time-provider-identity.md) | TV Time imports use hydrated multilingual provider identity and narrowly verified episode aliases without counting split parts as rewatches. |
+| [ADR-0056](ADR-0056-tv-time-resolution-retries.md) | TV Time imports retry empty provider resolutions at lower concurrency so transient request pressure is not reported as missing metadata. |
 
 ## Rule For New ADRs
 

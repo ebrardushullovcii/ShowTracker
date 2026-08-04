@@ -38,10 +38,10 @@ import {
   type TvTimeGdprParseSummary,
 } from "@/lib/import/tv-time-gdpr";
 import { enrichImportedEpisodeRuntimes } from "@/lib/import/provider-runtime";
-import { resolveGdprImportPlans } from "@/lib/import/gdpr-resolver";
+import { resolveGdprImportPlansWithRetry } from "@/lib/import/gdpr-resolver";
 import { mergeCanonicalImportEpisodes } from "@/lib/import/episode-merge";
 
-const RESOLVE_CONCURRENCY = 4;
+const RESOLVE_CONCURRENCY = 2;
 const IMPORT_CHUNK_SIZE = 20;
 const LARGE_JSON_THRESHOLD_BYTES = 1024 * 1024;
 const WEB_IMPORT_FILE_INPUT_ID = "import-file-input";
@@ -1000,10 +1000,14 @@ export function ImportScreen() {
         async (item): Promise<ResolveResult[]> => {
           try {
             if (item.source === "tv_time_gdpr") {
-              const { plans } = await resolveGdprImportPlans(item);
+              const { plans } = await resolveGdprImportPlansWithRetry(item);
               return plans.length > 0
                 ? plans
-                : [{ parsed: item, show: null }];
+                : [{
+                    parsed: item,
+                    show: null,
+                    error: "Metadata providers returned no match after retries.",
+                  }];
             }
             const show = await resolveImportedItem(item);
             const watchedEpisodes = show
