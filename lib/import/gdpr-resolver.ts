@@ -17,13 +17,29 @@ export type GdprImportPlan = {
   show: NormalizedShow;
 };
 
+const VERIFIED_EPISODE_DESTINATIONS: Record<
+  string,
+  { mediaType: "movie"; tmdbId: number }
+> = {
+  // TVDB stores these Naruto films as series specials while TMDB stores movies.
+  "4117651": { mediaType: "movie", tmdbId: 75624 },
+  "4564234": { mediaType: "movie", tmdbId: 118406 },
+  "5235891": { mediaType: "movie", tmdbId: 317442 },
+};
+
+export function getVerifiedEpisodeDestination(sourceEpisodeId?: string) {
+  return sourceEpisodeId
+    ? VERIFIED_EPISODE_DESTINATIONS[sourceEpisodeId]
+    : undefined;
+}
+
 function normalizeTitle(value: string) {
   return value
     .normalize("NFKD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .trim()
-    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -48,7 +64,11 @@ function scoreTitle(a: string, b: string) {
 }
 
 function scoreCandidate(item: ParsedImportItem, show: NormalizedShow) {
-  const title = scoreTitle(item.title, show.title);
+  const title = Math.max(
+    ...[show.title, show.originalTitle, ...(show.alternativeTitles ?? [])]
+      .filter((value): value is string => !!value)
+      .map((value) => scoreTitle(item.title, value))
+  );
   const candidateYear = extractYear(show.firstAired);
   const year =
     !item.firstAiredYear || !candidateYear
@@ -72,6 +92,7 @@ function isNamedExtensionTitle(source: string, candidate: string) {
   return (
     candidateTitle !== sourceTitle &&
     (anthologyContinuation ||
+      candidateTitle.startsWith(`${sourceTitle} of `) ||
       (candidateTitle.startsWith(sourceTitle) &&
         /\b(unlimited|short stories|specials?|ova|season|part|chapter|book|case|movie|film|inspector)\b/.test(
           candidateTitle.slice(sourceTitle.length)
@@ -105,12 +126,33 @@ function candidateKey(show: NormalizedShow) {
 async function hydrateTmdb(show: NormalizedShow) {
   if (typeof show.tmdbId !== "number") return null;
   const mediaType = show.mediaType === "movie" ? "movie" : "tv";
-  const details = await getTmdbShowDetails(mediaType, show.tmdbId).catch(() => null);
+  const details = await getTmdbShowDetails(mediaType, show.tmdbId, {
+    includeAlternativeTitles: true,
+    resolveRuntimeFallback: false,
+  }).catch(() => null);
   return details ? normalizeTmdbShowDetails(mediaType, details) : null;
 }
 
 async function collectCandidates(item: ParsedImportItem) {
   const candidates: NormalizedShow[] = [];
+  const externalCandidates: NormalizedShow[] = [];
+  const verifiedDestinationIds = Array.from(
+    new Set(
+      item.watchedEpisodes
+        .map((episode) => getVerifiedEpisodeDestination(episode.sourceEpisodeId)?.tmdbId)
+        .filter((tmdbId): tmdbId is number => typeof tmdbId === "number")
+    )
+  );
+  const verifiedDestinations = await Promise.all(
+    verifiedDestinationIds.map((tmdbId) =>
+      hydrateTmdb({
+        id: `tmdb:${tmdbId}`,
+        mediaType: "movie",
+        title: item.title,
+        tmdbId,
+      })
+    )
+  );
   if (typeof item.tvdbId === "number") {
     const [tmdbFind, tvmazeShow] = await Promise.all([
       findTmdbByTvdbId(item.tvdbId).catch(() => null),
@@ -119,31 +161,49 @@ async function collectCandidates(item: ParsedImportItem) {
     const tmdbCandidates = await Promise.all(
       (tmdbFind?.items ?? []).filter((show) => show.mediaType === "tv").map(hydrateTmdb)
     );
-    candidates.push(
+    externalCandidates.push(
       ...tmdbCandidates
         .filter((show): show is NormalizedShow => show !== null)
         .map((show) => ({ ...show, tvdbId: item.tvdbId }))
     );
     if (tvmazeShow) {
       const episodes = await getTvMazeShowEpisodes(tvmazeShow.id, true).catch(() => []);
-      candidates.push(normalizeTvMazeShow(tvmazeShow, episodes));
+      externalCandidates.push(normalizeTvMazeShow(tvmazeShow, episodes));
     }
   }
 
   const hasSpecials = item.watchedEpisodes.some(
     (episode) => (episode.sourceSeason ?? episode.season) === 0
   );
+  const titleWithoutYear = item.title.replace(/\s*\((19|20)\d{2}\)\s*$/, "").trim();
+  const titleWithoutCreator = titleWithoutYear.replace(
+    /^[\p{L}\p{N} .'-]+['’]s\s+(?=\p{L})/u,
+    ""
+  );
+  const searchTitles = Array.from(
+    new Set([item.title, titleWithoutYear, titleWithoutCreator].filter(Boolean))
+  );
+  const yearFilters = item.firstAiredYear
+    ? item.mediaType === "movie"
+      ? { primary_release_year: item.firstAiredYear }
+      : { first_air_date_year: item.firstAiredYear }
+    : undefined;
   const searches = await Promise.all([
-    searchTmdb(item.title, "tv", 1).catch(() => null),
+    ...searchTitles.map((title) => searchTmdb(title, "tv", 1).catch(() => null)),
     hasSpecials
       ? searchTmdb(`${item.title} short stories`, "tv", 1).catch(() => null)
       : Promise.resolve(null),
     hasSpecials
       ? searchTmdb(`${item.title} ova`, "tv", 1).catch(() => null)
       : Promise.resolve(null),
-    item.mediaType === "movie" || item.watchedEpisodes.length <= 10
-      ? searchTmdb(item.title, "movie", 1).catch(() => null)
-      : Promise.resolve(null),
+    ...(item.mediaType === "movie" || item.watchedEpisodes.length <= 10
+      ? searchTitles.flatMap((title) => [
+          searchTmdb(title, "movie", 1).catch(() => null),
+          yearFilters
+            ? searchTmdb(title, "movie", 1, yearFilters).catch(() => null)
+            : Promise.resolve(null),
+        ])
+      : []),
     /\((19|20)\d{2}\)/.test(item.title)
       ? searchTmdb(
           `${item.title.replace(/\s*\((19|20)\d{2}\)\s*$/, "").replace(/s$/i, "")}s`,
@@ -160,13 +220,18 @@ async function collectCandidates(item: ParsedImportItem) {
         .map((show) => [show.tmdbId!, show])
     ).values()
   )
-    .filter(
-      (show) =>
-        scoreCandidate(item, show) >= 0.68 || isNamedExtensionTitle(item.title, show.title)
-    )
     .slice(0, 24);
   const hydratedSearch = await Promise.all(rankedTmdb.map(hydrateTmdb));
-  candidates.push(...hydratedSearch.filter((show): show is NormalizedShow => show !== null));
+  candidates.push(
+    ...externalCandidates,
+    ...verifiedDestinations.filter((show): show is NormalizedShow => show !== null),
+    ...hydratedSearch.filter(
+      (show): show is NormalizedShow =>
+        show !== null &&
+        (scoreCandidate(item, show) >= 0.68 ||
+          isNamedExtensionTitle(item.title, show.title))
+    )
+  );
 
   const unique = new Map<string, NormalizedShow>();
   for (const show of candidates) {
@@ -204,11 +269,26 @@ export function selectMetadataOnlyCandidate(
   item: ParsedImportItem,
   candidates: NormalizedShow[]
 ) {
-  return candidates
-    .filter((show) => !isNamedExtensionTitle(item.title, show.title))
-    .map((show) => ({ show, score: scoreCandidate(item, show) }))
-    .filter((candidate) => candidate.score >= 0.68)
-    .sort((a, b) => b.score - a.score)[0]?.show ?? null;
+  const ranked: Array<{
+    show: NormalizedShow;
+    exactExternal: boolean;
+    score: number;
+  }> = [];
+  for (const show of candidates) {
+    if (isNamedExtensionTitle(item.title, show.title)) continue;
+    const candidate = {
+      show,
+      exactExternal:
+        typeof item.tvdbId === "number" && show.tvdbId === item.tvdbId,
+      score: scoreCandidate(item, show),
+    };
+    if (candidate.exactExternal || candidate.score >= 0.68) ranked.push(candidate);
+  }
+  ranked.sort(
+    (a, b) =>
+      Number(b.exactExternal) - Number(a.exactExternal) || b.score - a.score
+  );
+  return ranked[0]?.show ?? null;
 }
 
 export async function resolveGdprImportPlans(item: ParsedImportItem) {
@@ -222,16 +302,54 @@ export async function resolveGdprImportPlans(item: ParsedImportItem) {
   }
 
   const plans: GdprImportPlan[] = [];
-  let remaining = item.watchedEpisodes;
+  const verifiedPlans: GdprImportPlan[] = [];
+  const verifiedSourceKeys = new Set<string>();
+  for (const episode of item.watchedEpisodes) {
+    const destination = getVerifiedEpisodeDestination(episode.sourceEpisodeId);
+    if (!destination) continue;
+    const show = candidates.find(
+      (candidate) =>
+        candidate.mediaType === destination.mediaType &&
+        candidate.tmdbId === destination.tmdbId
+    );
+    if (!show) continue;
+    const [canonical] = await enrichImportedEpisodeRuntimes(
+      [
+        {
+          ...episode,
+          season: 1,
+          episode: 1,
+          sourceSeason: episode.sourceSeason ?? episode.season,
+          sourceEpisode: episode.sourceEpisode ?? episode.episode,
+        },
+      ],
+      show,
+      { canonicalize: true }
+    );
+    verifiedPlans.push({
+      parsed: { ...item, watchedEpisodes: [canonical] },
+      show,
+    });
+    verifiedSourceKeys.add(sourceEpisodeKey(episode));
+  }
+  let remaining = item.watchedEpisodes.filter(
+    (episode) => !verifiedSourceKeys.has(sourceEpisodeKey(episode))
+  );
   const unused = [...candidates];
 
   while (remaining.length > 0 && unused.length > 0) {
+    const exactExternalCandidates = unused.filter(
+      (show) =>
+        typeof item.tvdbId === "number" && show.tvdbId === item.tvdbId
+    );
     const baseCandidates = unused.filter(
       (show) => !isNamedExtensionTitle(item.title, show.title)
     );
     const eligible = plans[0]
       ? unused.filter((show) => isContinuationCandidate(item, plans[0].show, show))
-      : baseCandidates.length > 0
+      : exactExternalCandidates.length > 0
+        ? exactExternalCandidates
+        : baseCandidates.length > 0
         ? baseCandidates
         : unused;
     if (plans[0]) {
@@ -305,5 +423,5 @@ export async function resolveGdprImportPlans(item: ParsedImportItem) {
       ...remaining.map((episode) => ({ ...episode, unmatched: true }))
     );
   }
-  return { plans, unmatched: remaining };
+  return { plans: [...plans, ...verifiedPlans], unmatched: remaining };
 }

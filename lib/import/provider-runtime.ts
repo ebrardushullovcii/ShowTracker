@@ -6,6 +6,17 @@ import type { ParsedImportEpisode } from "@/lib/import/tv-time";
 
 const CATALOGUE_FETCH_CONCURRENCY = 3;
 
+const PROVIDER_EPISODE_ALIASES: Record<
+  string,
+  { tmdbId: number; season: number; episode: number }
+> = {
+  // TVDB splits these finales into parts while TMDB stores a combined episode.
+  "7659644": { tmdbId: 3498, season: 4, episode: 27 },
+  "4432653": { tmdbId: 5371, season: 6, episode: 13 },
+  // TMDB numbers The Last Watch differently in its specials catalogue.
+  "7107505": { tmdbId: 1399, season: 0, episode: 314 },
+};
+
 async function retryProviderRequest<T>(request: () => Promise<T>) {
   let lastError: unknown;
   for (let attempt = 0; attempt < 3; attempt += 1) {
@@ -94,7 +105,8 @@ function asUnmatched(source: ParsedImportEpisode, showRuntime?: number): ParsedI
 export function reconcileEpisodesWithProviderCatalogue(
   episodes: ParsedImportEpisode[],
   providerEpisodes: NormalizedEpisode[],
-  showRuntime?: number
+  showRuntime?: number,
+  options: { tmdbId?: number } = {}
 ) {
   const validProviderEpisodes = providerEpisodes.filter(
     (entry) =>
@@ -145,6 +157,16 @@ export function reconcileEpisodesWithProviderCatalogue(
 
   return episodes.map((entry) => {
     const source = getSourceCoordinates(entry);
+    const alias = entry.sourceEpisodeId
+      ? PROVIDER_EPISODE_ALIASES[entry.sourceEpisodeId]
+      : undefined;
+    const aliasedProvider =
+      alias && alias.tmdbId === options.tmdbId
+        ? providerByCoordinate.get(episodeKey(alias.season, alias.episode))
+        : undefined;
+    if (aliasedProvider) {
+      return withProviderEpisode(entry, aliasedProvider, "exact", showRuntime);
+    }
     const direct = providerByCoordinate.get(episodeKey(source.season, source.episode));
     if (source.season === 0) {
       if (direct) return withProviderEpisode(entry, direct, "exact", showRuntime);
@@ -287,7 +309,8 @@ export async function enrichImportedEpisodeRuntimes(
     return reconcileEpisodesWithProviderCatalogue(
       episodes,
       providerEpisodes,
-      show.episodeRuntime
+      show.episodeRuntime,
+      { tmdbId: show.tmdbId }
     );
   }
 

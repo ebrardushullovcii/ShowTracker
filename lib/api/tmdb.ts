@@ -85,6 +85,8 @@ export type TmdbMedia = {
   media_type?: "tv" | "movie" | "person";
   name?: string;
   title?: string;
+  original_name?: string;
+  original_title?: string;
   overview?: string;
   poster_path?: string | null;
   backdrop_path?: string | null;
@@ -98,6 +100,12 @@ export type TmdbShowDetails = {
   id: number;
   name?: string;
   title?: string;
+  original_name?: string;
+  original_title?: string;
+  alternative_titles?: {
+    results?: { title?: string }[];
+    titles?: { title?: string }[];
+  };
   overview?: string;
   poster_path?: string | null;
   backdrop_path?: string | null;
@@ -510,11 +518,20 @@ export async function findTmdbByTvdbId(tvdbId: number | string) {
 
 export async function getTmdbShowDetails(
   mediaType: "tv" | "movie",
-  id: number
+  id: number,
+  options: {
+    includeAlternativeTitles?: boolean;
+    resolveRuntimeFallback?: boolean;
+  } = {}
 ) {
-  const details = await request<TmdbShowDetails>(`/${mediaType}/${id}`);
+  const details = await request<TmdbShowDetails>(
+    `/${mediaType}/${id}`,
+    options.includeAlternativeTitles
+      ? { append_to_response: "alternative_titles" }
+      : undefined
+  );
 
-  if (mediaType === "tv") {
+  if (mediaType === "tv" && options.resolveRuntimeFallback !== false) {
     const fallbackRuntime = await resolveTmdbTvRuntimeFallback(details);
     if (typeof fallbackRuntime === "number") {
       const existingRuntime =

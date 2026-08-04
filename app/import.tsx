@@ -39,6 +39,7 @@ import {
 } from "@/lib/import/tv-time-gdpr";
 import { enrichImportedEpisodeRuntimes } from "@/lib/import/provider-runtime";
 import { resolveGdprImportPlans } from "@/lib/import/gdpr-resolver";
+import { mergeCanonicalImportEpisodes } from "@/lib/import/episode-merge";
 
 const RESOLVE_CONCURRENCY = 4;
 const IMPORT_CHUNK_SIZE = 20;
@@ -268,76 +269,6 @@ function chunkArray<T>(items: T[], size: number) {
   return output;
 }
 
-function getEpisodeHistoryForMerge(episode: ParsedImportItem["watchedEpisodes"][number]) {
-  if (Array.isArray(episode.watchHistory) && episode.watchHistory.length > 0) {
-    return episode.watchHistory.filter(
-      (entry): entry is number => typeof entry === "number" && Number.isFinite(entry)
-    );
-  }
-
-  if (typeof episode.watchedAt === "number" && Number.isFinite(episode.watchedAt)) {
-    return [episode.watchedAt];
-  }
-
-  return [];
-}
-
-function getEpisodeWatchCountForMerge(
-  episode: ParsedImportItem["watchedEpisodes"][number],
-  history: number[]
-) {
-  const explicitCount =
-    typeof episode.watchCount === "number" && Number.isFinite(episode.watchCount)
-      ? Math.floor(episode.watchCount)
-      : undefined;
-
-  if (typeof explicitCount === "number" && explicitCount > 0) {
-    return explicitCount;
-  }
-
-  if (history.length > 0) {
-    return history.length;
-  }
-
-  return 1;
-}
-
-function mergeWatchedEpisodeEntries(
-  existing: ParsedImportItem["watchedEpisodes"][number],
-  incoming: ParsedImportItem["watchedEpisodes"][number]
-): ParsedImportItem["watchedEpisodes"][number] {
-  const existingHistory = getEpisodeHistoryForMerge(existing);
-  const incomingHistory = getEpisodeHistoryForMerge(incoming);
-  const mergedHistory = [...existingHistory, ...incomingHistory];
-
-  const existingCount = getEpisodeWatchCountForMerge(existing, existingHistory);
-  const incomingCount = getEpisodeWatchCountForMerge(incoming, incomingHistory);
-  const watchCount = existingCount + incomingCount;
-
-  const latestWatchedAt =
-    mergedHistory.length > 0
-      ? mergedHistory.reduce((max, value) => (value > max ? value : max), mergedHistory[0])
-      : undefined;
-  const watchedAtCandidates = [existing.watchedAt, incoming.watchedAt, latestWatchedAt].filter(
-    (value): value is number => typeof value === "number" && Number.isFinite(value)
-  );
-
-  const watchedAt =
-    watchedAtCandidates.length > 0
-      ? watchedAtCandidates.reduce((max, value) => (value > max ? value : max), watchedAtCandidates[0])
-      : undefined;
-
-  return {
-    ...existing,
-    ...incoming,
-    season: existing.season,
-    episode: existing.episode,
-    watchedAt,
-    watchCount: watchCount > 1 ? watchCount : undefined,
-    watchHistory: mergedHistory.length > 1 ? mergedHistory : undefined,
-  };
-}
-
 async function mapWithConcurrency<T, R>(
   items: T[],
   concurrency: number,
@@ -429,7 +360,7 @@ function mergeImportPayloads(items: ImportPayloadItem[]) {
         episodes.set(episodeKey, episode);
         continue;
       }
-      episodes.set(episodeKey, mergeWatchedEpisodeEntries(current, episode));
+      episodes.set(episodeKey, mergeCanonicalImportEpisodes(current, episode));
     }
 
     const definedShowFields = Object.fromEntries(

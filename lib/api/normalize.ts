@@ -160,6 +160,7 @@ export function normalizeTmdbMedia(media: TmdbMedia): NormalizedShow {
     id: `tmdb:${media.id}`,
     mediaType: inferredMediaType,
     title: media.title ?? media.name ?? "Untitled",
+    originalTitle: media.original_title ?? media.original_name,
     overview: media.overview,
     posterUrl: media.poster_path
       ? `${tmdbPosterBase}${media.poster_path}`
@@ -195,6 +196,12 @@ export function normalizeTmdbShowDetails(
         : DEFAULTS.EPISODE_RUNTIME_MINUTES;
 
   const normalizedStatus = normalizeStatus(details.status);
+  const alternativeTitles = [
+    ...(details.alternative_titles?.results ?? []),
+    ...(details.alternative_titles?.titles ?? []),
+  ]
+    .map((entry) => entry.title?.trim())
+    .filter((title): title is string => !!title);
   
   // Keep planned totals separate from released episode counts for TV.
   const reportedTotalEpisodes =
@@ -216,6 +223,10 @@ export function normalizeTmdbShowDetails(
     id: `tmdb:${details.id}`,
     mediaType,
     title: details.title ?? details.name ?? "Untitled",
+    originalTitle: details.original_title ?? details.original_name,
+    alternativeTitles: alternativeTitles.length > 0
+      ? Array.from(new Set(alternativeTitles))
+      : undefined,
     overview: details.overview,
     posterUrl: details.poster_path
       ? `${tmdbPosterBase}${details.poster_path}`

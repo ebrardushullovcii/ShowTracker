@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { NormalizedShow } from "@/lib/api/types";
 import type { ParsedImportItem } from "@/lib/import/tv-time";
-import { selectMetadataOnlyCandidate } from "@/lib/import/gdpr-resolver";
+import {
+  getVerifiedEpisodeDestination,
+  selectMetadataOnlyCandidate,
+} from "@/lib/import/gdpr-resolver";
 
 function item(title: string, firstAiredYear?: number): ParsedImportItem {
   return {
@@ -44,4 +47,48 @@ test("rejects low-confidence metadata-only titles", () => {
     show("All Elite Wrestling: Dynamite", "2019-10-02"),
   ]);
   assert.equal(selected, null);
+});
+
+test("matches a localized title through the provider original title", () => {
+  const selected = selectMetadataOnlyCandidate(item("ハウルの動く城", 2004), [
+    {
+      ...show("Howl's Moving Castle", "2004-09-09"),
+      mediaType: "movie",
+      originalTitle: "ハウルの動く城",
+    },
+  ]);
+
+  assert.equal(selected?.title, "Howl's Moving Castle");
+});
+
+test("matches an alternative provider title", () => {
+  const selected = selectMetadataOnlyCandidate(item("365 dni", 2020), [
+    {
+      ...show("365 Days", "2020-02-07"),
+      mediaType: "movie",
+      originalTitle: "365 dni",
+      alternativeTitles: ["365 Tage"],
+    },
+  ]);
+
+  assert.equal(selected?.title, "365 Days");
+});
+
+test("prefers an exact external identity across localized display titles", () => {
+  const source = item("The Brave");
+  source.tvdbId = 437880;
+  const selected = selectMetadataOnlyCandidate(source, [
+    { ...show("Boundless Love", "2023-09-21"), tvdbId: 437880 },
+    show("The Brave Victory", "2022-01-01"),
+  ]);
+
+  assert.equal(selected?.title, "Boundless Love");
+});
+
+test("maps a verified TVDB special to its TMDB movie destination", () => {
+  assert.deepEqual(getVerifiedEpisodeDestination("4117651"), {
+    mediaType: "movie",
+    tmdbId: 75624,
+  });
+  assert.equal(getVerifiedEpisodeDestination("unknown"), undefined);
 });

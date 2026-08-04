@@ -4,6 +4,8 @@ export type NormalizedShow = {
   id: string;
   mediaType: MediaType;
   title: string;
+  originalTitle?: string;
+  alternativeTitles?: string[];
   overview?: string;
   posterUrl?: string;
   backdropUrl?: string;
