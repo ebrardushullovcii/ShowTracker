@@ -425,3 +425,37 @@ export async function resolveGdprImportPlans(item: ParsedImportItem) {
   }
   return { plans: [...plans, ...verifiedPlans], unmatched: remaining };
 }
+
+type GdprImportResolution = Awaited<ReturnType<typeof resolveGdprImportPlans>>;
+
+export async function resolveGdprImportPlansWithRetry(
+  item: ParsedImportItem,
+  options: {
+    maxAttempts?: number;
+    baseDelayMs?: number;
+    resolve?: (item: ParsedImportItem) => Promise<GdprImportResolution>;
+  } = {}
+) {
+  const maxAttempts = Math.max(1, Math.floor(options.maxAttempts ?? 3));
+  const baseDelayMs = Math.max(0, options.baseDelayMs ?? 500);
+  const resolve = options.resolve ?? resolveGdprImportPlans;
+  let lastResolution: GdprImportResolution | undefined;
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    try {
+      const resolution = await resolve(item);
+      lastResolution = resolution;
+      if (resolution.plans.length > 0) return resolution;
+    } catch (error) {
+      lastError = error;
+    }
+
+    if (attempt < maxAttempts - 1 && baseDelayMs > 0) {
+      await new Promise((done) => setTimeout(done, baseDelayMs * 2 ** attempt));
+    }
+  }
+
+  if (lastResolution) return lastResolution;
+  throw lastError instanceof Error ? lastError : new Error("Metadata resolution failed.");
+}

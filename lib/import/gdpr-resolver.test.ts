@@ -5,6 +5,7 @@ import type { ParsedImportItem } from "@/lib/import/tv-time";
 import {
   getVerifiedEpisodeDestination,
   selectMetadataOnlyCandidate,
+  resolveGdprImportPlansWithRetry,
 } from "@/lib/import/gdpr-resolver";
 
 function item(title: string, firstAiredYear?: number): ParsedImportItem {
@@ -91,4 +92,40 @@ test("maps a verified TVDB special to its TMDB movie destination", () => {
     tmdbId: 75624,
   });
   assert.equal(getVerifiedEpisodeDestination("unknown"), undefined);
+});
+
+test("retries an empty provider resolution", async () => {
+  let attempts = 0;
+  const source = item("Kidnap", 2017);
+  source.mediaType = "movie";
+  const destination = show("Kidnap", "2017-06-16");
+  destination.mediaType = "movie";
+
+  const result = await resolveGdprImportPlansWithRetry(source, {
+    baseDelayMs: 0,
+    resolve: async () => {
+      attempts += 1;
+      return attempts < 3
+        ? { plans: [], unmatched: [] }
+        : { plans: [{ parsed: source, show: destination }], unmatched: [] };
+    },
+  });
+
+  assert.equal(attempts, 3);
+  assert.equal(result.plans[0]?.show.title, "Kidnap");
+});
+
+test("returns an empty resolution after the retry limit", async () => {
+  let attempts = 0;
+  const result = await resolveGdprImportPlansWithRetry(item("Unknown title"), {
+    maxAttempts: 2,
+    baseDelayMs: 0,
+    resolve: async () => {
+      attempts += 1;
+      return { plans: [], unmatched: [] };
+    },
+  });
+
+  assert.equal(attempts, 2);
+  assert.deepEqual(result.plans, []);
 });
