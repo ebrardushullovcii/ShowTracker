@@ -17,6 +17,16 @@ test("rejects a pre-watch provider-season alias for a caught-up show", () => {
     ),
     false
   );
+  assert.equal(
+    isHomeScheduleSignalActionable(
+      {
+        lastWatchedAt: watchedAfterRelease,
+        remainingEpisodes: 0,
+      },
+      watchedAfterRelease
+    ),
+    false
+  );
 });
 
 test("keeps a new release after the last watch actionable", () => {

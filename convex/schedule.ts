@@ -3090,6 +3090,7 @@ export const applyHomeScheduleSignals = internalMutation({
       if (
         !projection ||
         projection.userId !== args.userId ||
+        projection.userShowId !== match.userShowId ||
         !isHomeScheduleSignalActionable(projection, match.signalAt)
       ) {
         continue;
@@ -3158,7 +3159,11 @@ export const applyHomeScheduleSignals = internalMutation({
         ctx.db.get(checked.feedProjectionId),
       ]);
 
-      if (!projection || projection.userId !== args.userId) {
+      if (
+        !projection ||
+        projection.userId !== args.userId ||
+        projection.userShowId !== checked.userShowId
+      ) {
         continue;
       }
 
