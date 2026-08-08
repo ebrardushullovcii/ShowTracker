@@ -11,6 +11,7 @@
 import type * as auth from "../auth.js";
 import type * as crons from "../crons.js";
 import type * as http from "../http.js";
+import type * as lib_homeScheduleSignalPolicy from "../lib/homeScheduleSignalPolicy.js";
 import type * as lists from "../lists.js";
 import type * as schedule from "../schedule.js";
 import type * as scheduleConfidence from "../scheduleConfidence.js";
@@ -27,6 +28,7 @@ declare const fullApi: ApiFromModules<{
   auth: typeof auth;
   crons: typeof crons;
   http: typeof http;
+  "lib/homeScheduleSignalPolicy": typeof lib_homeScheduleSignalPolicy;
   lists: typeof lists;
   schedule: typeof schedule;
   scheduleConfidence: typeof scheduleConfidence;
