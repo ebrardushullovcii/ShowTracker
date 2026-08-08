@@ -9,6 +9,7 @@ import {
 import type { Doc, Id } from "@/convex/_generated/dataModel";
 import type { ActionCtx, MutationCtx, QueryCtx } from "@/convex/_generated/server";
 import { v } from "convex/values";
+import { isHomeScheduleSignalActionable } from "./lib/homeScheduleSignalPolicy";
 import { getAniListAiringSchedule } from "@/lib/api/anilist";
 import {
   normalizeAniListScheduleEntry,
@@ -2857,6 +2858,9 @@ export const getHomeScheduleSignalMatches = internalQuery({
           continue;
         }
         const signalAt = airtimeMs ?? Math.min(bucketDayStartMs, args.nowMs);
+        if (!isHomeScheduleSignalActionable(tracked, signalAt)) {
+          continue;
+        }
         if (
           args.extendedPastSignalMode === "catch_up_only" &&
           bucketDayStartMs < regularCachedStartMs &&
@@ -3074,18 +3078,26 @@ export const applyHomeScheduleSignals = internalMutation({
     let patchedFeedProjections = 0;
     let clearedUserShows = 0;
     let clearedFeedProjections = 0;
-    const validSignalProjectionIds = new Set(
-      args.matches.map((match) => match.feedProjectionId)
-    );
-    const validSignalUserShowIds = new Set(
-      args.matches.map((match) => match.userShowId)
-    );
+    const validSignalProjectionIds = new Set<Id<"feedProjections">>();
+    const validSignalUserShowIds = new Set<Id<"userShows">>();
 
     for (const match of args.matches.slice(0, HOME_SIGNAL_MAX_MATCHES)) {
       const [userShow, projection] = await Promise.all([
         ctx.db.get(match.userShowId),
         ctx.db.get(match.feedProjectionId),
       ]);
+
+      if (
+        !projection ||
+        projection.userId !== args.userId ||
+        projection.userShowId !== match.userShowId ||
+        !isHomeScheduleSignalActionable(projection, match.signalAt)
+      ) {
+        continue;
+      }
+
+      validSignalProjectionIds.add(match.feedProjectionId);
+      validSignalUserShowIds.add(match.userShowId);
 
       const userShowSignalAt =
         userShow && userShow.userId === args.userId
@@ -3104,14 +3116,6 @@ export const applyHomeScheduleSignals = internalMutation({
           newEpisodeSignalAt: userShowSignalAt,
         });
         patchedUserShows += 1;
-      }
-
-      if (!projection) {
-        continue;
-      }
-
-      if (projection.userId !== args.userId) {
-        continue;
       }
 
       const projectionSignalAt = Math.max(
@@ -3155,7 +3159,11 @@ export const applyHomeScheduleSignals = internalMutation({
         ctx.db.get(checked.feedProjectionId),
       ]);
 
-      if (!projection || projection.userId !== args.userId) {
+      if (
+        !projection ||
+        projection.userId !== args.userId ||
+        projection.userShowId !== checked.userShowId
+      ) {
         continue;
       }
 
