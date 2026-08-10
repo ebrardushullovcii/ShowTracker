@@ -2048,6 +2048,40 @@ function preserveTrackedTmdbEpisodeCoordinates(selected, next, current, item = {
   };
 }
 
+function recoverTrackedTmdbEpisodeCoordinates(rows, sourceRows, item = {}) {
+  return rows.map((selected) => {
+    const selectedDate = dateKeyFromValue(selected.air_date);
+    const selectedName = normalizeTitle(selected.name ?? "");
+    const directTmdb = sourceRows.find((candidate) => {
+      if (!isDirectTmdbEventForItem(candidate, item)) {
+        return false;
+      }
+      const candidateDate = dateKeyFromValue(candidate.air_date);
+      if (!selectedDate || candidateDate !== selectedDate) {
+        return false;
+      }
+      const candidateName = normalizeTitle(candidate.name ?? "");
+      const sameNamedEpisode =
+        selectedName.length > 0 &&
+        selectedName === candidateName &&
+        !isGenericEpisodeName(selected.name) &&
+        !isGenericEpisodeName(candidate.name);
+      const sameEpisodeNumber =
+        Number(selected.episode_number) === Number(candidate.episode_number);
+      return sameNamedEpisode || sameEpisodeNumber;
+    });
+
+    return directTmdb
+      ? preserveTrackedTmdbEpisodeCoordinates(
+          selected,
+          directTmdb,
+          selected,
+          item
+        )
+      : selected;
+  });
+}
+
 function dedupeProviderEventsForReleaseFact(rows, nowMs, item = {}) {
   const deduped = [];
   for (const row of rows) {
@@ -2091,7 +2125,11 @@ function dedupeProviderEventsForReleaseFact(rows, nowMs, item = {}) {
       item
     );
   }
-  return deduped.sort((a, b) => a.air_timestamp - b.air_timestamp);
+  return recoverTrackedTmdbEpisodeCoordinates(
+    deduped,
+    rows,
+    item
+  ).sort((a, b) => a.air_timestamp - b.air_timestamp);
 }
 
 function dedupeProviderEventsForSchedule(rows) {
@@ -7645,6 +7683,19 @@ async function validateFixtureResults(db, summary, deltaPath = defaultDeltaPath)
   const futuramaProviderAliasRows = dedupeProviderEventsForReleaseFact(
     [
       {
+        source_provider: "tvmaze",
+        provider_show_id: "tvmaze:538",
+        air_timestamp: Date.UTC(2023, 6, 31, 16),
+        air_date: "2023-07-31T16:00:00.000Z",
+        normalized_title: "futurama",
+        media_type: "tv",
+        season_number: 11,
+        episode_number: 3,
+        name: "How the West Was 1010001",
+        tmdb_id: 615,
+        tvmaze_id: 538,
+      },
+      {
         source_provider: "tmdb",
         provider_show_id: "tmdb:tv:615",
         air_timestamp: Date.UTC(2026, 4, 10),
@@ -7688,10 +7739,12 @@ async function validateFixtureResults(db, summary, deltaPath = defaultDeltaPath)
     fixtureNowMs,
     { media_type: "tv", tmdb_id: 615 }
   );
-  const futuramaCanonicalEpisode = episodeFromEvent(futuramaProviderAliasRows[0]);
+  const futuramaCanonicalEpisode = episodeFromEvent(
+    futuramaProviderAliasRows.at(-1)
+  );
   assertValidation(
-    futuramaProviderAliasRows.length === 1 &&
-      futuramaProviderAliasRows[0]?.source_provider === "tvmaze" &&
+    futuramaProviderAliasRows.length === 2 &&
+      futuramaProviderAliasRows.at(-1)?.source_provider === "tvmaze" &&
       futuramaCanonicalEpisode.seasonNumber === 11 &&
       futuramaCanonicalEpisode.episodeNumber === 3 &&
       futuramaCanonicalEpisode.name === "Our Flag Means Medical Coverage" &&
