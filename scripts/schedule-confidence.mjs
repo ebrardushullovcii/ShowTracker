@@ -1812,10 +1812,11 @@ function findEventsForItem(db, item) {
 }
 
 function episodeFromEvent(row) {
+  const episodeName = row.canonical_name ?? row.name;
   return {
-    seasonNumber: row.season_number,
-    episodeNumber: row.episode_number,
-    ...(row.name ? { name: row.name } : {}),
+    seasonNumber: row.canonical_season_number ?? row.season_number,
+    episodeNumber: row.canonical_episode_number ?? row.episode_number,
+    ...(episodeName ? { name: episodeName } : {}),
     airDate: row.air_date,
     airTimestamp: row.air_timestamp,
   };
@@ -1988,6 +1989,65 @@ function preferReleaseFactEventCandidate(next, current, nowMs, matchKind = "name
   return preferEventCandidate(next, current, matchKind);
 }
 
+function preserveTrackedTmdbEpisodeCoordinates(selected, next, current, item = {}) {
+  if (next.source_provider === current.source_provider) {
+    return selected;
+  }
+
+  const nextDate = dateKeyFromValue(next.air_date);
+  const currentDate = dateKeyFromValue(current.air_date);
+  if (!nextDate || nextDate !== currentDate) {
+    return selected;
+  }
+
+  const nextName = normalizeTitle(next.name ?? "");
+  const currentName = normalizeTitle(current.name ?? "");
+  const sameNamedEpisode =
+    nextName.length > 0 &&
+    nextName === currentName &&
+    !isGenericEpisodeName(next.name) &&
+    !isGenericEpisodeName(current.name);
+  const sameEpisodeNumber =
+    Number(next.episode_number) === Number(current.episode_number);
+  if (!sameNamedEpisode && !sameEpisodeNumber) {
+    return selected;
+  }
+
+  const directTmdb = isDirectTmdbEventForItem(next, item)
+    ? next
+    : isDirectTmdbEventForItem(current, item)
+      ? current
+      : null;
+  const canonicalSeasonNumber =
+    directTmdb?.season_number ??
+    selected.canonical_season_number ??
+    current.canonical_season_number ??
+    next.canonical_season_number;
+  const canonicalEpisodeNumber =
+    directTmdb?.episode_number ??
+    selected.canonical_episode_number ??
+    current.canonical_episode_number ??
+    next.canonical_episode_number;
+  const canonicalName =
+    directTmdb?.name ??
+    selected.canonical_name ??
+    current.canonical_name ??
+    next.canonical_name;
+  if (
+    typeof canonicalSeasonNumber !== "number" ||
+    typeof canonicalEpisodeNumber !== "number"
+  ) {
+    return selected;
+  }
+
+  return {
+    ...selected,
+    canonical_season_number: canonicalSeasonNumber,
+    canonical_episode_number: canonicalEpisodeNumber,
+    ...(canonicalName ? { canonical_name: canonicalName } : {}),
+  };
+}
+
 function dedupeProviderEventsForReleaseFact(rows, nowMs, item = {}) {
   const deduped = [];
   for (const row of rows) {
@@ -2015,9 +2075,21 @@ function dedupeProviderEventsForReleaseFact(rows, nowMs, item = {}) {
         : isSameSourceSameDayEpisodeAlias(row, existing)
           ? "alias"
           : "date";
-    if (preferReleaseFactEventCandidate(row, existing, nowMs, matchKind, item)) {
-      deduped[existingIndex] = row;
-    }
+    const selected = preferReleaseFactEventCandidate(
+      row,
+      existing,
+      nowMs,
+      matchKind,
+      item
+    )
+      ? row
+      : existing;
+    deduped[existingIndex] = preserveTrackedTmdbEpisodeCoordinates(
+      selected,
+      row,
+      existing,
+      item
+    );
   }
   return deduped.sort((a, b) => a.air_timestamp - b.air_timestamp);
 }
@@ -7569,6 +7641,63 @@ async function validateFixtureResults(db, summary, deltaPath = defaultDeltaPath)
       sameSourceAliasDedupe[0]?.episode_number === 9,
     "Same-source season-local and cumulative schedule aliases should collapse.",
     sameSourceAliasDedupe
+  );
+  const futuramaProviderAliasRows = dedupeProviderEventsForReleaseFact(
+    [
+      {
+        source_provider: "tmdb",
+        provider_show_id: "tmdb:tv:615",
+        air_timestamp: Date.UTC(2026, 4, 10),
+        air_date: "2026-05-10",
+        normalized_title: "futurama",
+        media_type: "tv",
+        season_number: 11,
+        episode_number: 3,
+        name: "Our Flag Means Medical Coverage",
+        tmdb_id: 615,
+        tvmaze_id: null,
+      },
+      {
+        source_provider: "anilist",
+        provider_show_id: "anilist:61503",
+        air_timestamp: Date.UTC(2026, 4, 10, 15),
+        air_date: "2026-05-10T15:00:00.000Z",
+        normalized_title: "futurama",
+        media_type: "tv",
+        season_number: 14,
+        episode_number: 3,
+        name: "Our Flag Means Medical Coverage",
+        tmdb_id: 615,
+        tvmaze_id: 538,
+        anilist_id: 61503,
+      },
+      {
+        source_provider: "tvmaze",
+        provider_show_id: "tvmaze:538",
+        air_timestamp: Date.UTC(2026, 4, 10, 16),
+        air_date: "2026-05-10T16:00:00.000Z",
+        normalized_title: "futurama",
+        media_type: "tv",
+        season_number: 14,
+        episode_number: 3,
+        name: "Our Flag Means Medical Coverage",
+        tmdb_id: 615,
+        tvmaze_id: 538,
+      },
+    ],
+    fixtureNowMs,
+    { media_type: "tv", tmdb_id: 615 }
+  );
+  const futuramaCanonicalEpisode = episodeFromEvent(futuramaProviderAliasRows[0]);
+  assertValidation(
+    futuramaProviderAliasRows.length === 1 &&
+      futuramaProviderAliasRows[0]?.source_provider === "tvmaze" &&
+      futuramaCanonicalEpisode.seasonNumber === 11 &&
+      futuramaCanonicalEpisode.episodeNumber === 3 &&
+      futuramaCanonicalEpisode.name === "Our Flag Means Medical Coverage" &&
+      futuramaCanonicalEpisode.airDate === "2026-05-10T16:00:00.000Z",
+    "Multi-provider season aliases should keep precise TVMaze timing without dropping tracked TMDB episode coordinates.",
+    { futuramaProviderAliasRows, futuramaCanonicalEpisode }
   );
   assertValidation(
     fixtureUserProjection?.events.some((event) => event.showId === "show-direct"),

@@ -71,7 +71,7 @@ npm run ui:inspect
 
 ## Browser Debugging
 
-Use Chrome DevTools MCP first for web UI inspection, console/network debugging, screenshots, and visual polish. Use `agent-browser` for task-style flows such as login, guest mode, persistent auth, and route walkthroughs.
+Use the Codex built-in Browser or Chrome plugin for live web inspection and flows. Prefer Chrome/CDP for console, network, DOM/CSS, performance, and DevTools-level debugging. Do not install or invoke standalone browser automation frameworks or CLIs directly unless the user explicitly asks; the existing `npm run ui:inspect` validation wrappers are allowed. The legacy `scripts/test-app.sh` workflow depends on the removed `agent-browser` CLI and is not supported.
 
 See `docs/BROWSER_AUTOMATION.md`.
 

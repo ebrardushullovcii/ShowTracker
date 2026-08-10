@@ -55,6 +55,8 @@ Most frequently relevant:
 - [ADR-0050](ADR-0050-tv-time-episode-reconciliation.md): TV Time imports reconcile whole-show episode catalogues with provenance and isolate uncertain records from provider progress.
 - [ADR-0051](ADR-0051-unmatched-import-episode-policy.md): unmatched TV Time episodes are reported and omitted instead of being retained as invisible account history.
 - [ADR-0054](ADR-0054-terminal-provider-count-and-projection-repair.md): complete terminal TMDB counts and exact bounded projection repair prevent provider catalogue inflation from reactivating caught-up shows.
+- [ADR-0057](ADR-0057-caught-up-schedule-alias-signal-boundary.md): caught-up projections reject cached provider aliases released no later than the user's last watch.
+- [ADR-0058](ADR-0058-canonical-provider-alias-coordinates.md): provider aliases keep precise release timing while projections use the tracked TMDB episode coordinates.
 
 ## Navigation
 
@@ -126,6 +128,8 @@ Most frequently relevant:
 | [ADR-0054](ADR-0054-terminal-provider-count-and-projection-repair.md) | Complete terminal TMDB counts and exact bounded projection repair prevent provider catalogue inflation from reactivating caught-up shows. |
 | [ADR-0055](ADR-0055-multilingual-tv-time-provider-identity.md) | TV Time imports use hydrated multilingual provider identity and narrowly verified episode aliases without counting split parts as rewatches. |
 | [ADR-0056](ADR-0056-tv-time-resolution-retries.md) | TV Time imports retry empty provider resolutions at lower concurrency so transient request pressure is not reported as missing metadata. |
+| [ADR-0057](ADR-0057-caught-up-schedule-alias-signal-boundary.md) | Caught-up projections reject cached provider aliases released no later than the user's last watch. |
+| [ADR-0058](ADR-0058-canonical-provider-alias-coordinates.md) | Provider aliases keep precise release timing while projections use the tracked TMDB episode coordinates. |
 
 ## Rule For New ADRs
 
