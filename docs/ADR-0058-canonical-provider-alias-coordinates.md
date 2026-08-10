@@ -52,7 +52,10 @@ name or the same episode number:
 
 Raw provider events are not rewritten. The canonical coordinates are attached
 only to the deduplicated release-fact row and flow into release facts, schedule
-cache maintenance, and user schedule projections.
+cache maintenance, and user schedule projections. After pairwise duplicate
+selection, a final pass recovers canonical coordinates from the original raw
+TMDB rows. This prevents an older cross-provider same-number collision from
+removing the current TMDB alias before its same-day row is processed.
 
 ## Reasoning
 
@@ -103,8 +106,9 @@ npx convex deploy --dry-run --yes
 ```
 
 The regression fixture uses Futurama-shaped TMDB `S11E03` and TVMaze `S14E03`
-rows. It asserts that the result retains TVMaze's precise airtime and source
-while exposing TMDB `S11E03` and its name downstream.
+rows, an older TVMaze `S11E03` collision, and a third-provider replacement. It
+asserts that the result retains TVMaze's precise airtime and source while
+recovering TMDB `S11E03` and its name from the original provider rows.
 
 Production verification must snapshot the active and paused Home rows before
 deployment, run the schedule-confidence service on the VPS, confirm Futurama's
