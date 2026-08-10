@@ -7,13 +7,15 @@ Use Codex's built-in browser surfaces during development and production verifica
 - Use the built-in Browser plugin for an isolated in-app browsing session.
 - Use the built-in Chrome plugin when the task depends on the user's existing Chrome tabs, login state, or extensions. It connects through Chrome/CDP.
 - Prefer Chrome/CDP for console, network, DOM/CSS, performance, and DevTools-level debugging.
-- Do not install or invoke standalone browser automation frameworks or CLIs such as `agent-browser`, Playwright, or Puppeteer unless the user explicitly asks for one.
+- Do not install or invoke standalone browser automation frameworks or CLIs directly, such as `agent-browser`, Playwright, or Puppeteer, unless the user explicitly asks for one. Existing repo-maintained validation wrappers such as `npm run ui:inspect` are allowed.
 
 If a requested built-in surface is unavailable, report that limitation rather than silently substituting a standalone automation framework.
 
 ## UI Verification
 
 Use `npm run ui:inspect:quick` or `npm run ui:inspect` only when its existing screenshot sweep is useful after a UI change. These project scripts are regression checks, not a replacement for the built-in Browser or Chrome plugin.
+
+The older `scripts/test-app.sh` workflow depends on the removed `agent-browser` CLI and is not a supported validation path. Do not invoke it unless it is explicitly migrated in a separate task.
 
 For UI bugs:
 

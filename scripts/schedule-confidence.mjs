@@ -2013,20 +2013,38 @@ function preserveTrackedTmdbEpisodeCoordinates(selected, next, current, item = {
     return selected;
   }
 
-  const canonical = isDirectTmdbEventForItem(next, item)
+  const directTmdb = isDirectTmdbEventForItem(next, item)
     ? next
     : isDirectTmdbEventForItem(current, item)
       ? current
       : null;
-  if (!canonical) {
+  const canonicalSeasonNumber =
+    directTmdb?.season_number ??
+    selected.canonical_season_number ??
+    current.canonical_season_number ??
+    next.canonical_season_number;
+  const canonicalEpisodeNumber =
+    directTmdb?.episode_number ??
+    selected.canonical_episode_number ??
+    current.canonical_episode_number ??
+    next.canonical_episode_number;
+  const canonicalName =
+    directTmdb?.name ??
+    selected.canonical_name ??
+    current.canonical_name ??
+    next.canonical_name;
+  if (
+    typeof canonicalSeasonNumber !== "number" ||
+    typeof canonicalEpisodeNumber !== "number"
+  ) {
     return selected;
   }
 
   return {
     ...selected,
-    canonical_season_number: canonical.season_number,
-    canonical_episode_number: canonical.episode_number,
-    ...(canonical.name ? { canonical_name: canonical.name } : {}),
+    canonical_season_number: canonicalSeasonNumber,
+    canonical_episode_number: canonicalEpisodeNumber,
+    ...(canonicalName ? { canonical_name: canonicalName } : {}),
   };
 }
 
@@ -7640,6 +7658,20 @@ async function validateFixtureResults(db, summary, deltaPath = defaultDeltaPath)
         tvmaze_id: null,
       },
       {
+        source_provider: "anilist",
+        provider_show_id: "anilist:61503",
+        air_timestamp: Date.UTC(2026, 4, 10, 15),
+        air_date: "2026-05-10T15:00:00.000Z",
+        normalized_title: "futurama",
+        media_type: "tv",
+        season_number: 14,
+        episode_number: 3,
+        name: "Our Flag Means Medical Coverage",
+        tmdb_id: 615,
+        tvmaze_id: 538,
+        anilist_id: 61503,
+      },
+      {
         source_provider: "tvmaze",
         provider_show_id: "tvmaze:538",
         air_timestamp: Date.UTC(2026, 4, 10, 16),
@@ -7664,7 +7696,7 @@ async function validateFixtureResults(db, summary, deltaPath = defaultDeltaPath)
       futuramaCanonicalEpisode.episodeNumber === 3 &&
       futuramaCanonicalEpisode.name === "Our Flag Means Medical Coverage" &&
       futuramaCanonicalEpisode.airDate === "2026-05-10T16:00:00.000Z",
-    "Cross-provider season aliases should keep precise TVMaze timing with tracked TMDB episode coordinates.",
+    "Multi-provider season aliases should keep precise TVMaze timing without dropping tracked TMDB episode coordinates.",
     { futuramaProviderAliasRows, futuramaCanonicalEpisode }
   );
   assertValidation(

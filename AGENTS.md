@@ -46,7 +46,7 @@ Read these first when the task is broad:
 
 - For frontend/UI work, follow the repo's existing UI conventions and visual patterns.
 - For browser work, use the available Codex built-in Browser or Chrome plugin. Prefer Chrome/CDP when the task depends on the user's existing Chrome session, console/network inspection, or DevTools-level debugging.
-- Do not install or invoke standalone browser automation frameworks or CLIs (including `agent-browser`, Playwright, or Puppeteer) unless the user explicitly asks for one.
+- Do not install or invoke standalone browser automation frameworks or CLIs directly (including `agent-browser`, Playwright, or Puppeteer) unless the user explicitly asks for one. Existing repo-maintained validation wrappers such as `npm run ui:inspect` are allowed.
 - Use `npm run ui:inspect:quick` or `npm run ui:inspect` after UI changes when route/theme/device screenshot coverage is useful.
 - See `docs/BROWSER_AUTOMATION.md` for the tool decision guide.
 - Local Expo/Convex servers are useful for fast iteration, but final verification should use the live app when the change is intended for production.
