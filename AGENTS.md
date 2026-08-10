@@ -45,8 +45,8 @@ Read these first when the task is broad:
 ## Frontend And Browser Work
 
 - For frontend/UI work, follow the repo's existing UI conventions and visual patterns.
-- For web UI debugging, use Chrome DevTools MCP first when inspection, screenshots, console/network analysis, or UI debugging is needed.
-- Use `agent-browser` for task-style browser workflows such as auth, guest flows, route walkthroughs, and persistent session checks.
+- For browser work, use the available Codex built-in Browser or Chrome plugin. Prefer Chrome/CDP when the task depends on the user's existing Chrome session, console/network inspection, or DevTools-level debugging.
+- Do not install or invoke standalone browser automation frameworks or CLIs (including `agent-browser`, Playwright, or Puppeteer) unless the user explicitly asks for one.
 - Use `npm run ui:inspect:quick` or `npm run ui:inspect` after UI changes when route/theme/device screenshot coverage is useful.
 - See `docs/BROWSER_AUTOMATION.md` for the tool decision guide.
 - Local Expo/Convex servers are useful for fast iteration, but final verification should use the live app when the change is intended for production.
