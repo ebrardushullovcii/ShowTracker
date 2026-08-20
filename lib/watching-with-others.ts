@@ -28,3 +28,14 @@ export function areWatchingWithNamesEqual(left?: string[], right?: string[]) {
     leftNames.every((name, index) => name === rightNames[index])
   );
 }
+
+export function isTrackingStatusSelectionUnchanged(
+  currentStatus: string | null | undefined,
+  nextStatus: string,
+  hasWatchingWithOthersMetadata: boolean | undefined
+) {
+  return (
+    currentStatus === nextStatus &&
+    !(nextStatus === "watching" && hasWatchingWithOthersMetadata === true)
+  );
+}

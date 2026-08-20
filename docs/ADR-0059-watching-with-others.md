@@ -36,8 +36,11 @@ filter, bounded limits, stable feed behavior, anime-franchise selection, and
 route IDs as the other sections.
 Rows in the mode are excluded from the normal active section. Cards show compact
 name chips when names exist and expose the complete names through accessibility
-labels. The detail status editor offers the mode and an optional comma-separated
-name field.
+labels. The detail status editor offers the mode and an optional people picker:
+names are added one at a time and shown as individually removable chips.
+When the mode is active, the editor also presents a direct Move to regular
+Watching action so leaving the shared queue does not depend on understanding
+that both modes share the same underlying status.
 
 Home also removes matching route IDs from the same-day schedule-attention merge.
 Those schedule rows do not carry companion metadata themselves, so route-level
