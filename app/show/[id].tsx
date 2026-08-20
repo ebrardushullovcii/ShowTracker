@@ -71,6 +71,11 @@ import type {
 import type { UserTrackingStatus } from "@/lib/filters/tracking-filters";
 import { createShowRouteId, parseShowRouteId } from "@/lib/show-route";
 import { toHttpsImageUrl } from "@/lib/image-url";
+import {
+  MAX_WATCHING_WITH_NAMES,
+  isTrackingStatusSelectionUnchanged,
+  normalizeWatchingWithNames,
+} from "@/lib/watching-with-others";
 import { Ionicons } from "@expo/vector-icons";
 
 type SeasonLoadState = Record<number, boolean>;
@@ -879,7 +884,8 @@ export function ShowDetailScreen() {
   const [isRepairingTracking, setIsRepairingTracking] = useState(false);
   const [isSettingStatus, setIsSettingStatus] = useState(false);
   const [isStatusMenuVisible, setIsStatusMenuVisible] = useState(false);
-  const [watchingWithNamesDraft, setWatchingWithNamesDraft] = useState("");
+  const [watchingWithNamesDraft, setWatchingWithNamesDraft] = useState<string[]>([]);
+  const [watchingWithNameInput, setWatchingWithNameInput] = useState("");
   const [isMarkingShow, setIsMarkingShow] = useState(false);
   const [trackingError, setTrackingError] = useState<string | null>(null);
   const [trackingNotice, setTrackingNotice] = useState<string | null>(null);
@@ -1001,12 +1007,6 @@ export function ShowDetailScreen() {
   const displayIsInWatchlist = optimisticIsInWatchlist ?? isInWatchlist;
   const displayTrackingStatus = optimisticTrackingStatus ?? tracking?.status;
 
-  useEffect(() => {
-    if (isStatusMenuVisible) {
-      setWatchingWithNamesDraft(tracking?.watchingWithNames?.join(", ") ?? "");
-    }
-  }, [isStatusMenuVisible, tracking?.watchingWithNames]);
-  
   // Reset optimistic state once the subscribed tracking query catches up.
   useEffect(() => {
     if (
@@ -2246,7 +2246,12 @@ export function ShowDetailScreen() {
     }
     if (
       isInWatchlist &&
-      tracking?.status === nextStatus &&
+      isTrackingStatusSelectionUnchanged(
+        tracking?.status,
+        nextStatus,
+        tracking?.watchingWithOthers === true ||
+          (tracking?.watchingWithNames?.length ?? 0) > 0
+      ) &&
       companionOptions === undefined
     ) {
       setIsStatusMenuVisible(false);
@@ -2289,15 +2294,39 @@ export function ShowDetailScreen() {
     }
   };
 
+  const handleAddWatchingWithName = () => {
+    if (!watchingWithNameInput.trim()) return;
+
+    setWatchingWithNamesDraft((currentNames) =>
+      normalizeWatchingWithNames([...currentNames, watchingWithNameInput])
+    );
+    setWatchingWithNameInput("");
+  };
+
+  const handleRemoveWatchingWithName = (nameToRemove: string) => {
+    setWatchingWithNamesDraft((currentNames) =>
+      currentNames.filter((name) => name !== nameToRemove)
+    );
+  };
+
   const handleSetWatchingWithOthers = () => {
     void handleSetTrackingStatus("watching", {
       watchingWithOthers: true,
-      watchingWithNames: watchingWithNamesDraft.split(","),
+      watchingWithNames: normalizeWatchingWithNames([
+        ...watchingWithNamesDraft,
+        watchingWithNameInput,
+      ]),
     });
   };
 
   const handleSelectStatusFromMenu = (nextStatus: ShowTrackingStatus) => {
     void handleSetTrackingStatus(nextStatus);
+  };
+
+  const handleOpenStatusMenu = () => {
+    setWatchingWithNamesDraft(tracking?.watchingWithNames ?? []);
+    setWatchingWithNameInput("");
+    setIsStatusMenuVisible(true);
   };
 
   const handleOpenAddToWatchlistPrompt = () => {
@@ -2318,7 +2347,7 @@ export function ShowDetailScreen() {
     }
 
     setTrackingError(null);
-    setIsStatusMenuVisible(true);
+    handleOpenStatusMenu();
   };
 
   const confirmRemoveFromLibrary = () => {
@@ -4091,7 +4120,7 @@ export function ShowDetailScreen() {
                 onToggleFavorite={() => {
                   void handleToggleFavorite();
                 }}
-                onEditStatus={() => setIsStatusMenuVisible(true)}
+                onEditStatus={handleOpenStatusMenu}
                 onAddToList={() => setIsAddToListModalVisible(true)}
                 onRepairTracking={() => {
                   void handleRepairTracking();
@@ -5159,17 +5188,80 @@ export function ShowDetailScreen() {
                       color={tracking?.watchingWithOthers ? "#ef4444" : "#71717a"}
                     />
                   </View>
-                  <TextInput
-                    value={watchingWithNamesDraft}
-                    onChangeText={setWatchingWithNamesDraft}
-                    placeholder="Names (optional, comma-separated)"
-                    placeholderTextColor="#71717a"
-                    editable={!isStatusMenuBusy}
-                    accessibilityLabel="People you are watching with"
-                    className="mt-3 rounded-lg border border-border-default bg-bg-base px-3 py-2.5 text-sm text-text-primary"
-                  />
+                  {watchingWithNamesDraft.length > 0 ? (
+                    <View className="mt-3 flex-row flex-wrap gap-2">
+                      {watchingWithNamesDraft.map((name) => (
+                        <View
+                          key={name.toLowerCase()}
+                          className="flex-row items-center gap-1.5 rounded-full border border-primary/40 bg-primary/10 py-1 pl-2.5 pr-1.5"
+                        >
+                          <Text className="text-xs font-semibold text-text-primary">{name}</Text>
+                          <Pressable
+                            disabled={isStatusMenuBusy}
+                            onPress={() => handleRemoveWatchingWithName(name)}
+                            accessibilityRole="button"
+                            accessibilityLabel={`Remove ${name}`}
+                            hitSlop={6}
+                            className="rounded-full"
+                            style={({ pressed }) => ({
+                              opacity: isStatusMenuBusy ? 0.45 : pressed ? 0.65 : 1,
+                            })}
+                          >
+                            <Ionicons name="close-circle" size={17} color="#a1a1aa" />
+                          </Pressable>
+                        </View>
+                      ))}
+                    </View>
+                  ) : null}
+                  <View className="mt-3 flex-row items-center gap-2">
+                    <TextInput
+                      value={watchingWithNameInput}
+                      onChangeText={setWatchingWithNameInput}
+                      onSubmitEditing={handleAddWatchingWithName}
+                      placeholder="Add a person's name"
+                      placeholderTextColor="#71717a"
+                      editable={
+                        !isStatusMenuBusy &&
+                        watchingWithNamesDraft.length < MAX_WATCHING_WITH_NAMES
+                      }
+                      accessibilityLabel="Name of person you are watching with"
+                      returnKeyType="done"
+                      className="min-w-0 flex-1 rounded-lg border border-border-default bg-bg-base px-3 py-2.5 text-sm text-text-primary"
+                    />
+                    <Pressable
+                      disabled={
+                        isStatusMenuBusy ||
+                        !watchingWithNameInput.trim() ||
+                        watchingWithNamesDraft.length >= MAX_WATCHING_WITH_NAMES
+                      }
+                      onPress={handleAddWatchingWithName}
+                      accessibilityRole="button"
+                      accessibilityLabel="Add person"
+                      accessibilityState={{
+                        disabled:
+                          isStatusMenuBusy ||
+                          !watchingWithNameInput.trim() ||
+                          watchingWithNamesDraft.length >= MAX_WATCHING_WITH_NAMES,
+                      }}
+                      className="rounded-lg border border-primary/50 bg-primary/10 px-3 py-2.5"
+                      style={({ pressed }) => ({
+                        opacity:
+                          isStatusMenuBusy ||
+                          !watchingWithNameInput.trim() ||
+                          watchingWithNamesDraft.length >= MAX_WATCHING_WITH_NAMES
+                            ? 0.45
+                            : pressed
+                              ? 0.75
+                              : 1,
+                      })}
+                    >
+                      <Text className="text-xs font-black uppercase tracking-[0.8px] text-primary">
+                        Add
+                      </Text>
+                    </Pressable>
+                  </View>
                   <Text className="mt-1.5 text-[11px] text-text-muted">
-                    Up to five names; duplicates and extra spaces are cleaned up.
+                    Add up to five people. Each name can be removed separately.
                   </Text>
                   <Pressable
                     disabled={isStatusMenuBusy}
@@ -5185,6 +5277,23 @@ export function ShowDetailScreen() {
                       {tracking?.watchingWithOthers ? "Save people" : "Save shared watch"}
                     </Text>
                   </Pressable>
+                  {tracking?.watchingWithOthers ? (
+                    <Pressable
+                      disabled={isStatusMenuBusy}
+                      onPress={() => handleSelectStatusFromMenu("watching")}
+                      accessibilityRole="button"
+                      accessibilityLabel="Move to regular Watching"
+                      accessibilityState={{ disabled: isStatusMenuBusy }}
+                      className="mt-2 items-center rounded-lg border border-border-default bg-bg-base px-3 py-2.5"
+                      style={({ pressed }) => ({
+                        opacity: isStatusMenuBusy ? 0.45 : pressed ? 0.75 : 1,
+                      })}
+                    >
+                      <Text className="text-xs font-bold text-text-secondary">
+                        Move to regular Watching
+                      </Text>
+                    </Pressable>
+                  ) : null}
                 </View>
               ) : null}
 
