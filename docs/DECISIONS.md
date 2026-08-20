@@ -130,6 +130,7 @@ Most frequently relevant:
 | [ADR-0056](ADR-0056-tv-time-resolution-retries.md) | TV Time imports retry empty provider resolutions at lower concurrency so transient request pressure is not reported as missing metadata. |
 | [ADR-0057](ADR-0057-caught-up-schedule-alias-signal-boundary.md) | Caught-up projections reject cached provider aliases released no later than the user's last watch. |
 | [ADR-0058](ADR-0058-canonical-provider-alias-coordinates.md) | Provider aliases keep precise release timing while projections use the tracked TMDB episode coordinates. |
+| [ADR-0059](ADR-0059-watching-with-others.md) | Watching with others is an orthogonal synced Home section with optional normalized companion names; it does not widen the existing status enum or participate in auto-pause. |
 
 ## Rule For New ADRs
 

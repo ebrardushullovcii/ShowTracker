@@ -53,6 +53,8 @@ type WatchlistItem = {
   autoPausedAt?: number | null;
   lastWatchedAt?: number | null;
   newEpisodeSignalAt?: number | null;
+  watchingWithOthers?: boolean;
+  watchingWithNames?: string[];
 };
 
 type WatchlistScheduleCounts = {
@@ -431,7 +433,11 @@ function WatchlistCard({
     .replace(/_/g, " ")
     .replace(/\b\w/g, (char) => char.toUpperCase());
   const isAutoPaused = item.status === "paused" && typeof item.autoPausedAt === "number";
-  const metadataLabel = isAutoPaused ? formatPausedSinceLabel(item.autoPausedAt) : statusLabel;
+  const metadataLabel = isAutoPaused
+    ? formatPausedSinceLabel(item.autoPausedAt)
+    : item.watchingWithOthers
+      ? "Watching with others"
+      : statusLabel;
 
   const card = (
     <View className="overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900">
@@ -504,6 +510,19 @@ function WatchlistCard({
               </Text>
             ) : null}
           </View>
+          {item.watchingWithOthers && item.watchingWithNames?.length ? (
+            <View className="mt-1 flex-row flex-wrap gap-1">
+              {item.watchingWithNames.map((name) => (
+                <Text
+                  key={`${item.id}-with-${name}`}
+                  className="rounded-sm border border-violet-300/35 bg-violet-400/20 px-1.5 py-0.5 text-[8px] font-black text-violet-100"
+                  accessibilityLabel={`Watching with ${name}`}
+                >
+                  {name}
+                </Text>
+              ))}
+            </View>
+          ) : null}
         </View>
       </View>
     </View>
@@ -1387,6 +1406,7 @@ export function HomeScreen() {
   const [mediaFilter, setMediaFilter] = useState<HomeMediaFilter>("all");
   const [watchlistVisibleCount, setWatchlistVisibleCount] = useState(0);
   const [pausedVisibleCount, setPausedVisibleCount] = useState(0);
+  const [watchingWithOthersVisibleCount, setWatchingWithOthersVisibleCount] = useState(0);
   const [notStartedVisibleCount, setNotStartedVisibleCount] = useState(0);
   const [isLoadingMoreWatchlist, setIsLoadingMoreWatchlist] = useState(false);
   const [isMonthPickerVisible, setIsMonthPickerVisible] = useState(false);
@@ -1548,6 +1568,15 @@ export function HomeScreen() {
         }
       : "skip"
   );
+  const watchingWithOthersFeed = useQuery(
+    api.shows.getHomeWatchingWithOthersFeed,
+    activeTab === "watchlist"
+      ? {
+          limit: secondaryQueryLimit,
+          mediaFilter: homeFeedMediaFilter,
+        }
+      : "skip"
+  );
   const notStartedFeed = useQuery(
     api.shows.getHomeNotStartedFeed,
     activeTab === "watchlist"
@@ -1608,6 +1637,13 @@ export function HomeScreen() {
       isLoading: activeTab !== "watchlist" || pausedFeed === undefined,
     }
   );
+  const stableWatchingWithOthersFeed = useStableDisplayValue(
+    watchingWithOthersFeed as WatchlistItem[] | undefined,
+    {
+      contextKey: `${watchlistFeedContextKey}:watching-with-others`,
+      isLoading: activeTab !== "watchlist" || watchingWithOthersFeed === undefined,
+    }
+  );
   const stableNotStartedFeed = useStableDisplayValue(
     notStartedFeed as WatchlistItem[] | undefined,
     {
@@ -1649,13 +1685,17 @@ export function HomeScreen() {
     () => (stablePausedFeed ?? []) as WatchlistItem[],
     [stablePausedFeed]
   );
+  const watchingWithOthersFeedItems = useMemo(
+    () => (stableWatchingWithOthersFeed ?? []) as WatchlistItem[],
+    [stableWatchingWithOthersFeed]
+  );
   const notStartedFeedItems = useMemo(
     () => (stableNotStartedFeed ?? []) as WatchlistItem[],
     [stableNotStartedFeed]
   );
   const watchlistItems = useMemo(
-    () => [...activeFeedItems, ...pausedFeedItems, ...notStartedFeedItems],
-    [activeFeedItems, notStartedFeedItems, pausedFeedItems]
+    () => [...activeFeedItems, ...watchingWithOthersFeedItems, ...pausedFeedItems, ...notStartedFeedItems],
+    [activeFeedItems, notStartedFeedItems, pausedFeedItems, watchingWithOthersFeedItems]
   );
 
   const upcomingAvailabilityByRoute = useMemo(() => {
@@ -1724,6 +1764,7 @@ export function HomeScreen() {
         (hasAvailableScheduleSignal && hasActionableEpisode);
 
       if (item.status === "paused") return false;
+      if (item.watchingWithOthers) return false;
       if (item.status === "dropped") return false;
       if (item.trackingState === "upcoming") return false;
       if (
@@ -1762,6 +1803,17 @@ export function HomeScreen() {
     activeFeedItems,
     watchlistAirtimeMode,
   ]);
+
+  const watchingWithOthersSectionWatchlist = useMemo(
+    () =>
+      watchingWithOthersFeedItems.filter(
+        (item) =>
+          item.status === "watching" &&
+          item.watchingWithOthers === true &&
+          (mediaFilter === "all" || item.mediaType === mediaFilter)
+      ),
+    [mediaFilter, watchingWithOthersFeedItems]
+  );
 
   const pausedSectionWatchlist = useMemo(() => {
     return pausedFeedItems.filter((item) => {
@@ -1859,6 +1911,7 @@ export function HomeScreen() {
   const isWatchlistLoading =
     activeTab === "watchlist" &&
     (stableActiveFeed === undefined ||
+      stableWatchingWithOthersFeed === undefined ||
       stablePausedFeed === undefined ||
       stableNotStartedFeed === undefined);
   const hasResolvedFutureCountsForCurrentKey =
@@ -1895,6 +1948,7 @@ export function HomeScreen() {
   const watchlistSettleContextKey = useMemo(() => {
     if (
       stableActiveFeed === undefined ||
+      stableWatchingWithOthersFeed === undefined ||
       stablePausedFeed === undefined ||
       stableNotStartedFeed === undefined
     ) {
@@ -1920,6 +1974,7 @@ export function HomeScreen() {
     stableActiveFeed,
     stableNotStartedFeed,
     stablePausedFeed,
+    stableWatchingWithOthersFeed,
     watchlistFutureCountsQueryKey,
     watchlistItems,
   ]);
@@ -1948,7 +2003,7 @@ export function HomeScreen() {
 
   const watchlistCount = isWatchlistVisualLoading
     ? watchlistItems.length
-    : filteredWatchlist.length + pausedSectionWatchlist.length + notStartedSectionWatchlist.length;
+    : filteredWatchlist.length + watchingWithOthersSectionWatchlist.length + pausedSectionWatchlist.length + notStartedSectionWatchlist.length;
   const activeHomeHeaderPair = useStableDisplayPair(
     {
       label: activeTab === "watchlist" ? "matched" : "episodes",
@@ -2032,6 +2087,15 @@ export function HomeScreen() {
   }, [pausedSectionWatchlist.length, secondarySectionPageSize]);
 
   useEffect(() => {
+    setWatchingWithOthersVisibleCount((current) =>
+      Math.min(
+        watchingWithOthersSectionWatchlist.length,
+        Math.max(current, secondarySectionPageSize)
+      )
+    );
+  }, [secondarySectionPageSize, watchingWithOthersSectionWatchlist.length]);
+
+  useEffect(() => {
     setNotStartedVisibleCount((current) =>
       Math.min(
         notStartedSectionWatchlist.length,
@@ -2047,6 +2111,7 @@ export function HomeScreen() {
 
     if (
       stableActiveFeed === undefined ||
+      stableWatchingWithOthersFeed === undefined ||
       stablePausedFeed === undefined ||
       stableNotStartedFeed === undefined
     ) {
@@ -2070,6 +2135,7 @@ export function HomeScreen() {
     stableActiveFeed,
     stableNotStartedFeed,
     stablePausedFeed,
+    stableWatchingWithOthersFeed,
     watchlistSettleContextKey,
   ]);
 
@@ -2122,6 +2188,10 @@ export function HomeScreen() {
     () => pausedSectionWatchlist.slice(0, pausedVisibleCount),
     [pausedSectionWatchlist, pausedVisibleCount]
   );
+  const visibleWatchingWithOthersSectionItems = useMemo(
+    () => watchingWithOthersSectionWatchlist.slice(0, watchingWithOthersVisibleCount),
+    [watchingWithOthersSectionWatchlist, watchingWithOthersVisibleCount]
+  );
   const visibleNotStartedSectionItems = useMemo(
     () => notStartedSectionWatchlist.slice(0, notStartedVisibleCount),
     [notStartedSectionWatchlist, notStartedVisibleCount]
@@ -2132,6 +2202,9 @@ export function HomeScreen() {
   const hasMoreNotStartedSection =
     notStartedVisibleCount < notStartedSectionWatchlist.length ||
     notStartedFeedItems.length >= secondaryQueryLimit;
+  const hasMoreWatchingWithOthersSection =
+    watchingWithOthersVisibleCount < watchingWithOthersSectionWatchlist.length ||
+    watchingWithOthersFeedItems.length >= secondaryQueryLimit;
   const autoPausedRows = useMemo(
     () => chunkItems(visiblePausedSectionItems, columns),
     [visiblePausedSectionItems, columns]
@@ -2139,6 +2212,10 @@ export function HomeScreen() {
   const notStartedRows = useMemo(
     () => chunkItems(visibleNotStartedSectionItems, columns),
     [visibleNotStartedSectionItems, columns]
+  );
+  const watchingWithOthersRows = useMemo(
+    () => chunkItems(visibleWatchingWithOthersSectionItems, columns),
+    [columns, visibleWatchingWithOthersSectionItems]
   );
 
   const goToTodayCalendar = useCallback(() => {
@@ -2263,6 +2340,7 @@ export function HomeScreen() {
 
       {!isWatchlistVisualLoading &&
       filteredWatchlist.length === 0 &&
+      watchingWithOthersSectionWatchlist.length === 0 &&
       pausedSectionWatchlist.length === 0 &&
       notStartedSectionWatchlist.length === 0 ? (
         <View className="mt-6 items-center rounded-xl border-2 border-border-default bg-bg-surface px-6 py-12">
@@ -2276,6 +2354,74 @@ export function HomeScreen() {
       ) : null}
     </View>
   );
+
+  const watchingWithOthersSection =
+    !isWatchlistVisualLoading && watchingWithOthersSectionWatchlist.length > 0 ? (
+      <View className="mt-6 overflow-hidden rounded-[28px] border border-[#3d3158] bg-[#110e17]">
+        <LinearGradient
+          colors={["rgba(167,139,250,0.14)", "rgba(76,29,149,0.08)", "rgba(17,14,23,0.98)"]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={{ position: "absolute", left: 0, right: 0, top: 0, bottom: 0 }}
+        />
+        <View className="border-b border-[#302642] px-5 py-4">
+          <View className="flex-row items-start justify-between gap-4">
+            <View className="flex-1">
+              <Text className="text-[10px] font-black uppercase tracking-[1.8px] text-violet-200/70">
+                Shared watch queue
+              </Text>
+              <Text className="mt-2 text-2xl font-black text-white">Watching with others</Text>
+              <Text className="mt-1 text-sm text-zinc-400">
+                Keep these shows together until you have time to watch them as a group.
+              </Text>
+            </View>
+            <View className="rounded-full border border-violet-300/25 bg-violet-400/10 px-3 py-1.5">
+              <Text className="text-[10px] font-black uppercase tracking-[1.2px] text-violet-100">
+                {watchingWithOthersSectionWatchlist.length}
+                {hasMoreWatchingWithOthersSection ? "+" : ""} shared
+              </Text>
+            </View>
+          </View>
+        </View>
+        <View className="px-4 py-4">
+          <View className="gap-3">
+            {watchingWithOthersRows.map((row, rowIndex) => (
+              <View key={`watching-with-others-row-${rowIndex}`} className="flex-row gap-3">
+                {row.map((item) => (
+                  <View key={`watching-with-others-${item.mediaType}-${item.id}`} style={{ flex: 1 / columns }}>
+                    <WatchlistCard
+                      item={item}
+                      isCompact={isCompactHomeLayout}
+                      isSmallPhone={isSmallPhone}
+                    />
+                  </View>
+                ))}
+                {row.length < columns
+                  ? Array.from({ length: columns - row.length }, (_, fillerIndex) => (
+                      <View key={`watching-with-others-filler-${rowIndex}-${fillerIndex}`} style={{ flex: 1 / columns }} />
+                    ))
+                  : null}
+              </View>
+            ))}
+          </View>
+          {hasMoreWatchingWithOthersSection ? (
+            <View className="items-center pt-4">
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Show more shared watch shows"
+                className="rounded-full border border-violet-300/20 bg-violet-400/10 px-4 py-2.5"
+                onPress={() => setWatchingWithOthersVisibleCount((count) => count + secondarySectionPageSize)}
+                style={({ pressed }) => ({ opacity: pressed ? 0.9 : 1 })}
+              >
+                <Text className="text-[11px] font-black uppercase tracking-[1.2px] text-violet-100">
+                  Show more
+                </Text>
+              </Pressable>
+            </View>
+          ) : null}
+        </View>
+      </View>
+    ) : null;
 
   const autoPausedSection =
     !isWatchlistVisualLoading && pausedSectionWatchlist.length > 0 ? (
@@ -2569,6 +2715,7 @@ export function HomeScreen() {
                 </View>
 
                 {watchlistFooter}
+                {watchingWithOthersSection}
                 {autoPausedSection}
                 {notStartedSection}
               </ScrollView>
@@ -2588,6 +2735,7 @@ export function HomeScreen() {
                 ListFooterComponent={
                   <>
                     {isWatchlistFilterSettling ? watchlistSettlingFooter : watchlistFooter}
+                    {watchingWithOthersSection}
                     {autoPausedSection}
                     {notStartedSection}
                   </>
