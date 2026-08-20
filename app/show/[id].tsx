@@ -15,6 +15,7 @@ import {
   Pressable,
   ScrollView,
   Text,
+  TextInput,
   View,
   useWindowDimensions,
 } from "react-native";
@@ -878,6 +879,7 @@ export function ShowDetailScreen() {
   const [isRepairingTracking, setIsRepairingTracking] = useState(false);
   const [isSettingStatus, setIsSettingStatus] = useState(false);
   const [isStatusMenuVisible, setIsStatusMenuVisible] = useState(false);
+  const [watchingWithNamesDraft, setWatchingWithNamesDraft] = useState("");
   const [isMarkingShow, setIsMarkingShow] = useState(false);
   const [trackingError, setTrackingError] = useState<string | null>(null);
   const [trackingNotice, setTrackingNotice] = useState<string | null>(null);
@@ -998,6 +1000,12 @@ export function ShowDetailScreen() {
   );
   const displayIsInWatchlist = optimisticIsInWatchlist ?? isInWatchlist;
   const displayTrackingStatus = optimisticTrackingStatus ?? tracking?.status;
+
+  useEffect(() => {
+    if (isStatusMenuVisible) {
+      setWatchingWithNamesDraft(tracking?.watchingWithNames?.join(", ") ?? "");
+    }
+  }, [isStatusMenuVisible, tracking?.watchingWithNames]);
   
   // Reset optimistic state once the subscribed tracking query catches up.
   useEffect(() => {
@@ -2220,7 +2228,10 @@ export function ShowDetailScreen() {
     }
   };
 
-  const handleSetTrackingStatus = async (nextStatus: ShowTrackingStatus) => {
+  const handleSetTrackingStatus = async (
+    nextStatus: ShowTrackingStatus,
+    companionOptions?: { watchingWithOthers?: boolean; watchingWithNames?: string[] }
+  ) => {
     if (!show) return false;
     if (!canTrackShow) {
       setTrackingError("This title cannot be tracked yet.");
@@ -2233,7 +2244,11 @@ export function ShowDetailScreen() {
     if (isSettingStatus || isRemovingFromWatchlist) {
       return false;
     }
-    if (isInWatchlist && tracking?.status === nextStatus) {
+    if (
+      isInWatchlist &&
+      tracking?.status === nextStatus &&
+      companionOptions === undefined
+    ) {
       setIsStatusMenuVisible(false);
       return true;
     }
@@ -2259,6 +2274,8 @@ export function ShowDetailScreen() {
       await setWatchlistStatus({
         show: payload,
         status: nextStatus,
+        watchingWithOthers: companionOptions?.watchingWithOthers,
+        watchingWithNames: companionOptions?.watchingWithNames,
       });
       return true;
     } catch (mutationError) {
@@ -2270,6 +2287,13 @@ export function ShowDetailScreen() {
     } finally {
       setIsSettingStatus(false);
     }
+  };
+
+  const handleSetWatchingWithOthers = () => {
+    void handleSetTrackingStatus("watching", {
+      watchingWithOthers: true,
+      watchingWithNames: watchingWithNamesDraft.split(","),
+    });
   };
 
   const handleSelectStatusFromMenu = (nextStatus: ShowTrackingStatus) => {
@@ -4049,7 +4073,9 @@ export function ShowDetailScreen() {
                   !trackingLoaded
                     ? "Loading"
                     : displayIsInWatchlist
-                      ? activeTrackingOption.label
+                      ? tracking?.watchingWithOthers
+                        ? "Watching with others"
+                        : activeTrackingOption.label
                       : "Not Tracked"
                 }
                 isTracked={displayIsInWatchlist}
@@ -5106,9 +5132,67 @@ export function ShowDetailScreen() {
             </View>
 
             <View className="gap-2 p-4">
+              {showMediaType !== "movie" ? (
+                <View
+                  className={`rounded-xl border px-3 py-3 ${
+                    tracking?.watchingWithOthers
+                      ? "border-primary/60 bg-primary/15"
+                      : "border-border-default bg-bg-base"
+                  }`}
+                >
+                  <View className="flex-row items-center gap-3">
+                    <View className="flex-1">
+                      <Text
+                        className={`text-sm font-semibold ${
+                          tracking?.watchingWithOthers ? "text-primary" : "text-text-primary"
+                        }`}
+                      >
+                        Watching with others
+                      </Text>
+                      <Text className="mt-0.5 text-xs text-text-secondary">
+                        Keep this show together in one Home section.
+                      </Text>
+                    </View>
+                    <Ionicons
+                      name={tracking?.watchingWithOthers ? "radio-button-on" : "radio-button-off"}
+                      size={18}
+                      color={tracking?.watchingWithOthers ? "#ef4444" : "#71717a"}
+                    />
+                  </View>
+                  <TextInput
+                    value={watchingWithNamesDraft}
+                    onChangeText={setWatchingWithNamesDraft}
+                    placeholder="Names (optional, comma-separated)"
+                    placeholderTextColor="#71717a"
+                    editable={!isStatusMenuBusy}
+                    accessibilityLabel="People you are watching with"
+                    className="mt-3 rounded-lg border border-border-default bg-bg-base px-3 py-2.5 text-sm text-text-primary"
+                  />
+                  <Text className="mt-1.5 text-[11px] text-text-muted">
+                    Up to five names; duplicates and extra spaces are cleaned up.
+                  </Text>
+                  <Pressable
+                    disabled={isStatusMenuBusy}
+                    onPress={handleSetWatchingWithOthers}
+                    accessibilityRole="button"
+                    accessibilityLabel="Save watching with others status"
+                    className="mt-3 items-center rounded-lg bg-primary px-3 py-2.5"
+                    style={({ pressed }) => ({
+                      opacity: isStatusMenuBusy ? 0.45 : pressed ? 0.9 : 1,
+                    })}
+                  >
+                    <Text className="text-xs font-black uppercase tracking-[1px] text-white">
+                      {tracking?.watchingWithOthers ? "Save people" : "Save shared watch"}
+                    </Text>
+                  </Pressable>
+                </View>
+              ) : null}
+
               {statusMenuOptions.map((option) => {
                 const isActive =
-                  isInWatchlist && activeTrackingStatusForMenu === option.value;
+                  isInWatchlist &&
+                  activeTrackingStatusForMenu === option.value &&
+                  !(option.value === "watching" && tracking?.watchingWithOthers);
                 const title =
                   isFirstSavePrompt && option.value === "watching"
                     ? "Show on Home now"

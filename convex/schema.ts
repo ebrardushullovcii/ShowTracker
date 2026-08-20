@@ -144,6 +144,8 @@ export default defineSchema({
     completedAt: v.optional(v.number()),
     autoPausedAt: v.optional(v.number()),
     newEpisodeSignalAt: v.optional(v.number()),
+    watchingWithOthers: v.optional(v.boolean()),
+    watchingWithNames: v.optional(v.array(v.string())),
   })
     .index("by_user", ["userId"])
     .index("by_user_status", ["userId", "status"])
@@ -232,6 +234,8 @@ export default defineSchema({
     newEpisodeSignalAt: v.optional(v.number()),
     homeSortAt: v.optional(v.number()),
     autoPausedAt: v.optional(v.number()),
+    watchingWithOthers: v.optional(v.boolean()),
+    watchingWithNames: v.optional(v.array(v.string())),
     scheduleProjectionKey: v.optional(v.string()),
     scheduleProjectionUpdatedAt: v.optional(v.number()),
 
@@ -249,6 +253,12 @@ export default defineSchema({
     .index("by_user_media_status_lastWatched", ["userId", "mediaType", "status", "lastWatchedAt"])
     .index("by_user_media_status_homeSortAt", ["userId", "mediaType", "status", "homeSortAt"])
     .index("by_user_media_status_autoPausedAt", ["userId", "mediaType", "status", "autoPausedAt"])
+    .index("by_user_media_watchingWithOthers_homeSortAt", [
+      "userId",
+      "mediaType",
+      "watchingWithOthers",
+      "homeSortAt",
+    ])
     .index("by_user_show", ["userId", "showId"])
     .index("by_userShow", ["userShowId"]),
 
