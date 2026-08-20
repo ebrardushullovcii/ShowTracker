@@ -1666,12 +1666,17 @@ export function HomeScreen() {
   const activeFeedItems = useMemo(
     () => {
       const merged = new Map<string, WatchlistItem>();
+      const watchingWithOthersRouteIds = new Set(
+        ((stableWatchingWithOthersFeed ?? []) as WatchlistItem[]).map((item) => item.id)
+      );
 
       for (const item of (stableActiveFeed ?? []) as WatchlistItem[]) {
+        if (watchingWithOthersRouteIds.has(item.id)) continue;
         merged.set(item.id, item);
       }
 
       for (const item of (stableTodayScheduledWatchlistFeed ?? []) as WatchlistItem[]) {
+        if (watchingWithOthersRouteIds.has(item.id)) continue;
         if (!merged.has(item.id)) {
           merged.set(item.id, item);
         }
@@ -1679,7 +1684,7 @@ export function HomeScreen() {
 
       return Array.from(merged.values());
     },
-    [stableActiveFeed, stableTodayScheduledWatchlistFeed]
+    [stableActiveFeed, stableTodayScheduledWatchlistFeed, stableWatchingWithOthersFeed]
   );
   const pausedFeedItems = useMemo(
     () => (stablePausedFeed ?? []) as WatchlistItem[],

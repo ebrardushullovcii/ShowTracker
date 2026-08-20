@@ -39,6 +39,11 @@ name chips when names exist and expose the complete names through accessibility
 labels. The detail status editor offers the mode and an optional comma-separated
 name field.
 
+Home also removes matching route IDs from the same-day schedule-attention merge.
+Those schedule rows do not carry companion metadata themselves, so route-level
+exclusion prevents a title airing today from appearing in both Active and the
+Watching with others section.
+
 Episode marking/unmarking preserves the mode while the underlying status remains
 Watching. A transition to Completed or another non-Watching status clears it.
 The inactivity and anime-franchise auto-pause paths explicitly skip Watching
@@ -67,6 +72,8 @@ preserving the mode.
 - Leaving the mode clears both the marker and names.
 - A mode row remains underlying Watching for Library and tracking logic.
 - Mode rows are not auto-paused for inactivity.
+- A same-day release remains visible only in Watching with others, not as a
+  duplicate Active card.
 - Movies do not expose the mode in the detail editor.
 - Missing provider route identifiers are still excluded by the existing Home
   hydration guard.
