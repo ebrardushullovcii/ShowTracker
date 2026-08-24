@@ -28,11 +28,17 @@ import {
 import type { MediaType } from "@/lib/api/types";
 import { toHttpsImageUrl } from "@/lib/image-url";
 import { parseShowRouteId } from "@/lib/show-route";
+import {
+  getWatchlistScheduleAttentionCount,
+  hasWatchlistActionableEpisode,
+  shouldShowWatchingWithOthersItem,
+  type WatchlistAirtimeMode,
+  type WatchlistScheduleCounts,
+} from "@/lib/tracking/home-watchlist-visibility";
 
 type HomeTab = "watchlist" | "upcoming";
 type HomeMediaFilter = "all" | "tv" | "anime";
 type HomePausedSectionMode = "auto_paused_only" | "all_paused";
-type WatchlistAirtimeMode = "same_day" | "after_airtime";
 
 type WatchlistItem = {
   id: string;
@@ -55,12 +61,6 @@ type WatchlistItem = {
   newEpisodeSignalAt?: number | null;
   watchingWithOthers?: boolean;
   watchingWithNames?: string[];
-};
-
-type WatchlistScheduleCounts = {
-  availableCount: number;
-  futureCount: number;
-  unavailableCount: number;
 };
 
 type WatchlistFutureUpcomingCount = WatchlistScheduleCounts & {
@@ -133,59 +133,6 @@ function getUpcomingDistanceLabel(daysUntil: number) {
   if (daysUntil === -1) return "Yesterday";
   if (daysUntil > 1) return `In ${daysUntil}d`;
   return `${Math.abs(daysUntil)}d ago`;
-}
-
-function getWatchlistScheduleAttentionCount(
-  counts: WatchlistScheduleCounts | undefined,
-  mode: WatchlistAirtimeMode
-) {
-  if (!counts) {
-    return 0;
-  }
-
-  if (mode === "after_airtime") {
-    return counts.availableCount;
-  }
-
-  return Math.max(
-    0,
-    counts.availableCount + (counts.unavailableCount - counts.futureCount)
-  );
-}
-
-function hasWatchlistActionableEpisode(
-  item: WatchlistItem,
-  counts: WatchlistScheduleCounts | undefined,
-  mode: WatchlistAirtimeMode
-) {
-  const scheduleAttentionCount = getWatchlistScheduleAttentionCount(
-    counts,
-    mode
-  );
-  if (scheduleAttentionCount > 0) {
-    return true;
-  }
-
-  if (
-    typeof item.remainingEpisodes !== "number" ||
-    item.remainingEpisodes <= 0
-  ) {
-    return false;
-  }
-
-  const hasFreshReleaseSignal =
-    typeof item.newEpisodeSignalAt === "number" &&
-    item.newEpisodeSignalAt > (item.lastWatchedAt ?? 0);
-  if (hasFreshReleaseSignal) {
-    return true;
-  }
-
-  const unavailableUpcomingCount =
-    mode === "after_airtime"
-      ? counts?.unavailableCount ?? 0
-      : counts?.futureCount ?? 0;
-
-  return unavailableUpcomingCount < item.remainingEpisodes;
 }
 
 function parseEpisodeAirtime(airDate?: string | null) {
@@ -1813,11 +1760,19 @@ export function HomeScreen() {
     () =>
       watchingWithOthersFeedItems.filter(
         (item) =>
-          item.status === "watching" &&
-          item.watchingWithOthers === true &&
+          shouldShowWatchingWithOthersItem(
+            item,
+            upcomingAvailabilityByRoute.get(item.id),
+            watchlistAirtimeMode
+          ) &&
           (mediaFilter === "all" || item.mediaType === mediaFilter)
       ),
-    [mediaFilter, watchingWithOthersFeedItems]
+    [
+      mediaFilter,
+      upcomingAvailabilityByRoute,
+      watchingWithOthersFeedItems,
+      watchlistAirtimeMode,
+    ]
   );
 
   const pausedSectionWatchlist = useMemo(() => {

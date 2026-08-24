@@ -131,6 +131,7 @@ Most frequently relevant:
 | [ADR-0057](ADR-0057-caught-up-schedule-alias-signal-boundary.md) | Caught-up projections reject cached provider aliases released no later than the user's last watch. |
 | [ADR-0058](ADR-0058-canonical-provider-alias-coordinates.md) | Provider aliases keep precise release timing while projections use the tracked TMDB episode coordinates. |
 | [ADR-0059](ADR-0059-watching-with-others.md) | Watching with others is an orthogonal synced Home section with optional normalized companion names; it does not widen the existing status enum or participate in auto-pause. |
+| [ADR-0060](ADR-0060-caught-up-shared-watch-visibility.md) | Caught-up shared watches keep their people metadata but leave Home until an episode is actionable under the configured airtime mode. |
 
 ## Rule For New ADRs
 
