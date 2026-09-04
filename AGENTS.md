@@ -1,85 +1,37 @@
 # ShowTracker Agent Guide
 
-## Mission
+ShowTracker is a fast, minimal, open source tracker for shows, anime, and movies, a cleaner TVTime replacement, built as one Expo codebase with Convex for synced user data. Live app: https://showtrackerapp.netlify.app. Product direction: `docs/GOALS.md`. Vocabulary: `CONTEXT.md`. System shape and production runtime: `docs/ARCHITECTURE.md`. Decisions: `docs/DECISIONS.md` and the ADRs it indexes. Code is current behavior; docs are memory.
 
-ShowTracker is a fast, minimal, open source tracker for shows, anime, and movies. It should feel like a cleaner TVTime replacement: discover media, track progress, manage a Home watchlist, see upcoming/released episodes, build custom lists, and inspect watch statistics from one Expo codebase.
+## How to work
 
-## How To Work
+- Treat a bug report as a request to fix and ship. Use the live URL or screenshots when given, make the smallest correct change, and verify the result in production.
+- Delivery: branch (`feat/`, `fix/`, or `docs/`), validate, commit, push, PR, merge to `main` once checks pass. Netlify deploys the web app from `main`. Run `npx convex deploy --yes` when backend behavior changed. When schedule-confidence is involved, sync and run the VPS (commands in `docs/SCHEDULE_CONFIDENCE.md`). Then test the live app.
+- Never push directly to `main`. Follow-ups to an open PR stay on that PR's branch.
+- Local Expo and Convex servers are fine for iteration, but final verification of a production-intended change uses the live app against production Convex.
+- Browser work uses the built-in Browser or Chrome tooling of whichever agent you are running in; prefer Chrome/CDP for console, network, DOM/CSS, and DevTools-level debugging. Do not install or invoke standalone automation frameworks (`agent-browser`, Playwright, Puppeteer) unless the user asks. The `npm run ui:inspect` wrappers are allowed; `scripts/test-app.sh` depends on the removed `agent-browser` CLI and is not a supported path.
+- Never commit API keys, tokens, credentials, or machine connection details. Never store images in Convex; store external CDN URLs.
+- Skills and `skills-lock.json` are managed by the user; do not install, regenerate, or remove them. Do not create `.claude/` content.
 
-- Treat user bug reports as requests to fix and ship. Use live URLs/screenshots when provided, make the smallest correct change, and verify the result in production.
-- Default delivery is: branch, validate, commit, push, PR, merge to `main` once checks pass, let Netlify deploy, deploy Convex when backend behavior changed, sync/run the VPS when schedule-confidence is involved, then test the live app with Browser tooling.
-- Use docs as project memory and code as current behavior. When they disagree, trust code for diagnosis and update docs only when the task is documentation work or the needed doc fix is clear.
-- For Home, Watchlist, Schedule, release availability, provider matching, duplicate collapse, route IDs, or projections, read `docs/DECISIONS.md` and the relevant ADRs before changing behavior.
+## Conventions that are decisions, not habits
 
-Read these first when the task is broad:
+- App UI images use `Image` from `react-native`, not `expo-image`, even though the dependency is installed.
+- Provider APIs are called only from `lib/api/*` clients or Convex actions, never from screens or components, and responses are normalized before UI use.
+- User-owned synced state goes through Convex. No ad hoc local-only persistence as a source of truth.
+- Convex functions use `v.*` validators, validate auth where user data is involved, and prefer indexed queries over `.filter()` scans.
+- Route and join IDs are provider-qualified (`tmdb:tv:123`, `anilist:anime:789`). Never compare bare numeric IDs across providers.
 
-- `docs/GOALS.md` for the durable product direction and non-goals.
-- `CONTEXT.md` for product language.
-- `docs/DECISIONS.md` for the ADR map.
-- `docs/ARCHITECTURE.md` for the current system shape.
-- `docs/DEVELOPMENT.md` for commands and validation.
-- `docs/BROWSER_AUTOMATION.md` when the task involves live UI, screenshots, auth/session state, or Browser verification.
-- `docs/SCHEDULE_CONFIDENCE.md` when the task involves release dates, schedule freshness, Home attention, provider reconciliation, or the VPS job.
+## Watchlist and schedule change control
 
-## Current Stack
+Home watchlist, Home attention feed, schedule calendar, schedule cache, episode availability, provider reconciliation, release facts, duplicate collapse, route IDs, and projection reads are the highest-risk paths in this repo. The ADRs are the long-term memory for why they behave as they do; they are not cleanup targets.
 
-- Expo SDK 54, React 19, React Native 0.81, React Native Web 0.21.
-- Expo Router 6 file-based routing.
-- TypeScript strict mode.
-- NativeWind 4 for styling.
-- Convex with Convex Auth for synced user data, server functions, projections, and repair tools.
-- Zustand only for small client/UI state. Do not assume `react-native-mmkv`; it is not a dependency.
-- Provider clients live in `lib/api/` and normalize TMDB, TVMaze, AniList, and Jikan/MAL data.
+Before changing these paths, read `docs/DECISIONS.md` and the latest relevant ADRs. Any change that can affect what appears in Home, Watchlist, or Schedule, or that touches release availability, provider matching, duplicate collapse, route IDs, or projection reads, requires a new `docs/ADR-####-short-title.md` before or with the code change. Each ADR includes context, current behavior, decision, reasoning, provider/data assumptions, edge cases, verification, and rollback notes. If unsure whether a change touches these paths, treat it as if it does.
 
-## Code Rules
+Never weaken release-state correctness to reduce Convex I/O; move expensive work to the schedule-confidence reconciler and apply compact deltas. Never reintroduce broad aggregate repair or backfill from routine app navigation.
 
-- Functional components only; prefer named exports.
-- Use NativeWind `className` for styling. Do not add `StyleSheet.create`.
-- App/component images use `Image` from `react-native`; do not switch app UI to `expo-image`.
-- Do not call external provider APIs directly from screens/components. Use `lib/api/*` clients or Convex actions.
-- User-owned synced state goes through Convex. Do not bypass Convex with ad hoc local-only persistence.
-- Convex functions must use `v.*` validators and validate auth where user data is involved.
-- Prefer indexed Convex queries over broad `.filter()` scans.
-- Imports should use the `@/` alias where the repo already does.
+## Validation
 
-## Frontend And Browser Work
-
-- For frontend/UI work, follow the repo's existing UI conventions and visual patterns.
-- For browser work, use the available Codex built-in Browser or Chrome plugin. Prefer Chrome/CDP when the task depends on the user's existing Chrome session, console/network inspection, or DevTools-level debugging.
-- Do not install or invoke standalone browser automation frameworks or CLIs directly (including `agent-browser`, Playwright, or Puppeteer) unless the user explicitly asks for one. Existing repo-maintained validation wrappers such as `npm run ui:inspect` are allowed.
-- Use `npm run ui:inspect:quick` or `npm run ui:inspect` after UI changes when route/theme/device screenshot coverage is useful.
-- See `docs/BROWSER_AUTOMATION.md` for the tool decision guide.
-- Local Expo/Convex servers are useful for fast iteration, but final verification should use the live app when the change is intended for production.
-
-## Skill Management
-
-- Repo-local skill files and `skills-lock.json` are managed by skills.sh or the Codex app. Do not edit, regenerate, install, or remove skills from an agent session unless the user explicitly asks.
-- Claude-specific local mirrors are intentionally absent. Do not recreate `.claude/` content.
-
-## Watchlist And Schedule Change Control
-
-The Home watchlist, Home attention feed, schedule calendar, schedule cache, episode availability, provider reconciliation, release facts, and projection paths are the highest-risk areas in this repo.
-
-The ADRs for these paths are long-term memory, not cleanup targets. They preserve the hard-won context behind "shows are showing / shows are not showing" Home regressions, including provider matching, stale release signals, duplicate schedule rows, completed-show reactivation, and projection fallbacks. Before changing these paths, read `docs/DECISIONS.md` and the latest relevant ADRs.
-
-Any code change that can affect what appears in Home, Watchlist, Schedule, release availability, provider matching, duplicate collapse, route IDs, or projection reads requires a new ADR in `docs/ADR-####-short-title.md` before or with the code change.
-
-This includes changes to:
-
-- Home active, paused, not-started, completed, dropped, and newly available rows.
-- Schedule day/month/future rows and media filters.
-- `remainingEpisodes`, `releasedEpisodes`, `newEpisodeSignalAt`, `homeSortAt`, `watchlistAirtimeMode`, completed-show reactivation, and future-only filtering.
-- TMDB, TVMaze, AniList, Jikan/MAL, IMDb, route IDs, canonical keys, anime aliases, bridge IDs, title fallback, and low-confidence matches.
-- Duplicate prevention, same-day schedule entries, same-title TV/anime rows, stale provider totals, schedule-cache merges, and SQLite reconciler to Convex sync boundaries.
-
-Each ADR must include context, current behavior, decision, reasoning, provider/data assumptions, edge cases, verification, and rollback notes. If unsure whether a change affects these paths, treat it as affecting them.
+Use the narrowest check that proves the change: `npm run lint`, `npx tsc --noEmit --pretty false`, and for backend changes `npx convex dev --once --typecheck enable --tail-logs disable`. Use `npm run ui:inspect:quick` after UI changes when multi-route, theme, or device screenshot coverage is useful. Reconciler commands and the VPS runtime are in `docs/SCHEDULE_CONFIDENCE.md`; everything else is in `package.json` and `.env.example`.
 
 ## Docs
 
-Keep docs durable. Update them when the task is documentation work or when implementation exposes a clear durable mismatch; avoid phase logs, handoff notes, and one-off plans.
-
-## Project Guardrails
-
-- Never store images in Convex; store external CDN URLs.
-- Never weaken release-state correctness just to reduce Convex I/O. If correct release intelligence is too expensive in Convex, move the work to the schedule-confidence reconciliation layer and apply compact deltas.
-- Never reintroduce broad aggregate repair/backfill from routine app navigation.
+Keep docs durable: goals, architecture, decisions. No phase logs, handoff notes, or one-off plans. When code and docs disagree, code is current behavior; fix the doc when the task calls for it.
