@@ -6,7 +6,7 @@ For Home, Watchlist, Schedule, release availability, provider matching, duplicat
 
 ## Start Here For Risky Work
 
-For Home, Watchlist, Schedule, release availability, provider matching, duplicate collapse, route IDs, schedule cache, user projections, or the SQLite reconciliation boundary, read the most recent relevant ADRs before editing code and add a new ADR for behavior changes.
+For Home, Watchlist, Schedule, release availability, provider matching, duplicate collapse, route IDs, schedule cache, user projections, or the SQLite reconciliation boundary, read the relevant ADRs before editing code. Add an ADR for a new or revised durable decision; cite an existing ADR when restoring its intended behavior.
 
 When the user says a production issue happened before, search this map and the ADRs by symptom and title before designing a fix:
 
@@ -133,17 +133,10 @@ Most frequently relevant:
 | [ADR-0059](ADR-0059-watching-with-others.md) | Watching with others is an orthogonal synced Home section with optional normalized companion names; it does not widen the existing status enum or participate in auto-pause. |
 | [ADR-0060](ADR-0060-caught-up-shared-watch-visibility.md) | Caught-up shared watches keep their people metadata but leave Home until an episode is actionable under the configured airtime mode. |
 
+## Guidance policy
+
+- [ADR-0061](ADR-0061-minimal-agent-guidance.md): retain decisions, remove process scaffolding, and document decisions rather than every patch.
+
 ## Rule For New ADRs
 
-Watchlist/schedule/release/provider/projection ADRs must include:
-
-- Context.
-- Current behavior.
-- Decision.
-- Reasoning.
-- Provider/data assumptions.
-- Edge cases.
-- Verification.
-- Rollback notes.
-
-Keep the ADR concrete enough that a future agent can understand why a behavior exists without reading old chat history.
+Explain the context, decision, and why it was chosen. Include provider assumptions, edge cases, verification, or rollback details when they matter to the decision. Avoid a mandatory template for every fix.

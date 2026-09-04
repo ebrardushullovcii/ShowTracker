@@ -12,6 +12,6 @@ Durable project memory: goals, current architecture, and decisions. No phase log
 
 ## Decisions
 
-All `ADR-####-*.md` files are retained. They explain why risky behavior exists, especially around watchlist, schedule, release availability, provider matching, duplicate collapse, and Convex I/O. Read [DECISIONS.md](DECISIONS.md) before changing those areas and add a new ADR for any behavior-changing watchlist, schedule, release, provider, or projection work.
+All `ADR-####-*.md` files are retained. They explain why risky behavior exists, especially around watchlist, schedule, release availability, provider matching, duplicate collapse, and Convex I/O. Read [DECISIONS.md](DECISIONS.md) before changing those areas. New or revised durable decisions need an ADR; fixes restoring an existing decision can cite it.
 
 Setup, env, and commands: `.env.example` and `package.json`.

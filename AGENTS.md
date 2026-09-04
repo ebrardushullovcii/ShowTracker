@@ -10,7 +10,7 @@ ShowTracker is a fast, minimal, open source tracker for shows, anime, and movies
 - Local Expo and Convex servers are fine for iteration, but final verification of a production-intended change uses the live app against production Convex.
 - Browser work uses the built-in Browser or Chrome tooling of whichever agent you are running in; prefer Chrome/CDP for console, network, DOM/CSS, and DevTools-level debugging. Do not install or invoke standalone automation frameworks (`agent-browser`, Playwright, Puppeteer) unless the user asks. The `npm run ui:inspect` wrappers are allowed; `scripts/test-app.sh` depends on the removed `agent-browser` CLI and is not a supported path.
 - Never commit API keys, tokens, credentials, or machine connection details. Never store images in Convex; store external CDN URLs.
-- Skills and `skills-lock.json` are managed by the user; do not install, regenerate, or remove them. Do not create `.claude/` content.
+- Do not recreate removed project skills, skill locks, or generated guidance (ADR 0061).
 
 ## Conventions that are decisions, not habits
 
@@ -24,7 +24,7 @@ ShowTracker is a fast, minimal, open source tracker for shows, anime, and movies
 
 Home watchlist, Home attention feed, schedule calendar, schedule cache, episode availability, provider reconciliation, release facts, duplicate collapse, route IDs, and projection reads are the highest-risk paths in this repo. The ADRs are the long-term memory for why they behave as they do; they are not cleanup targets.
 
-Before changing these paths, read `docs/DECISIONS.md` and the latest relevant ADRs. Any change that can affect what appears in Home, Watchlist, or Schedule, or that touches release availability, provider matching, duplicate collapse, route IDs, or projection reads, requires a new `docs/ADR-####-short-title.md` before or with the code change. Each ADR includes context, current behavior, decision, reasoning, provider/data assumptions, edge cases, verification, and rollback notes. If unsure whether a change touches these paths, treat it as if it does.
+Before changing these paths, read `docs/DECISIONS.md` and relevant ADRs. Add an ADR when introducing or revising a durable decision; fixes that restore an existing decision can cite it without creating another. Code shows current behavior; investigate conflicts with ADRs before changing the decision.
 
 Never weaken release-state correctness to reduce Convex I/O; move expensive work to the schedule-confidence reconciler and apply compact deltas. Never reintroduce broad aggregate repair or backfill from routine app navigation.
 
