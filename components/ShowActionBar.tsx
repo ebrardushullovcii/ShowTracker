@@ -98,21 +98,21 @@ export function ShowActionBar({
     <View className="relative z-30">
       <View className="flex-row items-center gap-2">
         <Pressable
-          onPress={onEditStatus}
+          onPress={isTracked ? onEditStatus : onToggleWatchlist}
           disabled={isBusy}
           accessibilityRole="button"
-          accessibilityLabel={`Tracking status: ${statusLabel}`}
+          accessibilityLabel={isTracked ? `Tracking status: ${statusLabel}` : "Add to watchlist"}
           className="min-h-[42px] flex-row items-center gap-2 rounded-lg border border-white/30 bg-bg-base/95 px-3 py-2 shadow-lg"
           style={({ pressed }) => ({
             opacity: isBusy ? 0.45 : pressed ? 0.86 : 1,
           })}
         >
           <Badge
-            label={statusLabel}
+            label={isTracked ? statusLabel : "Add to watchlist"}
             variant={isTracked ? "accent" : "default"}
             className={isCompact ? "max-w-[104px]" : "max-w-[150px]"}
           />
-          <Ionicons name="chevron-down" size={14} color="#a1a1aa" />
+          <Ionicons name={isTracked ? "chevron-down" : "add"} size={14} color="#a1a1aa" />
         </Pressable>
 
         <Pressable

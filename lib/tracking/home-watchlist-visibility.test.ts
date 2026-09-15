@@ -3,12 +3,12 @@ import test from "node:test";
 
 import { shouldShowActiveWatchlistItem, shouldShowWatchingWithOthersItem } from "./home-watchlist-visibility";
 
-test("Show on Home accepts unwatched Watching titles with released episodes", () => {
+test("unwatched titles never appear as actively Watching", () => {
   for (const remainingEpisodes of [5, 10, 11, 23, 25]) {
     for (const mode of ["same_day", "after_airtime"] as const) {
       assert.equal(shouldShowActiveWatchlistItem({
         status: "watching", watchedEpisodes: 0, remainingEpisodes,
-      }, undefined, mode), true);
+      }, undefined, mode), false);
     }
   }
 });
@@ -34,7 +34,7 @@ test("explicit Watching still waits for a release and hides caught-up titles", (
       availableCount: 0, futureCount: 5, unavailableCount: 5,
     }, "same_day"), false);
     const releaseDay = { availableCount: 0, futureCount: 0, unavailableCount: 1 };
-    assert.equal(shouldShowActiveWatchlistItem(item, releaseDay, "same_day"), true);
+    assert.equal(shouldShowActiveWatchlistItem(item, releaseDay, "same_day"), watchedEpisodes > 0);
     assert.equal(shouldShowActiveWatchlistItem(item, releaseDay, "after_airtime"), false);
   }
 });

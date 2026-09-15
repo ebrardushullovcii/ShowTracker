@@ -11,6 +11,7 @@ import type { Doc, Id } from "@/convex/_generated/dataModel";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { v } from "convex/values";
 import { computeWatchedHistoryAggregates } from "@/lib/tracking/history-aggregates";
+import { resolveManualTrackingStatus } from "@/lib/tracking/initial-status";
 import { paginationOptsValidator } from "convex/server";
 import { api, internal } from "@/convex/_generated/api";
 import {
@@ -5856,11 +5857,18 @@ export const setWatchlistStatus = mutation({
       .withIndex("by_user_show", (q) => q.eq("userId", userId).eq("showId", showId))
       .unique();
 
+    const nextStatus = resolveManualTrackingStatus(
+      args.status,
+      args.show.mediaType,
+      existing?.watchedEpisodesCount ?? 0,
+      watchingWithOthers,
+    );
+
     if (!existing) {
       const insertData: Omit<Doc<"userShows">, "_id" | "_creationTime"> = {
         userId,
         showId,
-        status: args.status,
+        status: nextStatus,
         mediaType: args.show.mediaType,
         watchedEpisodesCount: 0,
         watchedTotalCount: 0,
@@ -5874,16 +5882,16 @@ export const setWatchlistStatus = mutation({
         insertData.isAutoTracked = false;
       }
 
-      if (args.status === "completed") {
+      if (nextStatus === "completed") {
         insertData.lastWatchedAt = now;
         insertData.completedAt = now;
       }
 
-      if (args.status === "watching") {
+      if (nextStatus === "watching") {
         insertData.lastWatchedAt = now;
       }
 
-      if (args.status === "dropped") {
+      if (nextStatus === "dropped") {
         insertData.droppedAt = now;
       }
 
@@ -5899,12 +5907,12 @@ export const setWatchlistStatus = mutation({
 
       return {
         inWatchlist: true,
-        status: args.status as UserShowStatus,
+        status: nextStatus as UserShowStatus,
       };
     }
 
     const patch: Partial<Doc<"userShows">> = {
-      status: args.status as UserShowStatus,
+      status: nextStatus as UserShowStatus,
       statusChangedAt: now,
       watchingWithOthers: watchingWithOthers ? true : undefined,
       watchingWithNames: watchingWithOthers && watchingWithNames.length > 0
@@ -5923,7 +5931,7 @@ export const setWatchlistStatus = mutation({
       }
     }
 
-    if (args.status === "completed") {
+    if (nextStatus === "completed") {
       if (typeof existing.lastWatchedAt !== "number") {
         patch.lastWatchedAt = now;
       }
@@ -5931,21 +5939,21 @@ export const setWatchlistStatus = mutation({
       patch.droppedAt = undefined; // Clear dropped date if completed
     }
 
-    if (args.status === "watching" && typeof existing.lastWatchedAt !== "number") {
+    if (nextStatus === "watching" && typeof existing.lastWatchedAt !== "number") {
       patch.lastWatchedAt = now;
     }
     
-    if (args.status === "dropped") {
+    if (nextStatus === "dropped") {
       patch.droppedAt = now;
     }
 
     // Clear completedAt when transitioning away from completed
-    if (existing.status === "completed" && args.status !== "completed") {
+    if (existing.status === "completed" && nextStatus !== "completed") {
       patch.completedAt = undefined;
     }
 
     // Clear droppedAt when transitioning away from dropped
-    if (existing.status === "dropped" && args.status !== "dropped") {
+    if (existing.status === "dropped" && nextStatus !== "dropped") {
       patch.droppedAt = undefined;
     }
 
@@ -5961,7 +5969,7 @@ export const setWatchlistStatus = mutation({
 
     return {
       inWatchlist: true,
-      status: args.status as UserShowStatus,
+      status: nextStatus as UserShowStatus,
     };
   },
 });

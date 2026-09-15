@@ -29,13 +29,13 @@ export function shouldShowActiveWatchlistItem(
 ) {
   if (item.status !== "watching" && item.status !== "completed") return false;
   if (item.watchingWithOthers || item.trackingState === "upcoming") return false;
+  if (item.watchedEpisodes <= 0) return false;
 
   const actionable = hasWatchlistActionableEpisode(item, counts, mode);
   const scheduleAttention = getWatchlistScheduleAttentionCount(counts, mode) > 0;
   const freshSignal = typeof item.newEpisodeSignalAt === "number" &&
     item.newEpisodeSignalAt > (item.lastWatchedAt ?? 0);
 
-  // Explicit Watching is enough to start a queue; watching episode one is not required.
   if (item.status === "watching") return actionable;
   return item.watchedEpisodes > 0 && actionable && (scheduleAttention || freshSignal);
 }
