@@ -5143,7 +5143,7 @@ export function ShowDetailScreen() {
                   : isInWatchlist
                   ? `Current status: ${activeTrackingOption.label}`
                   : isFirstSavePrompt
-                    ? "Choose whether this should appear on Home right away or stay saved for later."
+                    ? "Choose your active Home watchlist or save this in your backlog for later."
                     : showMediaType === "movie"
                       ? "Pick a status to add this movie to your queue."
                       : "Pick a status to add this title to your watchlist."}
@@ -5310,9 +5310,9 @@ export function ShowDetailScreen() {
                       : option.label;
                 const description =
                   isFirstSavePrompt && option.value === "watching"
-                    ? "Marks this as Watching so it appears in your Home watchlist."
+                    ? "Marks this as Watching. Appears in your active Home watchlist when episodes are available, even before you start."
                     : isFirstSavePrompt && option.value === "plan_to_watch"
-                      ? "Marks this as Planned and keeps it off Home until you start it."
+                      ? "Marks this as Planned in Home's Haven't started section and your Library."
                       : option.description;
                 return (
                   <Pressable
