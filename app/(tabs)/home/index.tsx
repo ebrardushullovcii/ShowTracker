@@ -31,6 +31,7 @@ import { parseShowRouteId } from "@/lib/show-route";
 import {
   getWatchlistScheduleAttentionCount,
   hasWatchlistActionableEpisode,
+  shouldShowActiveWatchlistItem,
   shouldShowWatchingWithOthersItem,
   type WatchlistAirtimeMode,
   type WatchlistScheduleCounts,
@@ -1693,61 +1694,12 @@ export function HomeScreen() {
 
   const filteredWatchlist = useMemo(() => {
     return activeFeedItems.filter((item) => {
-      const routeId = item.id;
-      const upcomingCounts = routeId
-        ? upcomingAvailabilityByRoute.get(routeId)
-        : undefined;
-      const availableScheduleCount = getWatchlistScheduleAttentionCount(
-        upcomingCounts,
-        watchlistAirtimeMode
-      );
-      const hasAvailableScheduleSignal =
-        typeof item.newEpisodeSignalAt === "number" &&
-        item.newEpisodeSignalAt > (item.lastWatchedAt ?? 0);
-      const hasSameDayScheduleAttention =
-        watchlistAirtimeMode === "same_day" && availableScheduleCount > 0;
-      const hasActionableEpisode = hasWatchlistActionableEpisode(
-        item,
-        upcomingCounts,
-        watchlistAirtimeMode
-      );
-      const hasDisplayableScheduleAttention =
-        availableScheduleCount > 0 ||
-        (hasAvailableScheduleSignal && hasActionableEpisode);
-
-      if (item.status === "paused") return false;
-      if (item.watchingWithOthers) return false;
-      if (item.status === "dropped") return false;
-      if (item.trackingState === "upcoming") return false;
-      if (
-        item.status === "completed" &&
-        !hasDisplayableScheduleAttention &&
-        !hasSameDayScheduleAttention
-      ) {
-        return false;
-      }
-      if (item.watchedEpisodes <= 0) {
-        return false;
-      }
-      if (
-        !hasActionableEpisode &&
-        !hasDisplayableScheduleAttention &&
-        !hasSameDayScheduleAttention
-      ) {
-        return false;
-      }
-
-      if (
-        typeof item.remainingEpisodes === "number" &&
-        item.remainingEpisodes <= 0 &&
-        !hasDisplayableScheduleAttention &&
-        !hasSameDayScheduleAttention
-      ) {
-        return false;
-      }
-
-      if (mediaFilter !== "all" && item.mediaType !== mediaFilter) return false;
-      return true;
+      return (mediaFilter === "all" || item.mediaType === mediaFilter) &&
+        shouldShowActiveWatchlistItem(
+          item,
+          upcomingAvailabilityByRoute.get(item.id),
+          watchlistAirtimeMode
+        );
     });
   }, [
     upcomingAvailabilityByRoute,

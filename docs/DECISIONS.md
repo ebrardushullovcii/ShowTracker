@@ -132,6 +132,7 @@ Most frequently relevant:
 | [ADR-0058](ADR-0058-canonical-provider-alias-coordinates.md) | Provider aliases keep precise release timing while projections use the tracked TMDB episode coordinates. |
 | [ADR-0059](ADR-0059-watching-with-others.md) | Watching with others is an orthogonal synced Home section with optional normalized companion names; it does not widen the existing status enum or participate in auto-pause. |
 | [ADR-0060](ADR-0060-caught-up-shared-watch-visibility.md) | Caught-up shared watches keep their people metadata but leave Home until an episode is actionable under the configured airtime mode. |
+| [ADR-0062](ADR-0062-explicit-watching-before-first-episode.md) | Explicit Watching can enter active Home before episode one when episodes are actionable; Save for later appears in Haven't started. |
 
 ## Guidance policy
 

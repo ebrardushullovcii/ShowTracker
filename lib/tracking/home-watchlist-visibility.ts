@@ -17,6 +17,29 @@ type WatchingWithOthersItem = WatchlistAvailabilityItem & {
   watchingWithOthers?: boolean;
 };
 
+type ActiveWatchlistItem = WatchingWithOthersItem & {
+  watchedEpisodes: number;
+  trackingState?: string | null;
+};
+
+export function shouldShowActiveWatchlistItem(
+  item: ActiveWatchlistItem,
+  counts: WatchlistScheduleCounts | undefined,
+  mode: WatchlistAirtimeMode,
+) {
+  if (item.status !== "watching" && item.status !== "completed") return false;
+  if (item.watchingWithOthers || item.trackingState === "upcoming") return false;
+
+  const actionable = hasWatchlistActionableEpisode(item, counts, mode);
+  const scheduleAttention = getWatchlistScheduleAttentionCount(counts, mode) > 0;
+  const freshSignal = typeof item.newEpisodeSignalAt === "number" &&
+    item.newEpisodeSignalAt > (item.lastWatchedAt ?? 0);
+
+  // Explicit Watching is enough to start a queue; watching episode one is not required.
+  if (item.status === "watching") return actionable;
+  return item.watchedEpisodes > 0 && actionable && (scheduleAttention || freshSignal);
+}
+
 export function getWatchlistScheduleAttentionCount(
   counts: WatchlistScheduleCounts | undefined,
   mode: WatchlistAirtimeMode,
