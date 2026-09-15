@@ -260,8 +260,8 @@ const seriesTrackingStatusOptions: {
   },
   {
     value: "plan_to_watch",
-    label: "Planned",
-    description: "Saved for later",
+    label: "Haven't started",
+    description: "On Home until you watch the first episode",
   },
   {
     value: "paused",
@@ -2276,12 +2276,13 @@ export function ShowDetailScreen() {
         await addAnimeToWatchlistWithRelations(payload);
       }
 
-      await setWatchlistStatus({
+      const savedTracking = await setWatchlistStatus({
         show: payload,
         status: nextStatus,
         watchingWithOthers: companionOptions?.watchingWithOthers,
         watchingWithNames: companionOptions?.watchingWithNames,
       });
+      setOptimisticTrackingStatus(savedTracking.status);
       return true;
     } catch (mutationError) {
       console.error("Failed to update watch status", mutationError);
@@ -2324,12 +2325,16 @@ export function ShowDetailScreen() {
   };
 
   const handleOpenStatusMenu = () => {
+    if (!isInWatchlist && show?.mediaType !== "movie") {
+      void handleSetTrackingStatus("plan_to_watch");
+      return;
+    }
     setWatchingWithNamesDraft(tracking?.watchingWithNames ?? []);
     setWatchingWithNameInput("");
     setIsStatusMenuVisible(true);
   };
 
-  const handleOpenAddToWatchlistPrompt = () => {
+  const handleAddToWatchlist = () => {
     if (!show) return;
     if (!canTrackShow) {
       setTrackingError("This title cannot be tracked yet.");
@@ -2347,7 +2352,7 @@ export function ShowDetailScreen() {
     }
 
     setTrackingError(null);
-    handleOpenStatusMenu();
+    void handleSetTrackingStatus("plan_to_watch");
   };
 
   const confirmRemoveFromLibrary = () => {
@@ -2391,7 +2396,7 @@ export function ShowDetailScreen() {
       return;
     }
 
-    handleOpenAddToWatchlistPrompt();
+    handleAddToWatchlist();
   };
 
   const handleRemoveFromStatusMenu = async () => {
@@ -3717,13 +3722,9 @@ export function ShowDetailScreen() {
     isTogglingFavorite ||
     isRepairingTracking;
   const showMediaType = show?.mediaType;
-  const isFirstSavePrompt =
-    trackingLoaded && !isInWatchlist && showMediaType != null && showMediaType !== "movie";
-  const statusMenuOptions = isFirstSavePrompt
-    ? trackingStatusOptions.filter(
-        (option) => option.value === "watching" || option.value === "plan_to_watch"
-      )
-    : trackingStatusOptions;
+  const statusMenuOptions = trackingStatusOptions.filter(
+    (option) => showMediaType === "movie" || watchedEpisodesCount > 0 || option.value !== "watching"
+  );
   const activeTrackingOption =
     trackingStatusOptions.find((option) => option.value === activeTrackingStatusForMenu) ??
     trackingStatusOptions.find((option) => option.value === "plan_to_watch") ??
@@ -5142,17 +5143,10 @@ export function ShowDetailScreen() {
                   ? "Loading your current tracking state."
                   : isInWatchlist
                   ? `Current status: ${activeTrackingOption.label}`
-                  : isFirstSavePrompt
-                    ? "Choose your active Home watchlist or save this in your backlog for later."
-                    : showMediaType === "movie"
+                  : showMediaType === "movie"
                       ? "Pick a status to add this movie to your queue."
                       : "Pick a status to add this title to your watchlist."}
               </Text>
-              {isFirstSavePrompt ? (
-                <Text className="mt-1 text-xs text-text-muted">
-                  Show on Home now sets it to Watching. Save for later sets it to Planned.
-                </Text>
-              ) : null}
               {showMediaType === "anime" ? (
                 <Text className="mt-1 text-xs text-text-muted">
                   Franchise titles may auto-follow as part of your timeline.
@@ -5282,7 +5276,7 @@ export function ShowDetailScreen() {
                       disabled={isStatusMenuBusy}
                       onPress={() => handleSelectStatusFromMenu("watching")}
                       accessibilityRole="button"
-                      accessibilityLabel="Move to regular Watching"
+                      accessibilityLabel={watchedEpisodesCount > 0 ? "Move to regular Watching" : "Move to Haven't started"}
                       accessibilityState={{ disabled: isStatusMenuBusy }}
                       className="mt-2 items-center rounded-lg border border-border-default bg-bg-base px-3 py-2.5"
                       style={({ pressed }) => ({
@@ -5290,7 +5284,7 @@ export function ShowDetailScreen() {
                       })}
                     >
                       <Text className="text-xs font-bold text-text-secondary">
-                        Move to regular Watching
+                        {watchedEpisodesCount > 0 ? "Move to regular Watching" : "Move to Haven't started"}
                       </Text>
                     </Pressable>
                   ) : null}
@@ -5302,18 +5296,8 @@ export function ShowDetailScreen() {
                   isInWatchlist &&
                   activeTrackingStatusForMenu === option.value &&
                   !(option.value === "watching" && tracking?.watchingWithOthers);
-                const title =
-                  isFirstSavePrompt && option.value === "watching"
-                    ? "Show on Home now"
-                    : isFirstSavePrompt && option.value === "plan_to_watch"
-                      ? "Save for later"
-                      : option.label;
-                const description =
-                  isFirstSavePrompt && option.value === "watching"
-                    ? "Marks this as Watching. Appears in your active Home watchlist when episodes are available, even before you start."
-                    : isFirstSavePrompt && option.value === "plan_to_watch"
-                      ? "Marks this as Planned in Home's Haven't started section and your Library."
-                      : option.description;
+                const title = option.label;
+                const description = option.description;
                 return (
                   <Pressable
                     key={option.value}

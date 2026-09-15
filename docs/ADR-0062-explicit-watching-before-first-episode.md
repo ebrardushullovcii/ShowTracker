@@ -1,5 +1,8 @@
 # ADR-0062: Explicit Watching can appear before the first episode
 
+Superseded by [ADR-0063](ADR-0063-new-shows-start-in-backlog.md). The user clarified
+that unstarted shows belong in Haven't started, not the active Watching queue.
+
 ## Context
 
 The first-save editor promises that Show on Home now sets Watching and puts the
