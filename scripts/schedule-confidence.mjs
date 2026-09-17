@@ -1827,6 +1827,77 @@ function isGenericEpisodeName(name) {
   return !normalized || /^episode\d+$/.test(normalized);
 }
 
+const elidedEpisodeNameMinPrefixLength = 12;
+
+function isElidedEpisodeNameMatch(left, right) {
+  if (isGenericEpisodeName(left) || isGenericEpisodeName(right)) {
+    return false;
+  }
+  const leftNormalized = normalizeTitle(left ?? "");
+  const rightNormalized = normalizeTitle(right ?? "");
+  if (!leftNormalized || !rightNormalized || leftNormalized === rightNormalized) {
+    return leftNormalized.length > 0 && leftNormalized === rightNormalized;
+  }
+  const [shorter, longer] =
+    leftNormalized.length <= rightNormalized.length
+      ? [leftNormalized, rightNormalized]
+      : [rightNormalized, leftNormalized];
+  if (
+    shorter.length >= elidedEpisodeNameMinPrefixLength &&
+    longer.startsWith(shorter)
+  ) {
+    return true;
+  }
+  for (const raw of [left, right]) {
+    const text = String(raw ?? "");
+    if (!/(\.\.\.|…)/.test(text)) {
+      continue;
+    }
+    const other = raw === left ? rightNormalized : leftNormalized;
+    const segments = text
+      .split(/(?:\.\.\.|…)/)
+      .map((segment) => normalizeTitle(segment))
+      .filter((segment) => segment.length > 0);
+    if (
+      segments.length < 2 ||
+      segments[0].length < elidedEpisodeNameMinPrefixLength
+    ) {
+      continue;
+    }
+    let cursor = 0;
+    let matched = true;
+    for (const segment of segments) {
+      const index = other.indexOf(segment, cursor);
+      if (index === -1) {
+        matched = false;
+        break;
+      }
+      cursor = index + segment.length;
+    }
+    if (matched) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function isTrackedTmdbAliasEvidence(next, current) {
+  const nextName = normalizeTitle(next.name ?? "");
+  const currentName = normalizeTitle(current.name ?? "");
+  const sameNamedEpisode =
+    nextName.length > 0 &&
+    nextName === currentName &&
+    !isGenericEpisodeName(next.name) &&
+    !isGenericEpisodeName(current.name);
+  const sameEpisodeNumber =
+    Number(next.episode_number) === Number(current.episode_number);
+  return (
+    sameNamedEpisode ||
+    sameEpisodeNumber ||
+    isElidedEpisodeNameMatch(next.name, current.name)
+  );
+}
+
 function eventNumberDedupeKey(row) {
   return `${row.media_type}:${row.normalized_title}:number:${row.season_number}:${row.episode_number}`;
 }
@@ -2000,16 +2071,7 @@ function preserveTrackedTmdbEpisodeCoordinates(selected, next, current, item = {
     return selected;
   }
 
-  const nextName = normalizeTitle(next.name ?? "");
-  const currentName = normalizeTitle(current.name ?? "");
-  const sameNamedEpisode =
-    nextName.length > 0 &&
-    nextName === currentName &&
-    !isGenericEpisodeName(next.name) &&
-    !isGenericEpisodeName(current.name);
-  const sameEpisodeNumber =
-    Number(next.episode_number) === Number(current.episode_number);
-  if (!sameNamedEpisode && !sameEpisodeNumber) {
+  if (!isTrackedTmdbAliasEvidence(next, current)) {
     return selected;
   }
 
@@ -2051,7 +2113,6 @@ function preserveTrackedTmdbEpisodeCoordinates(selected, next, current, item = {
 function recoverTrackedTmdbEpisodeCoordinates(rows, sourceRows, item = {}) {
   return rows.map((selected) => {
     const selectedDate = dateKeyFromValue(selected.air_date);
-    const selectedName = normalizeTitle(selected.name ?? "");
     const directTmdb = sourceRows.find((candidate) => {
       if (!isDirectTmdbEventForItem(candidate, item)) {
         return false;
@@ -2060,15 +2121,7 @@ function recoverTrackedTmdbEpisodeCoordinates(rows, sourceRows, item = {}) {
       if (!selectedDate || candidateDate !== selectedDate) {
         return false;
       }
-      const candidateName = normalizeTitle(candidate.name ?? "");
-      const sameNamedEpisode =
-        selectedName.length > 0 &&
-        selectedName === candidateName &&
-        !isGenericEpisodeName(selected.name) &&
-        !isGenericEpisodeName(candidate.name);
-      const sameEpisodeNumber =
-        Number(selected.episode_number) === Number(candidate.episode_number);
-      return sameNamedEpisode || sameEpisodeNumber;
+      return isTrackedTmdbAliasEvidence(selected, candidate);
     });
 
     return directTmdb
@@ -7751,6 +7804,75 @@ async function validateFixtureResults(db, summary, deltaPath = defaultDeltaPath)
       futuramaCanonicalEpisode.airDate === "2026-05-10T16:00:00.000Z",
     "Multi-provider season aliases should keep precise TVMaze timing without dropping tracked TMDB episode coordinates.",
     { futuramaProviderAliasRows, futuramaCanonicalEpisode }
+  );
+  const hotOnesElidedAliasRows = dedupeProviderEventsForReleaseFact(
+    [
+      {
+        source_provider: "tmdb",
+        provider_show_id: "tmdb:tv:72649",
+        air_timestamp: Date.UTC(2026, 8, 17),
+        air_date: "2026-09-17",
+        normalized_title: "hotones",
+        media_type: "tv",
+        season_number: 30,
+        episode_number: 18,
+        name: "Ryan Reynolds & Kenneth Branagh... Spicy Wings",
+        tmdb_id: 72649,
+        tvmaze_id: null,
+      },
+      {
+        source_provider: "tvmaze",
+        provider_show_id: "tvmaze:36841",
+        air_timestamp: Date.UTC(2026, 8, 17, 12),
+        air_date: "2026-09-17T12:00:00+00:00",
+        normalized_title: "hotones",
+        media_type: "tv",
+        season_number: 31,
+        episode_number: 1,
+        name: "Ryan Reynolds & Kenneth Branagh ... While Eating Spicy Wings",
+        tmdb_id: 72649,
+        tvmaze_id: 36841,
+      },
+      {
+        source_provider: "tvmaze",
+        provider_show_id: "tvmaze:36841",
+        air_timestamp: Date.UTC(2026, 8, 24, 12),
+        air_date: "2026-09-24T12:00:00+00:00",
+        normalized_title: "hotones",
+        media_type: "tv",
+        season_number: 31,
+        episode_number: 2,
+        name: "TBA .... While Eating Spicy Wings",
+        tmdb_id: 72649,
+        tvmaze_id: 36841,
+      },
+    ],
+    fixtureNowMs,
+    { media_type: "tv", tmdb_id: 72649 }
+  );
+  const hotOnesCanonicalEpisode = episodeFromEvent(hotOnesElidedAliasRows[0]);
+  const hotOnesFollowingEpisode = episodeFromEvent(hotOnesElidedAliasRows[1]);
+  assertValidation(
+    hotOnesElidedAliasRows.length === 2 &&
+      hotOnesElidedAliasRows[0]?.source_provider === "tvmaze" &&
+      hotOnesCanonicalEpisode.seasonNumber === 30 &&
+      hotOnesCanonicalEpisode.episodeNumber === 18 &&
+      hotOnesCanonicalEpisode.name === "Ryan Reynolds & Kenneth Branagh... Spicy Wings" &&
+      hotOnesCanonicalEpisode.airDate === "2026-09-17T12:00:00+00:00" &&
+      hotOnesFollowingEpisode.seasonNumber === 31 &&
+      hotOnesFollowingEpisode.episodeNumber === 2,
+    "Same-day cross-provider aliases with elided episode names should recover tracked TMDB coordinates.",
+    { hotOnesElidedAliasRows, hotOnesCanonicalEpisode, hotOnesFollowingEpisode }
+  );
+  assertValidation(
+    isElidedEpisodeNameMatch("Part 1", "Part 2") === false &&
+      isElidedEpisodeNameMatch("Episode 3", "Episode 3 ... Spicy Wings") === false &&
+      isElidedEpisodeNameMatch(
+        "The Long Night Before Dawn",
+        "The Long Night Before Dawn (Extended)"
+      ) === true,
+    "Elided-name alias evidence should reject short or generic names.",
+    {}
   );
   assertValidation(
     fixtureUserProjection?.events.some((event) => event.showId === "show-direct"),
