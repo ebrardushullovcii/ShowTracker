@@ -57,6 +57,7 @@ Most frequently relevant:
 - [ADR-0054](ADR-0054-terminal-provider-count-and-projection-repair.md): complete terminal TMDB counts and exact bounded projection repair prevent provider catalogue inflation from reactivating caught-up shows.
 - [ADR-0057](ADR-0057-caught-up-schedule-alias-signal-boundary.md): caught-up projections reject cached provider aliases released no later than the user's last watch.
 - [ADR-0058](ADR-0058-canonical-provider-alias-coordinates.md): provider aliases keep precise release timing while projections use the tracked TMDB episode coordinates.
+- [ADR-0064](ADR-0064-elided-episode-name-alias-evidence.md): elided or prefix-truncated episode names count as cross-provider alias evidence for tracked TMDB coordinates.
 
 ## Navigation
 
@@ -134,6 +135,7 @@ Most frequently relevant:
 | [ADR-0060](ADR-0060-caught-up-shared-watch-visibility.md) | Caught-up shared watches keep their people metadata but leave Home until an episode is actionable under the configured airtime mode. |
 | [ADR-0062](ADR-0062-explicit-watching-before-first-episode.md) | Superseded by ADR-0063 after clarification of unstarted Home placement. |
 | [ADR-0063](ADR-0063-new-shows-start-in-backlog.md) | Add saves directly to Haven't started; regular Watching requires actual episode progress. |
+| [ADR-0064](ADR-0064-elided-episode-name-alias-evidence.md) | Elided or prefix-truncated episode names count as cross-provider alias evidence for tracked TMDB coordinates. |
 
 ## Guidance policy
 
