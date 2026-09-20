@@ -137,6 +137,8 @@ Most frequently relevant:
 | [ADR-0063](ADR-0063-new-shows-start-in-backlog.md) | Add saves directly to Haven't started; regular Watching requires actual episode progress. |
 | [ADR-0064](ADR-0064-elided-episode-name-alias-evidence.md) | Elided or prefix-truncated episode names count as cross-provider alias evidence for tracked TMDB coordinates. |
 
+| [ADR-0065](ADR-0065-bounded-confirmed-release-timing.md) | Bounded VPS-only intraday verification of exact release-date conflicts, with paginated corrections and no idle Convex work. |
+
 ## Guidance policy
 
 - [ADR-0061](ADR-0061-minimal-agent-guidance.md): retain decisions, remove process scaffolding, and document decisions rather than every patch.

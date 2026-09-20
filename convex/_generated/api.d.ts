@@ -9,6 +9,7 @@
  */
 
 import type * as auth from "../auth.js";
+import type * as confirmedReleaseValidator from "../confirmedReleaseValidator.js";
 import type * as crons from "../crons.js";
 import type * as http from "../http.js";
 import type * as lib_homeScheduleSignalPolicy from "../lib/homeScheduleSignalPolicy.js";
@@ -26,6 +27,7 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   auth: typeof auth;
+  confirmedReleaseValidator: typeof confirmedReleaseValidator;
   crons: typeof crons;
   http: typeof http;
   "lib/homeScheduleSignalPolicy": typeof lib_homeScheduleSignalPolicy;

@@ -1,0 +1,13 @@
+[Unit]
+Description=Bounded release timing conflict verification
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=showtracker
+Group=showtracker
+WorkingDirectory=/opt/showtracker
+ExecStart=/bin/bash /opt/showtracker/scripts/ops/run-release-timing.sh
+TimeoutStartSec=180
+Nice=10
+SuccessExitStatus=75
