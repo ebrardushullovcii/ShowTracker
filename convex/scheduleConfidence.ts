@@ -3,6 +3,8 @@ import type { MutationCtx, QueryCtx } from "@/convex/_generated/server";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
 import { paginationOptsValidator } from "convex/server";
 import { v } from "convex/values";
+import { confirmedReleaseFields } from "./confirmedReleaseValidator";
+import { confirmedReleaseFloor, isConfirmedReleaseValid } from "@/lib/tracking/confirmed-release";
 
 const IMPORT_BATCH_LIMIT = 200;
 const APPLY_DELTA_LIMIT = 50;
@@ -936,6 +938,8 @@ function buildProjectionFields(
       typeof newEpisodeSignalAt === "number" ? newEpisodeSignalAt : 0
     ),
     autoPausedAt: userShow.autoPausedAt,
+    watchingWithOthers: userShow.watchingWithOthers,
+    watchingWithNames: userShow.watchingWithNames,
   };
 }
 
@@ -2077,6 +2081,119 @@ export const replaceUserScheduleProjectionWindow = mutation({
   },
 });
 
+// Intraday path: no catalogue hydration, watched-history scans, broad cache
+// pruning, full projection replacement, or scheduled fan-out. The VPS resumes
+// this bounded page using the cursor stored on the show, including after a crash.
+export const applyConfirmedReleasePage = mutation({
+  args: {
+    importToken: v.string(), tmdbId: v.number(), tvmazeId: v.number(),
+    correction: v.object(confirmedReleaseFields),
+  },
+  returns: v.object({ done: v.boolean(), users: v.number(), writes: v.number(), replay: v.boolean() }),
+  handler: async (ctx, args) => {
+    requireImportToken(args.importToken);
+    const now = Date.now();
+    const correction = args.correction;
+    if (!isConfirmedReleaseValid(correction, now)) throw new Error("Invalid release evidence");
+    const show = await ctx.db.query("shows")
+      .withIndex("by_tmdbId", q => q.eq("tmdbId", args.tmdbId)).unique();
+    if (!show || show.mediaType !== "tv" || show.tvmazeId !== args.tvmazeId ||
+        !show.totalEpisodes || correction.releasedEpisodes > show.totalEpisodes) {
+      throw new Error("Correction requires an existing exact TV provider pair and catalogue bound");
+    }
+    const previous = show.confirmedRelease;
+    const replay = previous?.seasonNumber === correction.seasonNumber &&
+      previous?.episodeNumber === correction.episodeNumber &&
+      previous?.airTimestamp === correction.airTimestamp &&
+      previous?.tmdbAirDate === correction.tmdbAirDate &&
+      previous?.releasedEpisodes === correction.releasedEpisodes;
+    if (replay && show.releaseCorrectionDone) return { done: true, users: 0, writes: 0, replay: true };
+    if (!replay && previous && show.releaseCorrectionDone === false) throw new Error("Prior correction still pending");
+    if (!replay && (now - correction.verifiedAt > 15 * 60_000 ||
+        now - correction.airTimestamp > 24 * 60 * 60_000 ||
+        correction.releasedEpisodes < (show.releasedEpisodes ?? 0) ||
+        correction.releasedEpisodes - (show.releasedEpisodes ?? 0) > 1 ||
+        (previous && correction.airTimestamp <= previous.airTimestamp))) {
+      throw new Error("Stale evidence or non-incremental release correction");
+    }
+    let writes = 0;
+    const oldDate = correction.tmdbAirDate;
+    const newDate = new Date(correction.airTimestamp).toISOString().slice(0, 10);
+    const routeId = `tmdb:tv:${args.tmdbId}`;
+    const cacheIds = new Set([`tmdb:${args.tmdbId}`, routeId, `tvmaze:${args.tvmazeId}`]);
+    if (!replay) {
+      // Exactly two indexed daily buckets. Preserve every unrelated entry and
+      // refuse duplicate/oversized buckets instead of broadening this hot path.
+      for (const date of new Set([oldDate, newDate])) {
+        const buckets = await ctx.db.query("scheduleCache")
+          .withIndex("by_date_type", q => q.eq("date", date).eq("mediaType", "tv")).take(2);
+        if (buckets.length > 1) throw new Error("Duplicate schedule buckets require nightly maintenance");
+        const bucket = buckets[0];
+        if (bucket && bucket.episodes.length > 128_000) throw new Error("Schedule bucket exceeds intraday budget");
+        const entries = bucket ? JSON.parse(bucket.episodes) : [];
+        if (!Array.isArray(entries)) throw new Error("Malformed schedule bucket");
+        const kept = entries.filter(entry => !(cacheIds.has(entry?.showId) &&
+          entry?.episode?.seasonNumber === correction.seasonNumber &&
+          entry?.episode?.episodeNumber === correction.episodeNumber));
+        if (date === newDate) kept.push({
+          showId: routeId, normalizedTitle: normalizeTitle(show.title),
+          episode: { seasonNumber: correction.seasonNumber, episodeNumber: correction.episodeNumber,
+            name: correction.name, airDate: new Date(correction.airTimestamp).toISOString() },
+        });
+        const episodes = JSON.stringify(kept);
+        if (bucket && episodes !== bucket.episodes) {
+          await ctx.db.patch(bucket._id, { episodes, lastUpdated: now }); writes++;
+        } else if (!bucket && kept.length) {
+          await ctx.db.insert("scheduleCache", { date, mediaType: "tv", episodes, lastUpdated: now }); writes++;
+        }
+      }
+    }
+    const releasedEpisodes = Math.max(show.releasedEpisodes ?? 0, correction.releasedEpisodes);
+    const patchedShow = { ...show, releasedEpisodes };
+    const page = await ctx.db.query("userShows")
+      .withIndex("by_showId", q => q.eq("showId", show._id))
+      .paginate({ cursor: replay ? show.releaseCorrectionCursor ?? null : null, numItems: 25 });
+    for (const row of page.page) {
+      if (!Number.isSafeInteger(row.watchedEpisodesCount) || (row.watchedEpisodesCount ?? -1) < 0) {
+        throw new Error("Missing tracking aggregate requires nightly maintenance");
+      }
+      const patch: Partial<Doc<"userShows">> = {};
+      if ((row.watchedEpisodesCount ?? 0) < releasedEpisodes) {
+        patch.newEpisodeSignalAt = Math.max(row.newEpisodeSignalAt ?? 0, correction.airTimestamp);
+        if (row.status === "completed" || (row.status === "paused" && row.autoPausedAt)) {
+          patch.status = (row.watchedEpisodesCount ?? 0) > 0 ? "watching" : "plan_to_watch";
+          patch.completedAt = undefined; patch.autoPausedAt = undefined; patch.statusChangedAt = now;
+        }
+      }
+      const changed = Object.keys(patch).some(key => !isSameValue(row[key as keyof typeof row], patch[key as keyof typeof patch]));
+      if (changed) { await ctx.db.patch(row._id, patch); writes++; }
+      if (await patchProjectionForUserShow(ctx, { ...row, ...patch }, patchedShow)) writes++;
+      const matchingEvents: Doc<"userScheduleEvents">[] = [];
+      for (const date of new Set([oldDate, newDate])) {
+        const events = await ctx.db.query("userScheduleEvents")
+          .withIndex("by_user_route_date", q => q.eq("userId", row.userId).eq("routeId", routeId).eq("date", date))
+          .take(17);
+        if (events.length > 16) throw new Error("Episode projection bucket exceeds intraday budget");
+        matchingEvents.push(...events.filter(event => event.seasonNumber === correction.seasonNumber &&
+          event.episodeNumber === correction.episodeNumber));
+      }
+      if (matchingEvents.length > 1) throw new Error("Duplicate episode projections require nightly maintenance");
+      for (const event of matchingEvents) {
+          if (event.airtimeMs === correction.airTimestamp && event.date === newDate) continue;
+          await ctx.db.patch(event._id, { date: newDate, airDate: new Date(correction.airTimestamp).toISOString(),
+            airtimeMs: correction.airTimestamp, sameTrackedShowDayKey: `${routeId}:${newDate}`,
+            sourceProvider: "tvmaze", reconciledAt: correction.verifiedAt, updatedAt: now }); writes++;
+      }
+    }
+    await ctx.db.patch(show._id, { releasedEpisodes, confirmedRelease: replay ? previous : correction,
+      releaseCorrectionCursor: page.isDone ? null : page.continueCursor,
+      releaseCorrectionDone: page.isDone,
+      ...(!replay ? { lastUpdated: now } : {}),
+    });
+    return { done: page.isDone, users: page.page.length, writes: writes + 1, replay };
+  },
+});
+
 export const applyReleaseDeltas = mutation({
   args: {
     importToken: v.string(),
@@ -2157,7 +2274,9 @@ export const applyReleaseDeltas = mutation({
           typeof totalEpisodes === "number"
             ? Math.min(releasedEpisodes, totalEpisodes)
             : releasedEpisodes;
-        setChangedField(showPatch, show, "releasedEpisodes", cappedReleasedEpisodes);
+        setChangedField(showPatch, show, "releasedEpisodes", confirmedReleaseFloor(
+          cappedReleasedEpisodes, totalEpisodes ?? show.totalEpisodes, show.confirmedRelease,
+        ));
       }
       if (typeof totalEpisodes === "number") {
         setChangedField(showPatch, show, "totalEpisodes", totalEpisodes);

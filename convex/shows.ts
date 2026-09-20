@@ -12,6 +12,7 @@ import { getAuthUserId } from "@convex-dev/auth/server";
 import { v } from "convex/values";
 import { computeWatchedHistoryAggregates } from "@/lib/tracking/history-aggregates";
 import { resolveManualTrackingStatus } from "@/lib/tracking/initial-status";
+import { confirmedReleaseFloor } from "@/lib/tracking/confirmed-release";
 import { paginationOptsValidator } from "convex/server";
 import { api, internal } from "@/convex/_generated/api";
 import {
@@ -2327,7 +2328,11 @@ function buildShowPatch(
     malId: incoming.malId ?? existing?.malId,
     tvmazeId: incoming.tvmazeId ?? existing?.tvmazeId,
     imdbId: incoming.imdbId ?? existing?.imdbId,
-    releasedEpisodes: incoming.releasedEpisodes ?? existing?.releasedEpisodes,
+    releasedEpisodes: confirmedReleaseFloor(
+      incoming.releasedEpisodes ?? existing?.releasedEpisodes,
+      incoming.totalEpisodes ?? existing?.totalEpisodes,
+      existing?.confirmedRelease,
+    ),
     lastUpdated:
       existing && incoming.mediaType !== "movie" && !carriesReleaseFreshness
         ? existing.lastUpdated
@@ -4857,6 +4862,7 @@ export const getUserShowTracking = query({
       inWatchlist: userShow !== null,
       status: userShow?.status ?? null,
       watchedEpisodes: resolvedWatchedEpisodesCount,
+      confirmedRelease: show.confirmedRelease ?? null,
       isFavorite: favoriteEntry !== null,
       relationRootAnilistId:
         userShow?.relationRootAnilistId ?? show.rootAnilistId ?? show.anilistId ?? null,

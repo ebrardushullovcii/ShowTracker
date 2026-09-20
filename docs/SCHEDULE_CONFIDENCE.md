@@ -93,6 +93,30 @@ ssh showtracker-vps "journalctl -u showtracker-schedule-confidence.service -n 16
 
 Run the service after syncing `main` when a schedule/release fix needs to affect production immediately.
 
+## Bounded intraday release timing
+
+ADR-0065 adds a separate `showtracker-release-timing.timer` every 15 minutes.
+It reads the nightly SQLite cache first, verifies only due exact-ID provider
+conflicts on the VPS, and applies at most 25 users per Convex mutation page.
+Idle ticks make no Convex calls. The persisted daily cap is 64 mutation pages
+and eight provider-verification attempts; excess work waits, without running
+the full nightly import or projection rebuild. Both jobs share the same lock.
+
+```bash
+node scripts/release-timing.mjs # provider-only dry run
+systemctl start showtracker-release-timing.service
+journalctl -u showtracker-release-timing.service -n 20 --no-pager
+systemctl list-timers showtracker-release-timing.timer --no-pager
+```
+
+Install the corresponding service/timer from `scripts/ops/` with the nightly
+service's user and working directory. The runner needs Node with `node:sqlite`
+and the existing provider/Convex environment. Its separate local ledger is
+`.schedule-confidence/release-timing.sqlite`. Preserve that ledger on deployment
+so deduplication and daily budgets survive. Three failed mutation attempts block
+a job visibly; investigate before clearing or retrying it. Disable the timer
+to stop intraday work without changing nightly maintenance or user history.
+
 ## Audits Should Surface
 
 - Missing provider links.

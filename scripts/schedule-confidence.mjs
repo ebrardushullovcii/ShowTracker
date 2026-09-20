@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { constants as zlibConstants, gunzipSync } from "node:zlib";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -3108,7 +3108,7 @@ async function fetchJson(url, options = {}) {
         new Error(`Provider request timed out after ${normalizedTimeoutMs}ms`)
       );
     }, normalizedTimeoutMs);
-    timeoutId.unref?.();
+    // Keep CLI validation alive until a hung provider actually times out.
     requestOptions.signal = abortController.signal;
   }
 
@@ -6225,7 +6225,8 @@ async function validateFixtureResults(db, summary, deltaPath = defaultDeltaPath)
   );
   assertValidation(
     facts.get("show-terminal-positive-released-caught-up")?.released_episodes === 161 &&
-      facts.get("show-terminal-positive-released-caught-up")?.total_episodes === 184 &&
+      // ADR-0054 also caps the terminal catalogue to exact provider evidence.
+      facts.get("show-terminal-positive-released-caught-up")?.total_episodes === 161 &&
       byShowId.get("show-terminal-positive-released-caught-up")?.simulatedProjection.remainingEpisodes === 0 &&
       byShowId.get("show-terminal-positive-released-caught-up")?.simulatedProjection.hasHomeAttention === false,
     "Terminal rows with a positive released/watchable count should not use inflated raw totals as Home backlog.",
@@ -8243,7 +8244,9 @@ async function main() {
   }
 }
 
-main().catch((error) => {
+export { loadEnvFile, fetchTmdbDetails, fetchTvMazeEpisodes, dedupeProviderEventsForReleaseFact };
+
+if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) await main().catch((error) => {
   console.error(error instanceof Error ? error.message : error);
   if (error?.details) {
     console.error(JSON.stringify(error.details, null, 2));

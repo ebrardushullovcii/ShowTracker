@@ -1,6 +1,7 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import { authTables } from "@convex-dev/auth/server";
+import { confirmedReleaseFields } from "./confirmedReleaseValidator";
 
 export default defineSchema({
   ...authTables,
@@ -79,6 +80,9 @@ export default defineSchema({
     .index("by_user", ["userId"])
     .index("by_user_root", ["userId", "relationRootAnilistId"]),
   shows: defineTable({
+    confirmedRelease: v.optional(v.object(confirmedReleaseFields)),
+    releaseCorrectionCursor: v.optional(v.union(v.string(), v.null())),
+    releaseCorrectionDone: v.optional(v.boolean()),
     tmdbId: v.optional(v.number()),
     tvdbId: v.optional(v.number()),
     anilistId: v.optional(v.number()),

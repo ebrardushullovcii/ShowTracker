@@ -1,3 +1,4 @@
+import { applyConfirmedRelease } from "@/lib/tracking/confirmed-release";
 import {
   useCallback,
   useEffect,
@@ -868,7 +869,7 @@ export function ShowDetailScreen() {
   }, [router]);
 
   const [show, setShow] = useState<NormalizedShow | null>(null);
-  const [seasons, setSeasons] = useState<NormalizedSeason[]>([]);
+  const [rawSeasons, setSeasons] = useState<NormalizedSeason[]>([]);
   const [expandedSeasons, setExpandedSeasons] = useState<Record<number, boolean>>({});
   const [expandedSeasonsInitialized, setExpandedSeasonsInitialized] = useState(false);
   const [seasonLoading, setSeasonLoading] = useState<SeasonLoadState>({});
@@ -990,6 +991,11 @@ export function ShowDetailScreen() {
   const trackingArgs = useMemo(() => buildTrackingArgs(show), [show]);
   const showLookupArgs = useMemo(() => buildShowLookupArgs(show), [show]);
   const tracking = useQuery(api.shows.getUserShowTracking, trackingArgs);
+  const confirmedRelease = tracking && "confirmedRelease" in tracking ? tracking.confirmedRelease : null;
+  const seasons = useMemo(() => rawSeasons.map(season => ({
+    ...season,
+    episodes: season.episodes?.map(episode => applyConfirmedRelease(episode, confirmedRelease)),
+  })), [rawSeasons, confirmedRelease]);
   const watchedSeasonProgress = useQuery(
     api.shows.getWatchedSeasonProgress,
     trackingArgs
@@ -1730,6 +1736,7 @@ export function ShowDetailScreen() {
         season.seasonNumber
       );
       const normalizedSeason = normalizeTmdbSeason(seasonDetails);
+      normalizedSeason.episodes = normalizedSeason.episodes?.map(episode => applyConfirmedRelease(episode, confirmedRelease));
       const mergedSeason: NormalizedSeason = {
         ...season,
         ...normalizedSeason,
@@ -1757,7 +1764,7 @@ export function ShowDetailScreen() {
       inFlightSeasonsRef.current.delete(inFlightKey);
       setSeasonLoading((prev) => ({ ...prev, [season.seasonNumber]: false }));
     }
-  }, [parsedId, seasonLoading]);
+  }, [parsedId, seasonLoading, confirmedRelease]);
 
   // Auto-expand earliest season with unwatched episodes
   // Wait for tracking data so we know which episodes are watched
