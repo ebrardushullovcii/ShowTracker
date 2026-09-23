@@ -59,6 +59,14 @@ previous page on screen while it resolves.
   backlog titles, the section above it keeps its Show more button.
 - `getHomeNotStartedFeed` returns at most 120 rows, so loading stops there,
   as Show more did before.
+- On web, the loading skeleton and the Watchlist content share one
+  `ScrollView` instance, and react-native-web applies a `ScrollView` ref only
+  when the instance mounts. Both branches therefore pass the same ref. The
+  first release put the ref only on the content branch, so it stayed empty
+  and nothing loaded. The scroll handler also falls back to the scroll
+  event's own metrics.
+- The re-check also runs when the Watchlist tab is active and the grid has
+  been measured, so a short page fills as soon as the scroll view mounts.
 
 ## Verification
 
