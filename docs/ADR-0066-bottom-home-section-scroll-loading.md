@@ -57,6 +57,8 @@ previous page on screen while it resolves.
   nothing loads until the reader scrolls down again.
 - When Haven't started is empty, for example under a media filter with no
   backlog titles, the section above it keeps its Show more button.
+- `getHomeNotStartedFeed` returns at most 120 rows, so loading stops there,
+  as Show more did before.
 
 ## Verification
 
