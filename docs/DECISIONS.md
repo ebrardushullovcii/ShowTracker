@@ -58,6 +58,7 @@ Most frequently relevant:
 - [ADR-0057](ADR-0057-caught-up-schedule-alias-signal-boundary.md): caught-up projections reject cached provider aliases released no later than the user's last watch.
 - [ADR-0058](ADR-0058-canonical-provider-alias-coordinates.md): provider aliases keep precise release timing while projections use the tracked TMDB episode coordinates.
 - [ADR-0064](ADR-0064-elided-episode-name-alias-evidence.md): elided or prefix-truncated episode names count as cross-provider alias evidence for tracked TMDB coordinates.
+- [ADR-0066](ADR-0066-bottom-home-section-scroll-loading.md): the last Home section, Haven't started, loads more on scroll; each secondary section uses its own query limit.
 
 ## Navigation
 
@@ -138,6 +139,7 @@ Most frequently relevant:
 | [ADR-0064](ADR-0064-elided-episode-name-alias-evidence.md) | Elided or prefix-truncated episode names count as cross-provider alias evidence for tracked TMDB coordinates. |
 
 | [ADR-0065](ADR-0065-bounded-confirmed-release-timing.md) | Bounded VPS-only intraday verification of exact release-date conflicts, with paginated corrections and no idle Convex work. |
+| [ADR-0066](ADR-0066-bottom-home-section-scroll-loading.md) | Haven't started, the last Home section, loads more on scroll instead of Show more; secondary sections use their own query limits. |
 
 ## Guidance policy
 

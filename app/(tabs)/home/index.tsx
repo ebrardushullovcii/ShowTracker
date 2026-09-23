@@ -36,6 +36,11 @@ import {
   type WatchlistAirtimeMode,
   type WatchlistScheduleCounts,
 } from "@/lib/tracking/home-watchlist-visibility";
+import {
+  getSectionQueryLimit,
+  hasMoreSectionRows,
+  isNearScrollEnd,
+} from "@/lib/tracking/home-section-pagination";
 
 type HomeTab = "watchlist" | "upcoming";
 type HomeMediaFilter = "all" | "tv" | "anime";
@@ -1418,9 +1423,17 @@ export function HomeScreen() {
     watchlistVisibleCount + watchlistPageSize * 2,
     watchlistPageSize * 4
   );
-  const secondaryQueryLimit = Math.max(
-    Math.max(pausedVisibleCount, notStartedVisibleCount) + secondarySectionPageSize * 2,
-    secondarySectionPageSize * 4
+  const pausedQueryLimit = getSectionQueryLimit(
+    pausedVisibleCount,
+    secondarySectionPageSize
+  );
+  const watchingWithOthersQueryLimit = getSectionQueryLimit(
+    watchingWithOthersVisibleCount,
+    secondarySectionPageSize
+  );
+  const notStartedQueryLimit = getSectionQueryLimit(
+    notStartedVisibleCount,
+    secondarySectionPageSize
   );
   const homeFeedMediaFilter =
     mediaFilter === "all" ? undefined : mediaFilter;
@@ -1511,7 +1524,7 @@ export function HomeScreen() {
     api.shows.getHomePausedFeed,
     activeTab === "watchlist"
       ? {
-          limit: secondaryQueryLimit,
+          limit: pausedQueryLimit,
           mediaFilter: homeFeedMediaFilter,
         }
       : "skip"
@@ -1520,7 +1533,7 @@ export function HomeScreen() {
     api.shows.getHomeWatchingWithOthersFeed,
     activeTab === "watchlist"
       ? {
-          limit: secondaryQueryLimit,
+          limit: watchingWithOthersQueryLimit,
           mediaFilter: homeFeedMediaFilter,
         }
       : "skip"
@@ -1529,7 +1542,7 @@ export function HomeScreen() {
     api.shows.getHomeNotStartedFeed,
     activeTab === "watchlist"
       ? {
-          limit: secondaryQueryLimit,
+          limit: notStartedQueryLimit,
           mediaFilter: homeFeedMediaFilter,
         }
       : "skip"
@@ -2108,15 +2121,85 @@ export function HomeScreen() {
     () => notStartedSectionWatchlist.slice(0, notStartedVisibleCount),
     [notStartedSectionWatchlist, notStartedVisibleCount]
   );
-  const hasMorePausedSection =
-    pausedVisibleCount < pausedSectionWatchlist.length ||
-    pausedFeedItems.length >= secondaryQueryLimit;
-  const hasMoreNotStartedSection =
-    notStartedVisibleCount < notStartedSectionWatchlist.length ||
-    notStartedFeedItems.length >= secondaryQueryLimit;
-  const hasMoreWatchingWithOthersSection =
-    watchingWithOthersVisibleCount < watchingWithOthersSectionWatchlist.length ||
-    watchingWithOthersFeedItems.length >= secondaryQueryLimit;
+  const hasMorePausedSection = hasMoreSectionRows({
+    visibleCount: pausedVisibleCount,
+    sectionLength: pausedSectionWatchlist.length,
+    loadedFeedLength: pausedFeedItems.length,
+    queryLimit: pausedQueryLimit,
+  });
+  const hasMoreNotStartedSection = hasMoreSectionRows({
+    visibleCount: notStartedVisibleCount,
+    sectionLength: notStartedSectionWatchlist.length,
+    loadedFeedLength: notStartedFeedItems.length,
+    queryLimit: notStartedQueryLimit,
+  });
+  const hasMoreWatchingWithOthersSection = hasMoreSectionRows({
+    visibleCount: watchingWithOthersVisibleCount,
+    sectionLength: watchingWithOthersSectionWatchlist.length,
+    loadedFeedLength: watchingWithOthersFeedItems.length,
+    queryLimit: watchingWithOthersQueryLimit,
+  });
+  const isNotStartedPageLoading =
+    activeTab === "watchlist" &&
+    notStartedFeed === undefined &&
+    stableNotStartedFeed !== undefined;
+  // Haven't started is the last Home section, so it grows as the reader
+  // scrolls instead of asking for a Show more press (ADR-0066).
+  const isNotStartedSectionRendered =
+    !isWatchlistVisualLoading && notStartedSectionWatchlist.length > 0;
+  const canLoadMoreNotStartedSection =
+    isNotStartedSectionRendered && hasMoreNotStartedSection;
+  const homeWatchlistScrollRef = useRef<ScrollView>(null);
+  const notStartedLoadPendingRef = useRef(false);
+  const loadMoreNotStartedSection = useCallback(() => {
+    if (!canLoadMoreNotStartedSection || notStartedLoadPendingRef.current) {
+      return;
+    }
+
+    notStartedLoadPendingRef.current = true;
+    setNotStartedVisibleCount((count) => count + secondarySectionPageSize);
+  }, [canLoadMoreNotStartedSection, secondarySectionPageSize]);
+  const loadMoreNotStartedSectionNearScrollEnd = useCallback(() => {
+    if (!isWeb || !canLoadMoreNotStartedSection) {
+      return;
+    }
+
+    const scrollNode = homeWatchlistScrollRef.current?.getScrollableNode?.() as
+      | HTMLElement
+      | null
+      | undefined;
+    if (
+      !scrollNode ||
+      !isNearScrollEnd({
+        scrollOffset: scrollNode.scrollTop,
+        viewportLength: scrollNode.clientHeight,
+        contentLength: scrollNode.scrollHeight,
+      })
+    ) {
+      return;
+    }
+
+    loadMoreNotStartedSection();
+  }, [canLoadMoreNotStartedSection, isWeb, loadMoreNotStartedSection]);
+  useEffect(() => {
+    // A committed page or newly resolved feed rows release the pending load.
+    // Reading the DOM forces fresh layout, so a page that is still shorter
+    // than the viewport keeps filling without waiting for another scroll event.
+    notStartedLoadPendingRef.current = false;
+    loadMoreNotStartedSectionNearScrollEnd();
+  }, [
+    loadMoreNotStartedSectionNearScrollEnd,
+    notStartedSectionWatchlist.length,
+    notStartedVisibleCount,
+  ]);
+  const handleWatchlistEndReached = useCallback(() => {
+    if (canLoadMoreNotStartedSection) {
+      loadMoreNotStartedSection();
+      return;
+    }
+
+    loadMoreWatchlist();
+  }, [canLoadMoreNotStartedSection, loadMoreNotStartedSection, loadMoreWatchlist]);
   const autoPausedRows = useMemo(
     () => chunkItems(visiblePausedSectionItems, columns),
     [visiblePausedSectionItems, columns]
@@ -2473,24 +2556,9 @@ export function HomeScreen() {
               </View>
             ))}
           </View>
-          {hasMoreNotStartedSection ? (
+          {hasMoreNotStartedSection || isNotStartedPageLoading ? (
             <View className="items-center pt-4">
-              <Pressable
-                accessibilityRole="button"
-                className="rounded-full border border-sky-300/20 bg-sky-400/10 px-4 py-2.5"
-                onPress={() =>
-                  setNotStartedVisibleCount((count) =>
-                    count + secondarySectionPageSize
-                  )
-                }
-                style={({ pressed }) => ({
-                  opacity: pressed ? 0.9 : 1,
-                })}
-              >
-                <Text className="text-[11px] font-black uppercase tracking-[1.2px] text-sky-100">
-                  Show more
-                </Text>
-              </Pressable>
+              <BrandLoader compact />
             </View>
           ) : null}
         </View>
@@ -2571,9 +2639,13 @@ export function HomeScreen() {
               </ScrollView>
             ) : isWeb ? (
               <ScrollView
+                ref={homeWatchlistScrollRef}
                 className="flex-1"
                 contentContainerStyle={{ paddingBottom: 24 }}
                 showsVerticalScrollIndicator={false}
+                onScroll={loadMoreNotStartedSectionNearScrollEnd}
+                onContentSizeChange={loadMoreNotStartedSectionNearScrollEnd}
+                scrollEventThrottle={64}
               >
                 {watchlistHeader}
 
@@ -2639,7 +2711,7 @@ export function HomeScreen() {
                 renderItem={renderWatchlistItem}
                 numColumns={columns}
                 ItemSeparatorComponent={() => <View style={{ height: GRID_GAP }} />}
-                onEndReached={loadMoreWatchlist}
+                onEndReached={handleWatchlistEndReached}
                 onEndReachedThreshold={0.4}
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={{ paddingBottom: 24 }}
