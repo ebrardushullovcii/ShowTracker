@@ -8,6 +8,8 @@ import {
   Text,
   View,
   useWindowDimensions,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
@@ -2145,8 +2147,13 @@ export function HomeScreen() {
     stableNotStartedFeed !== undefined;
   // Haven't started is the last Home section, so it grows as the reader
   // scrolls instead of asking for a Show more press (ADR-0066).
+  // Includes the tab and measured grid so the check re-runs once the scroll
+  // view actually mounts, without waiting for a content-size callback.
   const isNotStartedSectionRendered =
-    !isWatchlistVisualLoading && notStartedSectionWatchlist.length > 0;
+    activeTab === "watchlist" &&
+    gridWidth > 0 &&
+    !isWatchlistVisualLoading &&
+    notStartedSectionWatchlist.length > 0;
   const canLoadMoreNotStartedSection =
     isNotStartedSectionRendered && hasMoreNotStartedSection;
   const homeWatchlistScrollRef = useRef<ScrollView>(null);
@@ -2159,28 +2166,40 @@ export function HomeScreen() {
     notStartedLoadPendingRef.current = true;
     setNotStartedVisibleCount((count) => count + secondarySectionPageSize);
   }, [canLoadMoreNotStartedSection, secondarySectionPageSize]);
-  const loadMoreNotStartedSectionNearScrollEnd = useCallback(() => {
-    if (!isWeb || !canLoadMoreNotStartedSection) {
-      return;
-    }
+  const loadMoreNotStartedSectionNearScrollEnd = useCallback(
+    (event?: NativeSyntheticEvent<NativeScrollEvent>) => {
+      if (!isWeb || !canLoadMoreNotStartedSection) {
+        return;
+      }
 
-    const scrollNode = homeWatchlistScrollRef.current?.getScrollableNode?.() as
-      | HTMLElement
-      | null
-      | undefined;
-    if (
-      !scrollNode ||
-      !isNearScrollEnd({
-        scrollOffset: scrollNode.scrollTop,
-        viewportLength: scrollNode.clientHeight,
-        contentLength: scrollNode.scrollHeight,
-      })
-    ) {
-      return;
-    }
+      // The live node gives fresh metrics after a commit. A scroll event
+      // carries its own metrics if the ref has not attached yet.
+      const scrollNode = homeWatchlistScrollRef.current?.getScrollableNode?.() as
+        | HTMLElement
+        | null
+        | undefined;
+      const scrollEvent = event?.nativeEvent;
+      const metrics = scrollNode
+        ? {
+            scrollOffset: scrollNode.scrollTop,
+            viewportLength: scrollNode.clientHeight,
+            contentLength: scrollNode.scrollHeight,
+          }
+        : scrollEvent
+          ? {
+              scrollOffset: scrollEvent.contentOffset.y,
+              viewportLength: scrollEvent.layoutMeasurement.height,
+              contentLength: scrollEvent.contentSize.height,
+            }
+          : null;
+      if (!metrics || !isNearScrollEnd(metrics)) {
+        return;
+      }
 
-    loadMoreNotStartedSection();
-  }, [canLoadMoreNotStartedSection, isWeb, loadMoreNotStartedSection]);
+      loadMoreNotStartedSection();
+    },
+    [canLoadMoreNotStartedSection, isWeb, loadMoreNotStartedSection]
+  );
   useEffect(() => {
     // A committed page or newly resolved feed rows release the pending load.
     // Reading the DOM forces fresh layout, so a page that is still shorter
@@ -2611,6 +2630,10 @@ export function HomeScreen() {
           activeTab === "watchlist" ? (
             shouldRenderFullWatchlistSkeleton ? (
               <ScrollView
+                // Same ref as the content view below: React reuses this
+                // instance, and react-native-web only applies a ScrollView
+                // ref when it mounts.
+                ref={homeWatchlistScrollRef}
                 className="flex-1"
                 contentContainerStyle={{ paddingBottom: 24 }}
                 showsVerticalScrollIndicator={false}
@@ -2644,7 +2667,7 @@ export function HomeScreen() {
                 contentContainerStyle={{ paddingBottom: 24 }}
                 showsVerticalScrollIndicator={false}
                 onScroll={loadMoreNotStartedSectionNearScrollEnd}
-                onContentSizeChange={loadMoreNotStartedSectionNearScrollEnd}
+                onContentSizeChange={() => loadMoreNotStartedSectionNearScrollEnd()}
                 scrollEventThrottle={64}
               >
                 {watchlistHeader}
