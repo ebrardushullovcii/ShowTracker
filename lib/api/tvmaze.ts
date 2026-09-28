@@ -1,4 +1,4 @@
-import { getCached, setCached } from "@/lib/api/cache";
+import { getCached, setCached } from "./cache";
 
 const tvmazeBaseUrl =
   process.env.EXPO_PUBLIC_TVMAZE_BASE_URL ?? "https://api.tvmaze.com";

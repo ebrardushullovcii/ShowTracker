@@ -1,13 +1,13 @@
-import { getCached, setCached } from "@/lib/api/cache";
+import { getCached, setCached } from "./cache";
 import type {
   JikanAnimeEpisodesPage,
   NormalizedEpisode,
   NormalizedShow,
-} from "@/lib/api/types";
+} from "./types";
 import {
   normalizeJikanAnime,
   parseJikanDurationToMinutes,
-} from "@/lib/api/normalize";
+} from "./normalize";
 
 function resolveJikanBaseUrl() {
   const configured = process.env.EXPO_PUBLIC_JIKAN_BASE_URL?.trim();

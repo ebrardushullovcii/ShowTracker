@@ -1,10 +1,10 @@
-import { mutation, query } from "@/convex/_generated/server";
-import type { MutationCtx, QueryCtx } from "@/convex/_generated/server";
-import type { Doc, Id } from "@/convex/_generated/dataModel";
+import { mutation, query } from "./_generated/server";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
+import type { Doc, Id } from "./_generated/dataModel";
 import { paginationOptsValidator } from "convex/server";
 import { v } from "convex/values";
 import { confirmedReleaseFields } from "./confirmedReleaseValidator";
-import { confirmedReleaseFloor, isConfirmedReleaseValid } from "@/lib/tracking/confirmed-release";
+import { confirmedReleaseFloor, isConfirmedReleaseValid } from "../lib/tracking/confirmed-release";
 
 const IMPORT_BATCH_LIMIT = 200;
 const APPLY_DELTA_LIMIT = 50;

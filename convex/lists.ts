@@ -1,7 +1,7 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
-import { query, mutation } from "@/convex/_generated/server";
-import type { QueryCtx, MutationCtx } from "@/convex/_generated/server";
-import type { Id } from "@/convex/_generated/dataModel";
+import { query, mutation } from "./_generated/server";
+import type { QueryCtx, MutationCtx } from "./_generated/server";
+import type { Id } from "./_generated/dataModel";
 import { v } from "convex/values";
 
 async function getCurrentUserId(ctx: QueryCtx | MutationCtx) {

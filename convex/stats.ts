@@ -1,7 +1,7 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
-import { mutation, query } from "@/convex/_generated/server";
-import type { MutationCtx, QueryCtx } from "@/convex/_generated/server";
-import type { Doc, Id } from "@/convex/_generated/dataModel";
+import { mutation, query } from "./_generated/server";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
+import type { Doc, Id } from "./_generated/dataModel";
 import { v } from "convex/values";
 
 type MaterializedUserStats = {

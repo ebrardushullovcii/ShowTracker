@@ -1,4 +1,4 @@
-import type { NormalizedEpisode, NormalizedSeason, NormalizedShow } from "@/lib/api/types";
+import type { NormalizedEpisode, NormalizedSeason, NormalizedShow } from "./api/types";
 
 // Default fallback values for missing metadata
 export const DEFAULTS = {

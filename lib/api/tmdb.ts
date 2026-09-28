@@ -1,10 +1,10 @@
-import { getCached, setCached } from "@/lib/api/cache";
-import { normalizeTmdbEpisode, normalizeTmdbMedia } from "@/lib/api/normalize";
-import type { NormalizedEpisode, NormalizedShow } from "@/lib/api/types";
+import { getCached, setCached } from "./cache";
+import { normalizeTmdbEpisode, normalizeTmdbMedia } from "./normalize";
+import type { NormalizedEpisode, NormalizedShow } from "./types";
 import {
   lookupTvMazeShowByImdb,
   searchTvMazeShows,
-} from "@/lib/api/tvmaze";
+} from "./tvmaze";
 
 function normalizeTmdbBaseUrl(input?: string) {
   const fallback = "https://api.themoviedb.org/3";
