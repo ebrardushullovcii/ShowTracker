@@ -1451,6 +1451,7 @@ export function ShowDetailScreen() {
     if (
       !show ||
       show.mediaType !== "anime" ||
+      !isInWatchlist ||
       typeof relationRootAnilistId !== "number" ||
       animeFranchiseSettings === undefined
     ) {
@@ -1478,6 +1479,7 @@ export function ShowDetailScreen() {
   }, [
     animeFranchiseLastRelationSyncAt,
     animeFranchiseSettings,
+    isInWatchlist,
     relationRootAnilistId,
     show,
     syncAnimeRelationsForRoot,
