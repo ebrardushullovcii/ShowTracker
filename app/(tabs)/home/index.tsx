@@ -1247,16 +1247,24 @@ function MobileUpcomingCalendar({
     () => Array.from({ length: 7 }, (_, index) => addDaysToDate(weekStart, index)),
     [weekStart]
   );
+  // Seven day pills leave ~28px of text width on 320px phones.
+  const isNarrowPhone = useWindowDimensions().width < 360;
 
   return (
     <View className="gap-4">
-      <View className="overflow-hidden rounded-[28px] border border-[#563841] bg-[#0d090c] px-4 py-4">
-        <View className="mb-4 flex-row items-center justify-between gap-3">
-          <View className="flex-1">
+      <View
+        className={`overflow-hidden rounded-[28px] border border-[#563841] bg-[#0d090c] py-4 ${
+          isNarrowPhone ? "px-3" : "px-4"
+        }`}
+      >
+        <View className="mb-4 gap-3">
+          <View>
             <Text className="text-[10px] font-black uppercase tracking-[1.8px] text-zinc-500">
               Week View
             </Text>
-            <Text className="mt-2 text-2xl font-black text-white">{getWeekRangeLabel(weekStart)}</Text>
+            <Text className="mt-2 text-2xl font-black text-white" numberOfLines={1}>
+              {getWeekRangeLabel(weekStart)}
+            </Text>
           </View>
 
           <View className="flex-row items-center gap-2">
@@ -1290,12 +1298,12 @@ function MobileUpcomingCalendar({
           </View>
         </View>
 
-        <View className="flex-row gap-2">
+        <View className="flex-row gap-1">
           {isLoading
             ? Array.from({ length: 7 }, (_, index) => (
                 <View
                   key={`mobile-day-loading-${index}`}
-                  className="min-w-0 flex-1 rounded-[22px] border border-[#2b1d22] bg-[#120d10] px-1 py-3"
+                  className="min-w-0 flex-1 rounded-[20px] border border-[#2b1d22] bg-[#120d10] px-0.5 py-3"
                 >
                   <View className="mx-auto h-3 w-7 rounded-full bg-[#24191e]" />
                   <View className="mx-auto mt-2 h-8 w-8 rounded-[14px] bg-[#2b1d22]" />
@@ -1315,7 +1323,7 @@ function MobileUpcomingCalendar({
                     key={dateKey}
                     onPress={() => onSelectDate(dateKey)}
                     accessibilityRole="button"
-                    className={`min-w-0 flex-1 rounded-[22px] border px-1 py-3 ${
+                    className={`min-w-0 flex-1 rounded-[20px] border px-0.5 py-3 ${
                       isSelected
                         ? "border-[#ff745f] bg-[#2a151a]"
                         : isToday
@@ -1327,13 +1335,19 @@ function MobileUpcomingCalendar({
                     })}
                   >
                     <Text
-                      className={`text-center text-[10px] font-black uppercase tracking-[1.3px] ${
+                      className={`text-center text-[9px] font-black uppercase tracking-[0.6px] ${
                         isSelected ? "text-[#ffb0a4]" : "text-zinc-500"
                       }`}
+                      numberOfLines={1}
                     >
                       {getShortWeekdayLabel(date)}
                     </Text>
-                    <Text className="mt-2 text-center text-2xl font-black text-white">
+                    <Text
+                      className={`mt-2 text-center font-black text-white ${
+                        isNarrowPhone ? "text-lg" : "text-xl"
+                      }`}
+                      numberOfLines={1}
+                    >
                       {date.getDate()}
                     </Text>
                     <View className="mt-2 h-3 items-center justify-center">
