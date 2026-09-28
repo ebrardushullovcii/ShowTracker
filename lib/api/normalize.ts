@@ -3,27 +3,27 @@ import type {
   NormalizedSeason,
   NormalizedShow,
   NormalizedScheduleEntry,
-} from "@/lib/api/types";
+} from "./types";
 import type {
   TmdbEpisode,
   TmdbMedia,
   TmdbSeasonDetails,
   TmdbShowDetails,
-} from "@/lib/api/tmdb";
-import type { AniListAiringSchedule, AniListMedia } from "@/lib/api/anilist";
+} from "./tmdb";
+import type { AniListAiringSchedule, AniListMedia } from "./anilist";
 import type {
   TvMazeEpisode,
   TvMazeScheduleEntry,
   TvMazeShow,
-} from "@/lib/api/tvmaze";
-import type { JikanAnime, JikanAnimeEpisode } from "@/lib/api/jikan";
+} from "./tvmaze";
+import type { JikanAnime, JikanAnimeEpisode } from "./jikan";
 import {
   normalizeStatus,
   getEpisodeRuntime,
   formatAirDate,
   parseAirDate,
   DEFAULTS,
-} from "@/lib/metadata-utils";
+} from "../metadata-utils";
 
 const tmdbImageBase = "https://image.tmdb.org/t/p/w780";
 const tmdbPosterBase = "https://image.tmdb.org/t/p/w342";

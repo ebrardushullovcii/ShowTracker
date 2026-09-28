@@ -1,7 +1,7 @@
-import { getCached, setCached } from "@/lib/api/cache";
-import { normalizeAniListMedia } from "@/lib/api/normalize";
-import { getJikanAnime } from "@/lib/api/jikan";
-import type { NormalizedShow } from "@/lib/api/types";
+import { getCached, setCached } from "./cache";
+import { normalizeAniListMedia } from "./normalize";
+import { getJikanAnime } from "./jikan";
+import type { NormalizedShow } from "./types";
 
 const anilistUrl =
   process.env.EXPO_PUBLIC_ANILIST_URL ?? "https://graphql.anilist.co";

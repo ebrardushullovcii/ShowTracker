@@ -5,19 +5,19 @@ import {
   internalMutation,
   internalQuery,
   query,
-} from "@/convex/_generated/server";
-import type { Doc, Id } from "@/convex/_generated/dataModel";
-import type { ActionCtx, MutationCtx, QueryCtx } from "@/convex/_generated/server";
+} from "./_generated/server";
+import type { Doc, Id } from "./_generated/dataModel";
+import type { ActionCtx, MutationCtx, QueryCtx } from "./_generated/server";
 import { v } from "convex/values";
 import { isHomeScheduleSignalActionable } from "./lib/homeScheduleSignalPolicy";
-import { getAniListAiringSchedule } from "@/lib/api/anilist";
+import { getAniListAiringSchedule } from "../lib/api/anilist";
 import {
   normalizeAniListScheduleEntry,
   normalizeTvMazeScheduleEntry,
-} from "@/lib/api/normalize";
-import type { NormalizedScheduleEntry } from "@/lib/api/types";
-import { getTvMazeScheduleByDate } from "@/lib/api/tvmaze";
-import { internal } from "@/convex/_generated/api";
+} from "../lib/api/normalize";
+import type { NormalizedScheduleEntry } from "../lib/api/types";
+import { getTvMazeScheduleByDate } from "../lib/api/tvmaze";
+import { internal } from "./_generated/api";
 
 const HYDRATE_BATCH_SIZE = 3;
 const SCHEDULE_CACHE_FRESH_MS = 1000 * 60 * 60 * 6;

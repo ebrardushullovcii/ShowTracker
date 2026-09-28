@@ -18,6 +18,7 @@ ShowTracker is a fast, minimal, open source tracker for shows, anime, and movies
 - Provider APIs are called only from `lib/api/*` clients or Convex actions, never from screens or components, and responses are normalized before UI use.
 - User-owned synced state goes through Convex. No ad hoc local-only persistence as a source of truth.
 - Convex functions use `v.*` validators, validate auth where user data is involved, and prefer indexed queries over `.filter()` scans.
+- Code bundled into Convex (`convex/` and the `lib/` modules it imports) uses relative imports, never `@/`. The Convex CLI rewrites `convex/tsconfig.json` without the alias when it configures a new project or local deployment. ESLint enforces this.
 - Route and join IDs are provider-qualified (`tmdb:tv:123`, `anilist:anime:789`). Never compare bare numeric IDs across providers.
 
 ## Watchlist and schedule change control

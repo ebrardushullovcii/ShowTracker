@@ -5,31 +5,31 @@ import {
   internalQuery,
   mutation,
   query,
-} from "@/convex/_generated/server";
-import type { ActionCtx, MutationCtx, QueryCtx } from "@/convex/_generated/server";
-import type { Doc, Id } from "@/convex/_generated/dataModel";
+} from "./_generated/server";
+import type { ActionCtx, MutationCtx, QueryCtx } from "./_generated/server";
+import type { Doc, Id } from "./_generated/dataModel";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { v } from "convex/values";
-import { computeWatchedHistoryAggregates } from "@/lib/tracking/history-aggregates";
-import { resolveManualTrackingStatus } from "@/lib/tracking/initial-status";
-import { confirmedReleaseFloor } from "@/lib/tracking/confirmed-release";
+import { computeWatchedHistoryAggregates } from "../lib/tracking/history-aggregates";
+import { resolveManualTrackingStatus } from "../lib/tracking/initial-status";
+import { confirmedReleaseFloor } from "../lib/tracking/confirmed-release";
 import { paginationOptsValidator } from "convex/server";
-import { api, internal } from "@/convex/_generated/api";
+import { api, internal } from "./_generated/api";
 import {
   getAniListAnimeRelations,
   getAniListMediaById,
   getAniListMediaByMalId,
   type AniListAnimeRelations,
   type AniListRelatedShow,
-} from "@/lib/api/anilist";
-import { getJikanAnime } from "@/lib/api/jikan";
-import { normalizeTmdbShowDetails } from "@/lib/api/normalize";
-import { getTmdbSeasonDetails, getTmdbShowDetails } from "@/lib/api/tmdb";
-import type { NormalizedShow } from "@/lib/api/types";
+} from "../lib/api/anilist";
+import { getJikanAnime } from "../lib/api/jikan";
+import { normalizeTmdbShowDetails } from "../lib/api/normalize";
+import { getTmdbSeasonDetails, getTmdbShowDetails } from "../lib/api/tmdb";
+import type { NormalizedShow } from "../lib/api/types";
 import {
   areWatchingWithNamesEqual,
   normalizeWatchingWithNames,
-} from "@/lib/watching-with-others";
+} from "../lib/watching-with-others";
 
 const RELATION_SYNC_THROTTLE_MS = 1000 * 60 * 60 * 24 * 30;
 const FRANCHISE_AUTO_SYNC_FRESH_MS = 1000 * 60 * 60 * 24 * 30;
