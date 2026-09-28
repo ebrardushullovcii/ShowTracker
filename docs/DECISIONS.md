@@ -140,6 +140,7 @@ Most frequently relevant:
 
 | [ADR-0065](ADR-0065-bounded-confirmed-release-timing.md) | Bounded VPS-only intraday verification of exact release-date conflicts, with paginated corrections and no idle Convex work. |
 | [ADR-0066](ADR-0066-bottom-home-section-scroll-loading.md) | Haven't started, the last Home section, loads more on scroll instead of Show more; secondary sections use their own query limits. |
+| [ADR-0067](ADR-0067-franchise-sync-requires-tracking.md) | Anime franchise relation sync only extends franchises the user already tracks; viewing an anime never adds it. |
 
 ## Guidance policy
 

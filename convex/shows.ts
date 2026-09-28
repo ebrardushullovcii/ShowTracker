@@ -3665,9 +3665,42 @@ export const getAnimeRelationSyncCandidateForRoot = internalQuery({
     return {
       rootAnilistId: args.relationRootAnilistId,
       lastSyncedAt,
+      tracksFranchise:
+        userShowsForRoot.length > 0 ||
+        (await userTracksAnyFranchiseShow(ctx, args.userId, args.relationRootAnilistId, rootShow)),
     };
   },
 });
+
+const FRANCHISE_TRACKING_PROBE_LIMIT = 50;
+
+/** True when the user already tracks the franchise root or any entry that points at it. */
+async function userTracksAnyFranchiseShow(
+  ctx: QueryCtx,
+  userId: Id<"users">,
+  relationRootAnilistId: number,
+  rootShow: Doc<"shows"> | null
+): Promise<boolean> {
+  const franchiseShows = await ctx.db
+    .query("shows")
+    .withIndex("by_rootAnilistId", (q) => q.eq("rootAnilistId", relationRootAnilistId))
+    .take(FRANCHISE_TRACKING_PROBE_LIMIT);
+  const showIds = new Set(franchiseShows.map((show) => show._id));
+  if (rootShow) {
+    showIds.add(rootShow._id);
+  }
+
+  for (const showId of showIds) {
+    const userShow = await ctx.db
+      .query("userShows")
+      .withIndex("by_user_show", (q) => q.eq("userId", userId).eq("showId", showId))
+      .unique();
+    if (userShow) {
+      return true;
+    }
+  }
+  return false;
+}
 
 export const addAnimeToWatchlistWithRelations = action({
   args: showInput,
@@ -4047,17 +4080,20 @@ export const syncAnimeRelationsForRoot = action({
         relationRootAnilistId: args.relationRootAnilistId,
       }
     );
-    const candidate: { rootAnilistId: number; lastSyncedAt: number } =
+    const candidate: { rootAnilistId: number; lastSyncedAt: number; tracksFranchise: boolean } =
       await ctx.runQuery(internal.shows.getAnimeRelationSyncCandidateForRoot, {
         userId,
         relationRootAnilistId: args.relationRootAnilistId,
       });
     const lastSyncedAt = candidate.lastSyncedAt;
 
+    // Relation sync extends franchises the user already tracks. Viewing an anime must never
+    // add it: explicit adds go through addAnimeToWatchlistWithRelations.
     if (
-      args.force !== true &&
+      !candidate.tracksFranchise ||
+      (args.force !== true &&
       lastSyncedAt > 0 &&
-      Date.now() - lastSyncedAt < FRANCHISE_AUTO_SYNC_FRESH_MS
+      Date.now() - lastSyncedAt < FRANCHISE_AUTO_SYNC_FRESH_MS)
     ) {
       return {
         synced: false,
