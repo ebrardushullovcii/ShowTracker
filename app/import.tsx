@@ -1176,7 +1176,11 @@ export function ImportScreen() {
 
   return (
     <ScreenWrapper>
-      <ScrollView showsVerticalScrollIndicator={false} className="flex-1">
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        className="flex-1"
+        contentContainerStyle={{ paddingBottom: 24 }}
+      >
         <PageIntro
           title="Import"
           subtitle="Bring your TV Time history into ShowTracker"

@@ -49,7 +49,7 @@ export default function CreateListScreen() {
 
   return (
     <ScreenWrapper>
-      <ScrollView className="flex-1">
+      <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 24 }}>
         <View className="gap-3">
           <PageIntro
             title="Create List"
