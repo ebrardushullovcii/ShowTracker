@@ -43,6 +43,7 @@ import {
   hasMoreSectionRows,
   isNearScrollEnd,
 } from "@/lib/tracking/home-section-pagination";
+import { getScheduleDayDistance } from "@/lib/tracking/schedule-day-distance";
 
 type HomeTab = "watchlist" | "upcoming";
 type HomeMediaFilter = "all" | "tv" | "anime";
@@ -532,26 +533,28 @@ function WatchlistCardSkeleton({ isCompact }: { isCompact: boolean }) {
 function UpcomingEpisodeListItem({
   episode,
   isWeb,
+  daysUntil,
 }: {
   episode: UpcomingEpisode;
   isWeb: boolean;
+  daysUntil: number;
 }) {
-  const distanceLabel = getUpcomingDistanceLabel(episode.daysUntil);
+  const distanceLabel = getUpcomingDistanceLabel(daysUntil);
   const airtimeLabel = formatEpisodeAirtime(episode.episode.airDate);
   const episodeTitle =
     episode.episode.name && episode.episode.name !== episode.showTitle
       ? episode.episode.name
       : `Episode ${episode.episode.episodeNumber}`;
   const accentClass =
-    episode.daysUntil === 0
+    daysUntil === 0
       ? "border-primary/40 bg-primary/15"
-      : episode.daysUntil < 0
+      : daysUntil < 0
         ? "border-amber-400/30 bg-amber-500/10"
         : "border-[#3b272b] bg-[#1a1316]";
   const accentTextClass =
-    episode.daysUntil === 0
+    daysUntil === 0
       ? "text-primary-glow"
-      : episode.daysUntil < 0
+      : daysUntil < 0
         ? "text-amber-100"
         : "text-zinc-100";
 
@@ -654,6 +657,8 @@ function UpcomingAgendaPanel({
 }) {
   const date = parseLocalDate(dateKey) ?? new Date();
   const isToday = dateKey === todayKey;
+  // Server daysUntil counts from the UTC day; count from the viewer's local day instead.
+  const localDaysUntil = getScheduleDayDistance(todayKey, dateKey);
 
   return (
     <View
@@ -739,6 +744,7 @@ function UpcomingAgendaPanel({
                   key={`${dateKey}:${episode.routeId ?? episode.showTitle}:${episode.episode.seasonNumber}:${episode.episode.episodeNumber}:${index}`}
                   episode={episode}
                   isWeb={isWeb}
+                  daysUntil={localDaysUntil ?? episode.daysUntil}
                 />
               ))}
             </View>
@@ -782,6 +788,7 @@ function UpcomingAgendaPanel({
                   key={`${dateKey}:${episode.routeId ?? episode.showTitle}:${episode.episode.seasonNumber}:${episode.episode.episodeNumber}:${index}`}
                   episode={episode}
                   isWeb={isWeb}
+                  daysUntil={localDaysUntil ?? episode.daysUntil}
                 />
               ))}
             </View>
