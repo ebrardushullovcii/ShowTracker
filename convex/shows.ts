@@ -2575,13 +2575,20 @@ async function refreshUserShowTrackingAggregates(
   return refreshed;
 }
 
+// Keeps the cached stats and marks them stale; the profile then asks for a background rebuild
+// (ADR-0068). Only the first change after a rebuild is scheduled writes, so bulk tracking stays cheap.
 async function invalidateUserStatsCache(ctx: MutationCtx, userId: Id<"users">) {
   const cachedStats = await ctx.db
     .query("userStats")
     .withIndex("by_user", (q) => q.eq("userId", userId))
     .collect();
+  const now = Date.now();
   for (const entry of cachedStats) {
-    await ctx.db.delete(entry._id);
+    const alreadyMarked =
+      typeof entry.staleAt === "number" && entry.staleAt >= (entry.rebuildScheduledAt ?? 0);
+    if (!alreadyMarked) {
+      await ctx.db.patch(entry._id, { staleAt: now });
+    }
   }
 }
 

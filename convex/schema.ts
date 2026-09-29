@@ -54,6 +54,10 @@ export default defineSchema({
       })
     ),
     rebuiltAt: v.number(),
+    // Set by tracking changes; the profile keeps showing these numbers and asks for a rebuild.
+    staleAt: v.optional(v.number()),
+    // Set when a background rebuild is scheduled, cleared when it writes.
+    rebuildScheduledAt: v.optional(v.number()),
   }).index("by_user", ["userId"]),
   userAnimeHomeSettings: defineTable({
     userId: v.id("users"),

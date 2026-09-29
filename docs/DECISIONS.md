@@ -50,8 +50,9 @@ Most frequently relevant:
 - [ADR-0045](ADR-0045-tv-time-tv-catalog-priority.md): TV Time show imports prefer the regular TV catalog and use anime providers only as fallback.
 - [ADR-0046](ADR-0046-tv-time-exported-runtime.md): TV Time imports preserve exported episode runtime and use provider runtime only as fallback.
 - [ADR-0047](ADR-0047-provider-episode-runtime-authority.md): exact provider episode runtime outranks show-level and archived runtime during import and normal tracking.
-- [ADR-0048](ADR-0048-watch-stats-cache-invalidation.md): tracking aggregate changes invalidate materialized statistics, and bulk import rebuilds them once after completion.
+- [ADR-0048](ADR-0048-watch-stats-cache-invalidation.md): tracking aggregate changes invalidate materialized statistics, and bulk import rebuilds them once after completion. Revised by ADR-0068.
 - [ADR-0049](ADR-0049-import-history-statistics.md): statistics count all stored watch history while provider-bounded progress continues to protect Home and release projections.
+- [ADR-0068](ADR-0068-stats-rebuild-off-request-path.md): Profile statistics come only from the cached row; tracking marks it stale and a paged background action rebuilds it.
 - [ADR-0050](ADR-0050-tv-time-episode-reconciliation.md): TV Time imports reconcile whole-show episode catalogues with provenance and isolate uncertain records from provider progress.
 - [ADR-0051](ADR-0051-unmatched-import-episode-policy.md): unmatched TV Time episodes are reported and omitted instead of being retained as invisible account history.
 - [ADR-0054](ADR-0054-terminal-provider-count-and-projection-repair.md): complete terminal TMDB counts and exact bounded projection repair prevent provider catalogue inflation from reactivating caught-up shows.
@@ -141,6 +142,7 @@ Most frequently relevant:
 | [ADR-0065](ADR-0065-bounded-confirmed-release-timing.md) | Bounded VPS-only intraday verification of exact release-date conflicts, with paginated corrections and no idle Convex work. |
 | [ADR-0066](ADR-0066-bottom-home-section-scroll-loading.md) | Haven't started, the last Home section, loads more on scroll instead of Show more; secondary sections use their own query limits. |
 | [ADR-0067](ADR-0067-franchise-sync-requires-tracking.md) | Anime franchise relation sync only extends franchises the user already tracks; viewing an anime never adds it. |
+| [ADR-0068](ADR-0068-stats-rebuild-off-request-path.md) | Profile statistics are read from the cached row only; tracking marks it stale and a paged background action rebuilds it. |
 
 ## Guidance policy
 

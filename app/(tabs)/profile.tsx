@@ -86,7 +86,8 @@ type ProfileStats = {
   completedShows?: number;
   totalTrackedShows?: number;
   statsRebuiltAt?: number | null;
-  statsSource?: "cached" | "live";
+  statsStale?: boolean;
+  statsSource?: "cached";
 };
 
 function formatCount(value: number) {
@@ -594,6 +595,20 @@ export default function ProfileScreen() {
   const lists = useQuery(api.lists.getUserLists, shouldLoadHeavySections ? {} : "skip");
   const library = useQuery(api.shows.getLibrary, shouldLoadHeavySections ? {} : "skip");
   const upsertUserProfile = useMutation(api.stats.upsertUserProfile);
+  const requestUserStatsRebuild = useMutation(api.stats.requestUserStatsRebuild);
+  const requestedStatsRebuildRef = useRef<string | null>(null);
+
+  // Stats come from a cache rebuilt in the background. Ask once per missing or stale version;
+  // the query updates on its own when the rebuild writes.
+  useEffect(() => {
+    if (stats === undefined || (stats !== null && !stats.statsStale)) return;
+    const version = stats === null ? "missing" : `stale:${stats.statsRebuiltAt}`;
+    if (requestedStatsRebuildRef.current === version) return;
+    requestedStatsRebuildRef.current = version;
+    void requestUserStatsRebuild().catch((error) => {
+      console.error("Failed to request a stats rebuild", error);
+    });
+  }, [requestUserStatsRebuild, stats]);
 
   const isInitialLoading = profileSummary === undefined;
   const isHeavySectionsLoading =
@@ -1108,9 +1123,9 @@ export default function ProfileScreen() {
               </Text>
             </View>
           </View>
-          {stats?.statsSource === "live" ? (
+          {stats?.statsStale ? (
             <Text className="mb-3 text-xs text-text-muted">
-              Stats are live-calculated. Use Settings to cache them for faster, cheaper loads.
+              Updating with your latest activity...
             </Text>
           ) : null}
           {stats ? (
@@ -1119,7 +1134,7 @@ export default function ProfileScreen() {
             <View className="items-center justify-center rounded-2xl border border-border-default bg-bg-surface py-8">
               <BrandLoader compact />
               <Text className="mt-2 text-xs font-semibold uppercase tracking-wide text-text-muted">
-                Loading detailed stats
+                {stats === null ? "Calculating your stats" : "Loading detailed stats"}
               </Text>
             </View>
           )}
