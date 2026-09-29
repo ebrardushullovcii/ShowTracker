@@ -4090,6 +4090,7 @@ export function ShowDetailScreen() {
     <ScreenWrapper contentClassName="px-0 py-0" edges={detailScreenEdges}>
       <ScrollView
         className="flex-1"
+        contentContainerStyle={{ paddingBottom: 24 }}
         showsVerticalScrollIndicator={true}
         bounces={false}
       >

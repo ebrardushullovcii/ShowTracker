@@ -19,7 +19,9 @@ export function ScreenWrapper({
       className={`flex-1 bg-bg-base ${className ?? ""}`.trim()}
       edges={edges}
     >
-      <View className={`flex-1 px-5 pt-4 pb-2 ${contentClassName ?? ""}`.trim()}>
+      {/* No bottom padding: scroll content must reach the tab bar border instead of
+          being clipped above it. Scroll views pad their own ends. */}
+      <View className={`flex-1 px-5 pt-4 ${contentClassName ?? ""}`.trim()}>
         {children}
       </View>
     </SafeAreaView>

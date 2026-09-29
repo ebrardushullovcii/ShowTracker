@@ -2795,7 +2795,7 @@ export function HomeScreen() {
 
               </View>
 
-              <View className="min-h-0 flex-1 pb-4">
+              <View className="min-h-0 flex-1">
                 {usesMonthCalendarLayout ? (
                   <WebUpcomingCalendar
                     monthDate={currentMonthDate}
@@ -2814,7 +2814,7 @@ export function HomeScreen() {
                 ) : (
                   <ScrollView
                     className="min-h-0 flex-1"
-                    contentContainerStyle={{ paddingBottom: 16 }}
+                    contentContainerStyle={{ paddingBottom: 24 }}
                     showsVerticalScrollIndicator={false}
                   >
                     <MobileUpcomingCalendar
