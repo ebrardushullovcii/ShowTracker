@@ -1,5 +1,6 @@
 import type { PropsWithChildren } from "react";
 import { Platform, Pressable, View, useWindowDimensions } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { HeaderIconButton } from "@/components/HeaderIconButton";
 import { DESKTOP_SIDEBAR_BREAKPOINT } from "@/constants/navigation";
 
@@ -14,7 +15,11 @@ export function OverlayDetailFrame({
   closeAccessibilityLabel = "Close show details",
 }: OverlayDetailFrameProps) {
   const { width } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const isDesktop = Platform.OS === "web" && width >= DESKTOP_SIDEBAR_BREAKPOINT;
+  // On phones the sheet starts below the status bar / Dynamic Island, where iOS
+  // turns taps into scroll-to-top and the close button could never be pressed.
+  const sheetTopInset = isDesktop ? 0 : insets.top;
 
   return (
     <View className="flex-1 bg-black/65">
@@ -36,7 +41,7 @@ export function OverlayDetailFrame({
         style={
           isDesktop
             ? { shadowColor: "#000", shadowOpacity: 0.45, shadowRadius: 36 }
-            : { shadowColor: "#000", shadowOpacity: 0.35, shadowRadius: 28 }
+            : { marginTop: sheetTopInset, shadowColor: "#000", shadowOpacity: 0.35, shadowRadius: 28 }
         }
       >
         {isDesktop ? (
