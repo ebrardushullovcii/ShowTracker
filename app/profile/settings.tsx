@@ -276,8 +276,8 @@ export default function ProfileSettingsScreen() {
       if (!isDone) {
         throw new Error("Tracking history repair did not finish before the stats rebuild limit.");
       }
-      const result = await rebuildUserStats();
-      setNotice(`Stats refreshed for ${result.totalTrackedShows} tracked ${result.totalTrackedShows === 1 ? "show" : "shows"}.`);
+      await rebuildUserStats();
+      setNotice("Stats refresh started. Your profile updates in a moment.");
     } catch (statsError) {
       console.error("Failed to refresh stats", statsError);
       setError("Could not refresh stats.");

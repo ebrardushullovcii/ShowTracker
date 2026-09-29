@@ -1,5 +1,6 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
-import { mutation, query } from "./_generated/server";
+import { internal } from "./_generated/api";
+import { internalAction, internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import { v } from "convex/values";
@@ -296,6 +297,148 @@ function formatStatsResponse(
   };
 }
 
+// Stats are never computed on the request path (ADR-0068). The profile reads the cached
+// `userStats` row, tracking changes mark it stale, and a background action rebuilds it in pages
+// small enough to stay far under per-function read and time limits on large libraries.
+const STATS_SHOW_PAGE_SIZE = 100;
+const STATS_TIMESTAMP_PAGE_SIZE = 1000;
+// Streaks look at the most recent watched-episode rows only.
+const STATS_STREAK_ROW_LIMIT = 10000;
+// A scheduled rebuild that has not written after this long is treated as lost.
+const STATS_REBUILD_PENDING_MS = 10 * 60 * 1000;
+
+type StatsShowRow = {
+  showId: string;
+  title: string;
+  mediaType: Doc<"shows">["mediaType"] | null;
+  episodeRuntime: number;
+  status: Doc<"userShows">["status"];
+  uniqueEpisodes: number;
+  totalWatches: number;
+  runtimeMinutes: number | null;
+};
+
+type StatsPage<T> = { items: T[]; rowCount: number; continueCursor: string; isDone: boolean };
+
+const materializedStatsValidator = v.object({
+  uniqueEpisodesWatched: v.number(),
+  totalRewatches: v.number(),
+  totalEpisodesWatched: v.number(),
+  tvEpisodes: v.number(),
+  animeEpisodes: v.number(),
+  movieCount: v.number(),
+  totalWatchTimeMinutes: v.number(),
+  tvWatchTimeMinutes: v.number(),
+  animeWatchTimeMinutes: v.number(),
+  movieWatchTimeMinutes: v.number(),
+  currentStreak: v.number(),
+  longestStreak: v.number(),
+  completedShows: v.number(),
+  totalTrackedShows: v.number(),
+  topRewatchedShows: v.array(v.object({ title: v.string(), watchCount: v.number() })),
+});
+
+function buildMaterializedStats(
+  rows: StatsShowRow[],
+  watchedTimestamps: number[],
+): MaterializedUserStats {
+  let uniqueEpisodesWatched = 0;
+  let totalRewatches = 0;
+  let tvEpisodes = 0;
+  let tvWatchTimeMinutes = 0;
+  let animeEpisodes = 0;
+  let animeWatchTimeMinutes = 0;
+  let movieCount = 0;
+  let movieWatchTimeMinutes = 0;
+  const rewatchesByShow = new Map<string, { title: string; count: number }>();
+
+  for (const row of rows) {
+    if (!row.mediaType) {
+      continue;
+    }
+
+    const rewatchCount = Math.max(row.totalWatches - row.uniqueEpisodes, 0);
+    const watchedRuntimeMinutes = Math.max(
+      0,
+      Math.floor(
+        row.runtimeMinutes !== null ? row.runtimeMinutes : row.episodeRuntime * row.totalWatches,
+      ),
+    );
+
+    uniqueEpisodesWatched += row.uniqueEpisodes;
+    totalRewatches += rewatchCount;
+    if (rewatchCount > 0) {
+      rewatchesByShow.set(row.showId, { title: row.title, count: rewatchCount });
+    }
+
+    if (row.mediaType === "tv") {
+      tvEpisodes += row.totalWatches;
+      tvWatchTimeMinutes += watchedRuntimeMinutes;
+    } else if (row.mediaType === "anime") {
+      animeEpisodes += row.totalWatches;
+      animeWatchTimeMinutes += watchedRuntimeMinutes;
+    } else if (row.mediaType === "movie") {
+      if (row.status === "completed") {
+        movieCount += 1;
+      }
+      movieWatchTimeMinutes += watchedRuntimeMinutes;
+    }
+  }
+
+  const { currentStreak, longestStreak } = calculateStreak(watchedTimestamps);
+  const topRewatchedShows = Array.from(rewatchesByShow.values())
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 5)
+    .map((entry) => ({ title: entry.title, watchCount: entry.count }));
+
+  return {
+    uniqueEpisodesWatched,
+    totalRewatches,
+    totalEpisodesWatched: uniqueEpisodesWatched + totalRewatches,
+    tvEpisodes,
+    animeEpisodes,
+    movieCount,
+    totalWatchTimeMinutes: tvWatchTimeMinutes + animeWatchTimeMinutes + movieWatchTimeMinutes,
+    tvWatchTimeMinutes,
+    animeWatchTimeMinutes,
+    movieWatchTimeMinutes,
+    currentStreak,
+    longestStreak,
+    completedShows: rows.filter((row) => row.status === "completed").length,
+    totalTrackedShows: rows.length,
+    topRewatchedShows,
+  };
+}
+
+async function scheduleUserStatsRebuild(
+  ctx: MutationCtx,
+  userId: Id<"users">,
+  { force }: { force: boolean },
+) {
+  const existing = await ctx.db
+    .query("userStats")
+    .withIndex("by_user", (q) => q.eq("userId", userId))
+    .first();
+  const now = Date.now();
+
+  if (existing && !force) {
+    const isStale = typeof existing.staleAt === "number";
+    const isPending =
+      typeof existing.rebuildScheduledAt === "number" &&
+      existing.rebuildScheduledAt > existing.rebuiltAt &&
+      now - existing.rebuildScheduledAt < STATS_REBUILD_PENDING_MS;
+    if (!isStale || isPending) {
+      return { scheduled: false };
+    }
+  }
+
+  if (existing) {
+    await ctx.db.patch(existing._id, { rebuildScheduledAt: now });
+  }
+  await ctx.scheduler.runAfter(0, internal.stats.rebuildUserStatsInBackground, { userId });
+  return { scheduled: true };
+}
+
 export const getUserStats = query({
   args: {},
   handler: async (ctx) => {
@@ -305,369 +448,176 @@ export const getUserStats = query({
       .withIndex("by_user", (q) => q.eq("userId", userId))
       .first();
 
-    if (cachedStats) {
-      const userProfile = await ctx.db
-        .query("userProfiles")
-        .withIndex("by_userId", (q) => q.eq("userId", userId))
-        .first();
-      const userSocial = await ctx.db
-        .query("userSocial")
-        .withIndex("by_user", (q) => q.eq("userId", userId))
-        .first();
-      const displayName = resolveDisplayName({
-        profileUsername: userProfile?.username,
-        profileTokenIdentifier: userProfile?.tokenIdentifier,
-      });
-
-      return {
-        ...formatStatsResponse(cachedStats, {
-          followingCount: userSocial?.followingCount ?? 0,
-          followersCount: userSocial?.followersCount ?? 0,
-          commentsCount: userSocial?.commentsCount ?? 0,
-          username: displayName,
-          bio: userProfile?.bio ?? "",
-          avatarUrl: userProfile?.avatarUrl,
-          bannerUrl: userProfile?.bannerUrl,
-        }),
-        statsRebuiltAt: cachedStats.rebuiltAt,
-        statsSource: "cached" as const,
-      };
+    // No stats yet: the profile asks for a background rebuild and shows a loader until it lands.
+    if (!cachedStats) {
+      return null;
     }
 
-    // Get all user shows with precomputed watch aggregates.
-    const userShows = await ctx.db
-      .query("userShows")
-      .withIndex("by_user", (q) => q.eq("userId", userId))
-      .collect();
-
-    // Resolve all referenced shows once to avoid repeated reads.
-    const uniqueShowIds = Array.from(
-      new Set<Id<"shows">>(userShows.map((userShow) => userShow.showId)),
-    );
-
-    const showDocs = await Promise.all(
-      uniqueShowIds.map((showId) => ctx.db.get(showId)),
-    );
-    const showById = new Map<string, Doc<"shows">>();
-    uniqueShowIds.forEach((showId, index) => {
-      const show = showDocs[index];
-      if (show) {
-        showById.set(showId.toString(), show);
-      }
-    });
-
-    // Calculate basic counts
-    let uniqueEpisodesWatched = 0;
-    let totalWatchEvents = 0;
-    let tvEpisodes = 0;
-    let tvWatchTimeMinutes = 0;
-    let animeEpisodes = 0;
-    let animeWatchTimeMinutes = 0;
-    let movieCount = 0;
-    let movieWatchTimeMinutes = 0;
-
-    const showWatchCounts = new Map<string, number>();
-
-    for (const userShow of userShows) {
-      const show = showById.get(userShow.showId.toString());
-      if (!show) {
-        continue;
-      }
-
-      const history = getUserShowHistoryTotals(userShow);
-      const watchedEpisodesCount = history.uniqueEpisodes;
-      const watchedTotalCount = history.totalWatches;
-      const rewatchCount = Math.max(
-        watchedTotalCount - watchedEpisodesCount,
-        0,
-      );
-      const fallbackRuntimeMinutes =
-        Math.max(0, show.episodeRuntime ?? 0) * watchedTotalCount;
-      const watchedRuntimeMinutes = Math.max(
-        0,
-        Math.floor(
-          history.runtimeMinutes !== null
-            ? history.runtimeMinutes
-            : fallbackRuntimeMinutes,
-        ),
-      );
-
-      uniqueEpisodesWatched += watchedEpisodesCount;
-      totalWatchEvents += rewatchCount;
-
-      if (rewatchCount > 0) {
-        showWatchCounts.set(show._id.toString(), rewatchCount);
-      }
-
-      if (show.mediaType === "tv") {
-        tvEpisodes += watchedTotalCount;
-        tvWatchTimeMinutes += watchedRuntimeMinutes;
-        continue;
-      }
-
-      if (show.mediaType === "anime") {
-        animeEpisodes += watchedTotalCount;
-        animeWatchTimeMinutes += watchedRuntimeMinutes;
-        continue;
-      }
-
-      if (show.mediaType === "movie") {
-        if (userShow.status === "completed") {
-          movieCount += 1;
-        }
-        movieWatchTimeMinutes += watchedRuntimeMinutes;
-      }
-    }
-
-    const totalRewatches = Math.max(totalWatchEvents, 0);
-
-    // Bound streak computation to recent episode rows so large accounts stay under query limits.
-    const streakEpisodeSamples = await ctx.db
-      .query("watchedEpisodes")
-      .withIndex("by_watchedAt", (q) => q.eq("userId", userId))
-      .order("desc")
-      .take(10000);
-
-    const watchedTimestamps: number[] = [];
-    for (const episode of streakEpisodeSamples) {
-      watchedTimestamps.push(episode.watchedAt);
-      if (episode.watchHistory) {
-        for (const timestamp of episode.watchHistory) {
-          watchedTimestamps.push(timestamp);
-        }
-      }
-    }
-
-    // Calculate streaks
-    const { currentStreak, longestStreak } = calculateStreak(watchedTimestamps);
-
-    // Find most re-watched shows
-    const topRewatchedEntries = Array.from(showWatchCounts.entries())
-      .sort(([, a], [, b]) => b - a)
-      .slice(0, 5);
-
-    const topRewatchedShows = topRewatchedEntries.map(([showId, count]) => {
-      const show = showById.get(showId);
-      return {
-        title: show?.title ?? "Unknown",
-        watchCount: count,
-      };
-    });
-
-    // Count completed shows
-    const completedShows = userShows.filter(
-      (us) => us.status === "completed",
-    ).length;
-
-    // Get user profile for social stats
     const userProfile = await ctx.db
       .query("userProfiles")
       .withIndex("by_userId", (q) => q.eq("userId", userId))
       .first();
-
     const userSocial = await ctx.db
       .query("userSocial")
       .withIndex("by_user", (q) => q.eq("userId", userId))
       .first();
-
     const displayName = resolveDisplayName({
       profileUsername: userProfile?.username,
       profileTokenIdentifier: userProfile?.tokenIdentifier,
     });
 
-    // Calculate total across all types
-    const allWatchTimeMinutes =
-      tvWatchTimeMinutes + animeWatchTimeMinutes + movieWatchTimeMinutes;
-
     return {
-      // Episode stats
-      uniqueEpisodesWatched,
-      totalRewatches,
-      totalEpisodesWatched: uniqueEpisodesWatched + totalRewatches,
-
-      // Breakdown by type
-      tvEpisodes,
-      animeEpisodes,
-      movieCount,
-
-      // Total watch time
-      totalWatchTimeMinutes: allWatchTimeMinutes,
-      totalWatchTimeFormatted: formatDuration(allWatchTimeMinutes),
-      totalWatchTimeBreakdown: formatDurationBreakdown(allWatchTimeMinutes),
-
-      // TV watch time
-      tvWatchTimeMinutes,
-      tvWatchTimeFormatted: formatDuration(tvWatchTimeMinutes),
-      tvWatchTimeBreakdown: formatDurationBreakdown(tvWatchTimeMinutes),
-
-      // Anime watch time
-      animeWatchTimeMinutes,
-      animeWatchTimeFormatted: formatDuration(animeWatchTimeMinutes),
-      animeWatchTimeBreakdown: formatDurationBreakdown(animeWatchTimeMinutes),
-
-      // Movie watch time
-      movieWatchTimeMinutes,
-      movieWatchTimeFormatted: formatDuration(movieWatchTimeMinutes),
-      movieWatchTimeBreakdown: formatDurationBreakdown(movieWatchTimeMinutes),
-
-      // Streaks
-      currentStreak,
-      longestStreak,
-
-      // Show completion
-      completedShows,
-      totalTrackedShows: userShows.length,
-
-      // Top re-watched
-      topRewatchedShows,
-
-      // Social stats
-      followingCount: userSocial?.followingCount ?? 0,
-      followersCount: userSocial?.followersCount ?? 0,
-      commentsCount: userSocial?.commentsCount ?? 0,
-
-      // Profile info
-      username: displayName,
-      bio: userProfile?.bio ?? "",
-      avatarUrl: userProfile?.avatarUrl,
-      bannerUrl: userProfile?.bannerUrl,
-      statsRebuiltAt: null,
-      statsSource: "live" as const,
+      ...formatStatsResponse(cachedStats, {
+        followingCount: userSocial?.followingCount ?? 0,
+        followersCount: userSocial?.followersCount ?? 0,
+        commentsCount: userSocial?.commentsCount ?? 0,
+        username: displayName,
+        bio: userProfile?.bio ?? "",
+        avatarUrl: userProfile?.avatarUrl,
+        bannerUrl: userProfile?.bannerUrl,
+      }),
+      statsRebuiltAt: cachedStats.rebuiltAt,
+      statsStale: typeof cachedStats.staleAt === "number",
+      statsSource: "cached" as const,
     };
   },
 });
 
+/** Called by the profile when its stats are missing or stale. Skips if a rebuild is already running. */
+export const requestUserStatsRebuild = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await getCurrentUserId(ctx);
+    return await scheduleUserStatsRebuild(ctx, userId, { force: false });
+  },
+});
+
+/** Explicit refresh from Settings and after imports. Always schedules a rebuild. */
 export const rebuildUserStats = mutation({
   args: {},
   handler: async (ctx) => {
     const userId = await getCurrentUserId(ctx);
-    const userShows = await ctx.db
+    return await scheduleUserStatsRebuild(ctx, userId, { force: true });
+  },
+});
+
+export const getStatsShowPage = internalQuery({
+  args: { userId: v.id("users"), cursor: v.union(v.string(), v.null()) },
+  handler: async (ctx, { userId, cursor }): Promise<StatsPage<StatsShowRow>> => {
+    const page = await ctx.db
       .query("userShows")
       .withIndex("by_user", (q) => q.eq("userId", userId))
-      .collect();
-    const uniqueShowIds = Array.from(
-      new Set<Id<"shows">>(userShows.map((userShow) => userShow.showId)),
-    );
-    const showDocs = await Promise.all(
-      uniqueShowIds.map((showId) => ctx.db.get(showId)),
-    );
-    const showById = new Map<string, Doc<"shows">>();
-    uniqueShowIds.forEach((showId, index) => {
-      const show = showDocs[index];
-      if (show) {
-        showById.set(showId.toString(), show);
-      }
+      .paginate({ cursor, numItems: STATS_SHOW_PAGE_SIZE });
+    const shows = await Promise.all(page.page.map((userShow) => ctx.db.get(userShow.showId)));
+
+    const items = page.page.map((userShow, index): StatsShowRow => {
+      const show = shows[index];
+      const history = getUserShowHistoryTotals(userShow);
+      return {
+        showId: userShow.showId,
+        title: show?.title ?? "Unknown",
+        mediaType: show?.mediaType ?? null,
+        episodeRuntime: Math.max(0, show?.episodeRuntime ?? 0),
+        status: userShow.status,
+        uniqueEpisodes: history.uniqueEpisodes,
+        totalWatches: history.totalWatches,
+        runtimeMinutes: history.runtimeMinutes,
+      };
     });
 
-    let uniqueEpisodesWatched = 0;
-    let totalRewatches = 0;
-    let tvEpisodes = 0;
-    let tvWatchTimeMinutes = 0;
-    let animeEpisodes = 0;
-    let animeWatchTimeMinutes = 0;
-    let movieCount = 0;
-    let movieWatchTimeMinutes = 0;
-    const showWatchCounts = new Map<string, number>();
+    return { items, rowCount: page.page.length, continueCursor: page.continueCursor, isDone: page.isDone };
+  },
+});
 
-    for (const userShow of userShows) {
-      const show = showById.get(userShow.showId.toString());
-      if (!show) {
-        continue;
-      }
-
-      const history = getUserShowHistoryTotals(userShow);
-      const watchedEpisodesCount = history.uniqueEpisodes;
-      const watchedTotalCount = history.totalWatches;
-      const rewatchCount = Math.max(watchedTotalCount - watchedEpisodesCount, 0);
-      const fallbackRuntimeMinutes =
-        Math.max(0, show.episodeRuntime ?? 0) * watchedTotalCount;
-      const watchedRuntimeMinutes = Math.max(
-        0,
-        Math.floor(
-          history.runtimeMinutes !== null
-            ? history.runtimeMinutes
-            : fallbackRuntimeMinutes,
-        ),
-      );
-
-      uniqueEpisodesWatched += watchedEpisodesCount;
-      totalRewatches += rewatchCount;
-      if (rewatchCount > 0) {
-        showWatchCounts.set(show._id.toString(), rewatchCount);
-      }
-
-      if (show.mediaType === "tv") {
-        tvEpisodes += watchedTotalCount;
-        tvWatchTimeMinutes += watchedRuntimeMinutes;
-      } else if (show.mediaType === "anime") {
-        animeEpisodes += watchedTotalCount;
-        animeWatchTimeMinutes += watchedRuntimeMinutes;
-      } else if (show.mediaType === "movie") {
-        if (userShow.status === "completed") {
-          movieCount += 1;
-        }
-        movieWatchTimeMinutes += watchedRuntimeMinutes;
-      }
-    }
-
-    const streakEpisodeSamples = await ctx.db
+export const getStatsTimestampPage = internalQuery({
+  args: { userId: v.id("users"), cursor: v.union(v.string(), v.null()), numItems: v.number() },
+  handler: async (ctx, { userId, cursor, numItems }): Promise<StatsPage<number>> => {
+    const page = await ctx.db
       .query("watchedEpisodes")
       .withIndex("by_watchedAt", (q) => q.eq("userId", userId))
       .order("desc")
-      .take(10000);
-    const watchedTimestamps: number[] = [];
-    for (const episode of streakEpisodeSamples) {
-      watchedTimestamps.push(episode.watchedAt);
+      .paginate({ cursor, numItems });
+
+    const items: number[] = [];
+    for (const episode of page.page) {
+      items.push(episode.watchedAt);
       if (episode.watchHistory) {
-        watchedTimestamps.push(...episode.watchHistory);
+        items.push(...episode.watchHistory);
       }
     }
-    const { currentStreak, longestStreak } = calculateStreak(watchedTimestamps);
-    const topRewatchedShows = Array.from(showWatchCounts.entries())
-      .sort(([, a], [, b]) => b - a)
-      .slice(0, 5)
-      .map(([showId, count]) => ({
-        title: showById.get(showId)?.title ?? "Unknown",
-        watchCount: count,
-      }));
-    const totalWatchTimeMinutes =
-      tvWatchTimeMinutes + animeWatchTimeMinutes + movieWatchTimeMinutes;
-    const completedShows = userShows.filter((us) => us.status === "completed").length;
-    const payload = {
-      userId,
-      uniqueEpisodesWatched,
-      totalRewatches,
-      totalEpisodesWatched: uniqueEpisodesWatched + totalRewatches,
-      tvEpisodes,
-      animeEpisodes,
-      movieCount,
-      totalWatchTimeMinutes,
-      tvWatchTimeMinutes,
-      animeWatchTimeMinutes,
-      movieWatchTimeMinutes,
-      currentStreak,
-      longestStreak,
-      completedShows,
-      totalTrackedShows: userShows.length,
-      topRewatchedShows,
-      rebuiltAt: Date.now(),
-    };
+
+    return { items, rowCount: page.page.length, continueCursor: page.continueCursor, isDone: page.isDone };
+  },
+});
+
+export const writeUserStats = internalMutation({
+  args: { userId: v.id("users"), startedAt: v.number(), stats: materializedStatsValidator },
+  returns: v.null(),
+  handler: async (ctx, { userId, startedAt, stats }) => {
     const existing = await ctx.db
       .query("userStats")
       .withIndex("by_user", (q) => q.eq("userId", userId))
       .first();
+    const rebuiltAt = Date.now();
 
-    if (existing) {
-      await ctx.db.patch(existing._id, payload);
-    } else {
-      await ctx.db.insert("userStats", payload);
+    if (!existing) {
+      await ctx.db.insert("userStats", { ...stats, userId, rebuiltAt });
+      return null;
     }
 
-    return {
-      rebuiltAt: payload.rebuiltAt,
-      totalTrackedShows: payload.totalTrackedShows,
-      totalEpisodesWatched: payload.totalEpisodesWatched,
-    };
+    // A tracking change that landed after this rebuild started reading keeps the row stale,
+    // so the profile asks for one more rebuild.
+    const changedDuringRebuild =
+      typeof existing.staleAt === "number" && existing.staleAt > startedAt;
+    await ctx.db.patch(existing._id, {
+      ...stats,
+      rebuiltAt,
+      staleAt: changedDuringRebuild ? existing.staleAt : undefined,
+      rebuildScheduledAt: undefined,
+    });
+    return null;
+  },
+});
+
+export const rebuildUserStatsInBackground = internalAction({
+  args: { userId: v.id("users") },
+  returns: v.null(),
+  handler: async (ctx, { userId }): Promise<null> => {
+    const startedAt = Date.now();
+
+    const rows: StatsShowRow[] = [];
+    let showCursor: string | null = null;
+    for (;;) {
+      const page: StatsPage<StatsShowRow> = await ctx.runQuery(internal.stats.getStatsShowPage, {
+        userId,
+        cursor: showCursor,
+      });
+      rows.push(...page.items);
+      if (page.isDone) break;
+      showCursor = page.continueCursor;
+    }
+
+    const watchedTimestamps: number[] = [];
+    let timestampCursor: string | null = null;
+    let episodeRowsRead = 0;
+    while (episodeRowsRead < STATS_STREAK_ROW_LIMIT) {
+      const page: StatsPage<number> = await ctx.runQuery(internal.stats.getStatsTimestampPage, {
+        userId,
+        cursor: timestampCursor,
+        numItems: Math.min(STATS_TIMESTAMP_PAGE_SIZE, STATS_STREAK_ROW_LIMIT - episodeRowsRead),
+      });
+      watchedTimestamps.push(...page.items);
+      episodeRowsRead += page.rowCount;
+      if (page.isDone) break;
+      timestampCursor = page.continueCursor;
+    }
+
+    await ctx.runMutation(internal.stats.writeUserStats, {
+      userId,
+      startedAt,
+      stats: buildMaterializedStats(rows, watchedTimestamps),
+    });
+    return null;
   },
 });
 
