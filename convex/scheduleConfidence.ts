@@ -104,6 +104,7 @@ const releaseDeltaValidator = v.object({
   upcomingEpisodes: v.optional(v.array(episodeFactValidator)),
   clearStaleEpisodeSignal: v.optional(v.boolean()),
   scheduleCacheProviderPrunes: v.optional(v.array(scheduleCacheProviderPruneValidator)),
+  scheduleCachePruneOnly: v.optional(v.boolean()),
   scheduleCacheMaintenance: v.optional(v.boolean()),
   scheduleCacheMaintenanceVersion: v.optional(v.number()),
   projectionRepair: v.optional(projectionRepairValidator),
@@ -1327,6 +1328,7 @@ async function pruneStaleScheduleCacheProviderEntries(
     episodes: Array<{
       seasonNumber: number;
       episodeNumber: number;
+      airDate?: string;
     }>;
   }>,
   generatedAt: number
@@ -1337,21 +1339,31 @@ async function pruneStaleScheduleCacheProviderEntries(
   }
 
   const staleEpisodeKeys = new Set<string>();
+  const staleDatedEpisodeKeys = new Set<string>();
+  const staleDates = new Set<string>();
   for (const prune of prunes) {
     for (const episode of prune.episodes) {
       if (
         Number.isFinite(episode.seasonNumber) &&
         Number.isFinite(episode.episodeNumber)
       ) {
-        staleEpisodeKeys.add(`${episode.seasonNumber}:${episode.episodeNumber}`);
+        const key = `${episode.seasonNumber}:${episode.episodeNumber}`;
+        const date = parseDateKey(episode.airDate);
+        if (date) {
+          staleDates.add(date);
+          staleDatedEpisodeKeys.add(`${date}:${prune.providerShowId}:${key}`);
+        } else {
+          staleEpisodeKeys.add(key);
+        }
       }
     }
   }
-  if (staleEpisodeKeys.size === 0) {
+  if (staleEpisodeKeys.size === 0 && staleDatedEpisodeKeys.size === 0) {
     return 0;
   }
 
   const routeProviderShowIds = getScheduleCacheProviderPruneShowIds(delta);
+  for (const prune of prunes) routeProviderShowIds.add(prune.providerShowId);
   if (routeProviderShowIds.size === 0) {
     return 0;
   }
@@ -1363,12 +1375,27 @@ async function pruneStaleScheduleCacheProviderEntries(
   const todayKey = generatedDate.toISOString().slice(0, 10);
   const startDate = addDaysToDateKey(todayKey, -STALE_PROVIDER_PRUNE_PAST_DAYS);
   const endDate = addDaysToDateKey(todayKey, STALE_PROVIDER_PRUNE_FUTURE_DAYS);
-  const rows = await ctx.db
-    .query("scheduleCache")
-    .withIndex("by_type_date", (q) =>
-      q.eq("mediaType", mediaType).gte("date", startDate).lte("date", endDate)
-    )
-    .collect();
+  // New prunes carry exact dates. Undated legacy deltas retain their bounded window.
+  const rows: Doc<"scheduleCache">[] = [];
+  if (staleEpisodeKeys.size > 0) {
+    const limit = STALE_PROVIDER_PRUNE_PAST_DAYS + STALE_PROVIDER_PRUNE_FUTURE_DAYS + 2;
+    const legacyRows = await ctx.db.query("scheduleCache")
+      .withIndex("by_type_date", (q) =>
+        q.eq("mediaType", mediaType).gte("date", startDate).lte("date", endDate)
+      ).take(limit);
+    if (legacyRows.length === limit) throw new Error("Too many schedule buckets for provider prune");
+    rows.push(...legacyRows);
+  } else {
+    if (staleDates.size > 128) throw new Error("Too many dates for provider prune");
+    for (const date of staleDates) {
+      if (date < startDate || date > endDate) continue;
+      const buckets = await ctx.db.query("scheduleCache")
+        .withIndex("by_type_date", (q) => q.eq("mediaType", mediaType).eq("date", date))
+        .take(2);
+      if (buckets.length > 1) throw new Error("Duplicate schedule buckets for provider prune");
+      rows.push(...buckets);
+    }
+  }
 
   let rowsUpdated = 0;
   for (const row of rows) {
@@ -1378,7 +1405,8 @@ async function pruneStaleScheduleCacheProviderEntries(
         return true;
       }
       const episodeKey = `${entry.episode.seasonNumber}:${entry.episode.episodeNumber}`;
-      return !staleEpisodeKeys.has(episodeKey);
+      return !staleEpisodeKeys.has(episodeKey) &&
+        !staleDatedEpisodeKeys.has(`${row.date}:${entry.showId}:${episodeKey}`);
     });
 
     if (entries.length === existingEntries.length) {
@@ -2250,6 +2278,7 @@ export const applyReleaseDeltas = mutation({
         result.scheduleCacheRowsUpdated += prunedRows;
         scheduleCacheAlreadyMaintained = prunedRows > 0;
       }
+      if (delta.scheduleCachePruneOnly === true) continue;
       if (delta.scheduleCacheMaintenance === true) {
         const scheduleCacheResult = await upsertScheduleCacheEntry(ctx, delta);
         result.scheduleCacheRowsUpdated += scheduleCacheResult.updated;

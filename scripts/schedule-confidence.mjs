@@ -928,6 +928,13 @@ function initDb(db) {
       inserted_at INTEGER NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS provider_catalogues (
+      provider_show_id TEXT PRIMARY KEY,
+      show_id TEXT NOT NULL,
+      evidence_json TEXT NOT NULL,
+      fetched_at INTEGER NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS release_facts (
       canonical_key TEXT PRIMARY KEY,
       show_id TEXT NOT NULL,
@@ -1621,6 +1628,99 @@ function isProviderEventCurrentForFreshFetch(row, prune) {
   return typeof episodeCount === "number" && episodeNumber <= episodeCount;
 }
 
+function isUnconfirmedProviderPlaceholder(row, tmdbCatalogue) {
+  if (
+    row.source_provider !== "tvmaze" ||
+    !tmdbCatalogue ||
+    !/^(?:tba|tbd|to be announced)\b/i.test(String(row.name ?? "").trim())
+  ) {
+    return false;
+  }
+  // Missing rows only prove absence in a season that was actually hydrated.
+  return (
+    (tmdbCatalogue.exactSeasonNumbers ?? []).includes(Number(row.season_number)) &&
+    !isProviderEventCurrentForFreshFetch(row, tmdbCatalogue)
+  );
+}
+
+function rememberProviderCatalogue(db, item, prune, fetchedAt) {
+  if (!prune || !(prune.validEpisodes?.length > 0)) {
+    return;
+  }
+  db.prepare(`INSERT INTO provider_catalogues (provider_show_id, show_id, evidence_json, fetched_at)
+    VALUES (?, ?, ?, ?) ON CONFLICT(provider_show_id) DO UPDATE SET
+    show_id = excluded.show_id, evidence_json = excluded.evidence_json,
+    fetched_at = excluded.fetched_at`).run(
+    prune.providerShowId, item.show_id, JSON.stringify(prune), fetchedAt
+  );
+}
+
+function buildFreshCatalogueCachePrunes(db, scheduleCacheRows, generatedAt = Date.now()) {
+  const catalogues = new Map(db.prepare(
+    "SELECT * FROM provider_catalogues WHERE fetched_at >= ?"
+  ).all(generatedAt - 36 * 60 * 60 * 1000).map((row) => [row.provider_show_id, {
+    showId: row.show_id, evidence: JSON.parse(row.evidence_json),
+  }]));
+  const items = new Map(getLibraryItems(db).map((item) => [item.show_id, item]));
+  const grouped = new Map();
+  for (const cache of scheduleCacheRows) {
+    let entries;
+    try {
+      entries = JSON.parse(cache.episodes);
+    } catch {
+      continue;
+    }
+    if (!Array.isArray(entries)) {
+      continue;
+    }
+    for (const entry of entries) {
+      const catalogue = catalogues.get(entry?.showId);
+      const item = catalogue && items.get(catalogue.showId);
+      if (
+        !item || cache.mediaType !== item.media_type ||
+        !Number.isFinite(entry?.episode?.seasonNumber) ||
+        !Number.isFinite(entry?.episode?.episodeNumber)
+      ) {
+        continue;
+      }
+      const row = {
+        source_provider: catalogue.evidence.sourceProvider,
+        season_number: entry.episode.seasonNumber,
+        episode_number: entry.episode.episodeNumber,
+        name: entry.episode.name,
+      };
+      const tmdbCatalogue = catalogues.get(`tmdb:tv:${item.tmdb_id}`)?.evidence;
+      if (
+        isProviderEventCurrentForFreshFetch(row, catalogue.evidence) &&
+        !isUnconfirmedProviderPlaceholder(row, tmdbCatalogue)
+      ) {
+        continue;
+      }
+      const key = `${item.show_id}:${entry.showId}`;
+      const group = grouped.get(key) ?? { item, providerShowId: entry.showId,
+        sourceProvider: catalogue.evidence.sourceProvider, episodes: [] };
+      group.episodes.push({
+        seasonNumber: entry.episode.seasonNumber,
+        episodeNumber: entry.episode.episodeNumber,
+        ...(typeof entry.episode.name === "string" ? { name: entry.episode.name } : {}),
+        airDate: cache.date,
+      });
+      grouped.set(key, group);
+    }
+  }
+  return Array.from(grouped.values()).map(({ item, ...prune }) => ({
+    canonicalKey: `schedule-cache:catalogue:${prune.providerShowId}`,
+    title: item.title, mediaType: item.media_type,
+    providerIds: {
+      ...(item.tmdb_id ? { tmdbId: item.tmdb_id } : {}),
+      ...(item.tvmaze_id ? { tvmazeId: item.tvmaze_id } : {}),
+    },
+    matchConfidence: "direct_id", releaseState: "unknown",
+    scheduleCachePruneOnly: true, scheduleCacheProviderPrunes: [prune],
+    reconciledAt: generatedAt,
+  }));
+}
+
 function pruneProviderEventsForFreshFetch(db, prune, nowMs = Date.now()) {
   if (!prune || !prune.sourceProvider || !prune.providerShowId || !prune.mediaType) {
     return [];
@@ -1696,7 +1796,7 @@ function buildScheduleCacheProviderPruneFromRows(prune, staleRows) {
 
   const episodesByKey = new Map();
   for (const row of staleRows) {
-    const key = episodeIdentityKey(row.seasonNumber, row.episodeNumber);
+    const key = `${episodeIdentityKey(row.seasonNumber, row.episodeNumber)}:${row.airDate ?? ""}`;
     if (episodesByKey.has(key)) {
       continue;
     }
@@ -3841,6 +3941,7 @@ async function hydrateProviderEventsFromRealApis(db, item, insertedAt, nowMs = D
     }
   };
   const pruneFetchedProviderEvents = (prune) => {
+    rememberProviderCatalogue(db, item, prune, insertedAt);
     const staleRows = pruneProviderEventsForFreshFetch(db, prune, nowMs);
     const scheduleCachePrune = buildScheduleCacheProviderPruneFromRows(prune, staleRows);
     if (scheduleCachePrune) {
@@ -3889,6 +3990,25 @@ async function hydrateProviderEventsFromRealApis(db, item, insertedAt, nowMs = D
             forceCompleteRegularSeasonHydration: true,
           })
         : tmdbResult;
+      const placeholders = db.prepare(`SELECT * FROM provider_events
+        WHERE source_provider = 'tvmaze' AND provider_show_id = ? AND media_type = ?
+          AND air_timestamp >= ? AND air_timestamp <= ?`)
+        .all(tvMazeResult.providerEventPrune?.providerShowId ?? "", item.media_type,
+          nowMs - staleProviderEventPrunePastMs, nowMs + scheduleLookaheadMs)
+        .filter((row) => isUnconfirmedProviderPlaceholder(row, authoritativeTmdbResult.providerEventPrune));
+      const deletePlaceholder = db.prepare("DELETE FROM provider_events WHERE id = ?");
+      for (const row of placeholders) {
+        deletePlaceholder.run(row.id);
+      }
+      const placeholderPrune = buildScheduleCacheProviderPruneFromRows(
+        tvMazeResult.providerEventPrune, placeholders.map((row) => ({
+          seasonNumber: row.season_number, episodeNumber: row.episode_number,
+          name: row.name, airDate: row.air_date,
+        }))
+      );
+      if (placeholderPrune) {
+        scheduleCacheProviderPrunes.push(placeholderPrune);
+      }
       if (authoritativeTmdbResult !== tmdbResult) {
         upsertEvents(authoritativeTmdbResult.events);
         pruneFetchedProviderEvents(authoritativeTmdbResult.providerEventPrune);
@@ -5038,6 +5158,9 @@ async function importConvex(db, options) {
   const staleDeleted = db
     .prepare("DELETE FROM library_items WHERE imported_at < ?")
     .run(importedAt).changes;
+  db.prepare(`DELETE FROM provider_catalogues WHERE fetched_at < ?
+    OR show_id NOT IN (SELECT show_id FROM library_items)`)
+    .run(importedAt - 36 * 60 * 60 * 1000);
   return { imported, staleDeleted };
 }
 
@@ -5280,10 +5403,12 @@ async function applyConvex(deltaPath, options) {
         clientBundle,
         windows
       );
-      const scheduleCacheDeltas =
-        await buildScheduleCacheProviderMaintenanceDeltas(scheduleCacheRows, {
+      const scheduleCacheDeltas = [
+        ...buildFreshCatalogueCachePrunes(options.db, scheduleCacheRows),
+        ...await buildScheduleCacheProviderMaintenanceDeltas(scheduleCacheRows, {
           generatedAt: Date.now(),
-        });
+        }),
+      ];
       const scheduleCacheResults = await applyDeltas(scheduleCacheDeltas, {
         generatedAt: Date.now(),
         markApplied: false,
@@ -5690,6 +5815,7 @@ function resetReconciliationTables(db) {
   db.exec(`
     DELETE FROM library_items;
     DELETE FROM provider_events;
+    DELETE FROM provider_catalogues;
     DELETE FROM release_facts;
     DELETE FROM convex_deltas;
     DELETE FROM audit_issues;
@@ -8244,7 +8370,9 @@ async function main() {
   }
 }
 
-export { loadEnvFile, fetchTmdbDetails, fetchTvMazeEpisodes, dedupeProviderEventsForReleaseFact };
+export { loadEnvFile, fetchTmdbDetails, fetchTvMazeEpisodes, dedupeProviderEventsForReleaseFact,
+  initDb, upsertLibraryItem, rememberProviderCatalogue, buildFreshCatalogueCachePrunes,
+  isUnconfirmedProviderPlaceholder, hydrateProviderEventsFromRealApis };
 
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) await main().catch((error) => {
   console.error(error instanceof Error ? error.message : error);
