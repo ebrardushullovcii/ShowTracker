@@ -143,6 +143,7 @@ Most frequently relevant:
 | [ADR-0066](ADR-0066-bottom-home-section-scroll-loading.md) | Haven't started, the last Home section, loads more on scroll instead of Show more; secondary sections use their own query limits. |
 | [ADR-0067](ADR-0067-franchise-sync-requires-tracking.md) | Anime franchise relation sync only extends franchises the user already tracks; viewing an anime never adds it. |
 | [ADR-0068](ADR-0068-stats-rebuild-off-request-path.md) | Profile statistics are read from the cached row only; tracking marks it stale and a paged background action rebuilds it. |
+| [ADR-0069](ADR-0069-fresh-schedule-catalogue-evidence.md) | Fresh VPS catalogues prune orphan schedule-cache entries; unconfirmed placeholders cannot create actionable releases. |
 
 ## Guidance policy
 
