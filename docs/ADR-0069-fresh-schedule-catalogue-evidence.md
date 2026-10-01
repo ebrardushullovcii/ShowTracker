@@ -16,8 +16,9 @@ episode to mark watched. A timestamp alone was not sufficient release evidence.
 ## Decision
 
 The nightly reconciler retains successful TMDB/TVMaze catalogue evidence in
-the existing VPS SQLite database. Evidence is usable for at most 36 hours;
-empty or failed responses cannot replace it. AniList next-airing responses
+the existing VPS SQLite database. Evidence is usable for at most 36 hours and
+must come from the latest reconciliation pass. Empty or failed responses cannot
+renew old proof or authorize cleanup in that pass. AniList next-airing responses
 are not complete catalogues and remain excluded from absent-row pruning.
 
 The existing paginated schedule-cache export is checked against this evidence.

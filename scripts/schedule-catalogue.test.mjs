@@ -52,5 +52,11 @@ test("fresh catalogue prunes Convex orphans even after SQLite provider rows were
     assert.ok(deltas.every((delta) => delta.scheduleCachePruneOnly && delta.releaseState === "unknown" && delta.releasedEpisodes === undefined));
     assert.deepEqual(buildFreshCatalogueCachePrunes(db, cached, now + 37 * 3600000), []);
     assert.deepEqual(buildFreshCatalogueCachePrunes(db, [{ ...cached[0], episodes: "invalid" }], now), []);
+    db.prepare("INSERT INTO runs (id, mode, started_at) VALUES (?, ?, ?)").run("fresh-failed-pass", "local", now + 1000);
+    assert.deepEqual(buildFreshCatalogueCachePrunes(db, cached, now + 2000), [], "Previous-pass evidence cannot authorize deletion after a failed fetch");
+    rememberProviderCatalogue(db, { show_id: "delicious" }, { ...tvmaze, providerShowId: "tvmaze:69046", validEpisodes: [] }, now + 2000);
+    assert.deepEqual(buildFreshCatalogueCachePrunes(db, cached, now + 2000), [], "An empty response cannot renew stale proof");
+    rememberProviderCatalogue(db, { show_id: "delicious" }, { ...tvmaze, providerShowId: "tvmaze:69046", validEpisodes: [episode(1, 24)] }, now + 2000);
+    assert.equal(buildFreshCatalogueCachePrunes(db, cached, now + 2000).length, 1, "Only the successfully refreshed provider can prune in this pass");
   } finally { db.close(); }
 });

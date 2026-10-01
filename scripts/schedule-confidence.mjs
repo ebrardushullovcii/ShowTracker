@@ -1656,9 +1656,12 @@ function rememberProviderCatalogue(db, item, prune, fetchedAt) {
 }
 
 function buildFreshCatalogueCachePrunes(db, scheduleCacheRows, generatedAt = Date.now()) {
+  const latestRun = db.prepare("SELECT started_at FROM runs ORDER BY started_at DESC LIMIT 1").get();
+  // A failed fetch in this pass must not reuse yesterday's catalogue to delete rows.
+  const freshAfter = Math.max(generatedAt - 36 * 60 * 60 * 1000, latestRun?.started_at ?? 0);
   const catalogues = new Map(db.prepare(
     "SELECT * FROM provider_catalogues WHERE fetched_at >= ?"
-  ).all(generatedAt - 36 * 60 * 60 * 1000).map((row) => [row.provider_show_id, {
+  ).all(freshAfter).map((row) => [row.provider_show_id, {
     showId: row.show_id, evidence: JSON.parse(row.evidence_json),
   }]));
   const items = new Map(getLibraryItems(db).map((item) => [item.show_id, item]));
