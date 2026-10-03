@@ -36,6 +36,15 @@ episode, a generic `Episode N` name, an unhydrated season, or a placeholder
 whose canonical episode does exist retains existing provider policies.
 Fresh provider data can restore an episode once it is announced or confirmed.
 
+Cache cleanup also preserves ADR-0058's verified canonical episode aliases.
+An entry can retain TVMaze's provider ID and precise airtime while using TMDB's
+season/episode coordinates. It is not an orphan merely because those coordinates
+are absent from TVMaze's raw catalogue. The same-pass raw rows from both fresh
+catalogues must establish the same-date alias under the existing name/number
+matching rules. Old evidence, a moved date, or an unrelated TMDB episode cannot
+protect a removed provider entry. Affected cache facts can be restored through
+the existing cache-only maintenance path without changing tracking state.
+
 This adds no app-navigation repair, subscription, Convex table, or frequent
 timer work. Watched history, manual statuses, companion names, and airtime
 settings are unchanged. ADR-0037's provider-disappearance rule and ADR-0033's

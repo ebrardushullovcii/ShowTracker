@@ -60,3 +60,39 @@ test("fresh catalogue prunes Convex orphans even after SQLite provider rows were
     assert.equal(buildFreshCatalogueCachePrunes(db, cached, now + 2000).length, 1, "Only the successfully refreshed provider can prune in this pass");
   } finally { db.close(); }
 });
+
+test("fresh same-date provider aliases preserve canonical cache coordinates without protecting orphans", () => {
+  const db = new DatabaseSync(":memory:");
+  try {
+    initDb(db);
+    upsertLibraryItem(db, { showId: "apothecary", title: "The Apothecary Diaries", mediaType: "tv", status: "watching", tmdbId: 220542, tvmazeId: 67017 });
+    const canonicalCatalogue = { ...tmdb, providerShowId: "tmdb:tv:220542",
+      validEpisodes: [episode(1, 49)], exactSeasonNumbers: [1],
+      seasonEpisodeCounts: [{ seasonNumber: 1, episodeCount: 49 }] };
+    const timingCatalogue = { ...tvmaze, providerShowId: "tvmaze:67017", validEpisodes: [episode(3, 1)] };
+    for (const catalogue of [canonicalCatalogue, timingCatalogue]) {
+      rememberProviderCatalogue(db, { show_id: "apothecary" }, catalogue, now);
+    }
+    const insert = db.prepare(`INSERT INTO provider_events
+      (id, source_provider, provider_show_id, title, normalized_title, media_type,
+       season_number, episode_number, name, air_date, air_timestamp, tmdb_id, tvmaze_id, inserted_at)
+      VALUES (?, ?, ?, 'The Apothecary Diaries', 'theapothecarydiaries', 'tv', ?, ?, ?, ?, ?, 220542, 67017, ?)`);
+    insert.run("canonical", "tmdb", "tmdb:tv:220542", 1, 49, "Locusts", "2026-10-02", Date.UTC(2026, 9, 2), now);
+    insert.run("timing", "tvmaze", "tvmaze:67017", 3, 1, "Locusts", "2026-10-02T13:30:00+00:00", Date.UTC(2026, 9, 2, 13, 30), now);
+    const entry = { showId: "tvmaze:67017", episode: { ...episode(1, 49), name: "Locusts", airDate: "2026-10-02T13:30:00+00:00" } };
+    const cache = (date = "2026-10-02", value = entry) => [{ date, mediaType: "tv", episodes: JSON.stringify([value]) }];
+    assert.deepEqual(buildFreshCatalogueCachePrunes(db, cache(), now), [], "TVMaze airtime with verified TMDB numbering is valid");
+    assert.equal(buildFreshCatalogueCachePrunes(db, cache("2026-10-01"), now).length, 1, "A moved date is not protected");
+    assert.equal(buildFreshCatalogueCachePrunes(db, cache("2026-10-02", { ...entry, episode: episode(1, 50) }), now).length, 1, "An unrelated canonical coordinate is not protected");
+    db.prepare("UPDATE provider_events SET name = 'Different episode' WHERE id = 'timing'").run();
+    assert.equal(buildFreshCatalogueCachePrunes(db, cache(), now).length, 1, "Different names and numbers do not establish an alias");
+    db.prepare("UPDATE provider_events SET name = 'Locusts', inserted_at = ? WHERE id = 'timing'").run(now - 37 * 3600000);
+    assert.equal(buildFreshCatalogueCachePrunes(db, cache(), now).length, 1, "Old raw provider rows cannot establish a fresh alias");
+    db.prepare("UPDATE provider_events SET inserted_at = ? WHERE id = 'timing'").run(now);
+    db.prepare("DELETE FROM provider_catalogues WHERE provider_show_id = 'tmdb:tv:220542'").run();
+    assert.equal(buildFreshCatalogueCachePrunes(db, cache(), now).length, 1, "Both provider catalogues must be fresh");
+    rememberProviderCatalogue(db, { show_id: "apothecary" }, canonicalCatalogue, now);
+    rememberProviderCatalogue(db, { show_id: "apothecary" }, { ...timingCatalogue, validEpisodes: [episode(3, 2)] }, now);
+    assert.equal(buildFreshCatalogueCachePrunes(db, cache(), now).length, 1, "A removed own-provider episode is still pruned");
+  } finally { db.close(); }
+});
