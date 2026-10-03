@@ -1655,6 +1655,35 @@ function rememberProviderCatalogue(db, item, prune, fetchedAt) {
   );
 }
 
+function buildFreshCanonicalCacheAliasKeys(db, item, catalogues, freshAfter) {
+  const tmdbCatalogue = catalogues.get(`tmdb:tv:${item.tmdb_id}`)?.evidence;
+  const tvmazeCatalogue = catalogues.get(`tvmaze:${item.tvmaze_id}`)?.evidence;
+  if (item.media_type !== "tv" || !tmdbCatalogue || !tvmazeCatalogue) {
+    return new Set();
+  }
+  // Cache rows retain TVMaze's provider ID and airtime, but ADR-0058 gives
+  // verified aliases TMDB coordinates. Validate against fresh raw rows from
+  // both catalogues before comparing those coordinates to the cache.
+  const freshRows = db.prepare(
+    "SELECT * FROM provider_events WHERE tmdb_id = ? AND inserted_at >= ?"
+  ).all(item.tmdb_id, freshAfter).filter((row) => {
+    const catalogue = catalogues.get(row.provider_show_id)?.evidence;
+    return catalogue && isProviderEventCurrentForFreshFetch(row, catalogue) &&
+      !isUnconfirmedProviderPlaceholder(row, tmdbCatalogue);
+  });
+  const aliases = recoverTrackedTmdbEpisodeCoordinates(
+    freshRows.filter((row) => row.provider_show_id === tvmazeCatalogue.providerShowId),
+    freshRows.filter((row) => isDirectTmdbEventForItem(row, item)),
+    item
+  );
+  return new Set(aliases.filter((row) =>
+    Number.isFinite(row.canonical_season_number) &&
+    Number.isFinite(row.canonical_episode_number)
+  ).map((row) => `${row.provider_show_id}:${dateKeyFromValue(row.air_date)}:${
+    episodeIdentityKey(row.canonical_season_number, row.canonical_episode_number)
+  }`));
+}
+
 function buildFreshCatalogueCachePrunes(db, scheduleCacheRows, generatedAt = Date.now()) {
   const latestRun = db.prepare("SELECT started_at FROM runs ORDER BY started_at DESC LIMIT 1").get();
   // A failed fetch in this pass must not reuse yesterday's catalogue to delete rows.
@@ -1665,6 +1694,7 @@ function buildFreshCatalogueCachePrunes(db, scheduleCacheRows, generatedAt = Dat
     showId: row.show_id, evidence: JSON.parse(row.evidence_json),
   }]));
   const items = new Map(getLibraryItems(db).map((item) => [item.show_id, item]));
+  const aliasKeysByShow = new Map();
   const grouped = new Map();
   for (const cache of scheduleCacheRows) {
     let entries;
@@ -1693,9 +1723,18 @@ function buildFreshCatalogueCachePrunes(db, scheduleCacheRows, generatedAt = Dat
         name: entry.episode.name,
       };
       const tmdbCatalogue = catalogues.get(`tmdb:tv:${item.tmdb_id}`)?.evidence;
+      if (!aliasKeysByShow.has(item.show_id)) {
+        aliasKeysByShow.set(item.show_id,
+          buildFreshCanonicalCacheAliasKeys(db, item, catalogues, freshAfter));
+      }
+      const isVerifiedCanonicalAlias = aliasKeysByShow.get(item.show_id).has(
+        `${entry.showId}:${cache.date}:${episodeIdentityKey(row.season_number, row.episode_number)}`
+      );
       if (
-        isProviderEventCurrentForFreshFetch(row, catalogue.evidence) &&
-        !isUnconfirmedProviderPlaceholder(row, tmdbCatalogue)
+        isVerifiedCanonicalAlias || (
+          isProviderEventCurrentForFreshFetch(row, catalogue.evidence) &&
+          !isUnconfirmedProviderPlaceholder(row, tmdbCatalogue)
+        )
       ) {
         continue;
       }
