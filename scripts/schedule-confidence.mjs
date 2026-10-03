@@ -1723,6 +1723,11 @@ function buildFreshCatalogueCachePrunes(db, scheduleCacheRows, generatedAt = Dat
         name: entry.episode.name,
       };
       const tmdbCatalogue = catalogues.get(`tmdb:tv:${item.tmdb_id}`)?.evidence;
+      // Without a fresh canonical catalogue, absence from TVMaze's coordinate
+      // set cannot distinguish a removed episode from a valid TMDB alias.
+      if (row.source_provider === "tvmaze" && item.tmdb_id && !tmdbCatalogue) {
+        continue;
+      }
       if (!aliasKeysByShow.has(item.show_id)) {
         aliasKeysByShow.set(item.show_id,
           buildFreshCanonicalCacheAliasKeys(db, item, catalogues, freshAfter));

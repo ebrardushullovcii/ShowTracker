@@ -44,6 +44,9 @@ catalogues must establish the same-date alias under the existing name/number
 matching rules. Old evidence, a moved date, or an unrelated TMDB episode cannot
 protect a removed provider entry. Affected cache facts can be restored through
 the existing cache-only maintenance path without changing tracking state.
+For TMDB-tracked TV titles, a missing or failed canonical-provider refresh defers
+TVMaze catalogue cleanup until fresh TMDB evidence is available; raw TVMaze
+coordinate absence alone cannot disprove a canonical alias.
 
 This adds no app-navigation repair, subscription, Convex table, or frequent
 timer work. Watched history, manual statuses, companion names, and airtime

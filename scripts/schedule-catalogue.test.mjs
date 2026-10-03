@@ -36,6 +36,7 @@ test("fresh catalogue prunes Convex orphans even after SQLite provider rows were
     rememberProviderCatalogue(db, { show_id: "hot" }, tmdb, now);
     rememberProviderCatalogue(db, { show_id: "hot" }, tvmaze, now);
     rememberProviderCatalogue(db, { show_id: "delicious" }, { ...tvmaze, providerShowId: "tvmaze:69046", validEpisodes: [episode(1, 24)] }, now);
+    rememberProviderCatalogue(db, { show_id: "delicious" }, { ...tmdb, providerShowId: "tmdb:tv:207784", validEpisodes: [episode(2, 1)], exactSeasonNumbers: [2] }, now);
     const cached = [{ date: "2026-10-01", mediaType: "tv", episodes: JSON.stringify([
       { showId: "tvmaze:1", episode: { ...episode(31, 3), name: "TBA While Eating Spicy Wings" } },
       { showId: "tvmaze:1", episode: { ...episode(31, 2), name: "Willem Dafoe" } },
@@ -57,6 +58,8 @@ test("fresh catalogue prunes Convex orphans even after SQLite provider rows were
     rememberProviderCatalogue(db, { show_id: "delicious" }, { ...tvmaze, providerShowId: "tvmaze:69046", validEpisodes: [] }, now + 2000);
     assert.deepEqual(buildFreshCatalogueCachePrunes(db, cached, now + 2000), [], "An empty response cannot renew stale proof");
     rememberProviderCatalogue(db, { show_id: "delicious" }, { ...tvmaze, providerShowId: "tvmaze:69046", validEpisodes: [episode(1, 24)] }, now + 2000);
+    assert.deepEqual(buildFreshCatalogueCachePrunes(db, cached, now + 2000), [], "A failed canonical-provider fetch must not misclassify coordinates as removed");
+    rememberProviderCatalogue(db, { show_id: "delicious" }, { ...tmdb, providerShowId: "tmdb:tv:207784", validEpisodes: [episode(2, 1)], exactSeasonNumbers: [2] }, now + 2000);
     assert.equal(buildFreshCatalogueCachePrunes(db, cached, now + 2000).length, 1, "Only the successfully refreshed provider can prune in this pass");
   } finally { db.close(); }
 });
@@ -90,7 +93,7 @@ test("fresh same-date provider aliases preserve canonical cache coordinates with
     assert.equal(buildFreshCatalogueCachePrunes(db, cache(), now).length, 1, "Old raw provider rows cannot establish a fresh alias");
     db.prepare("UPDATE provider_events SET inserted_at = ? WHERE id = 'timing'").run(now);
     db.prepare("DELETE FROM provider_catalogues WHERE provider_show_id = 'tmdb:tv:220542'").run();
-    assert.equal(buildFreshCatalogueCachePrunes(db, cache(), now).length, 1, "Both provider catalogues must be fresh");
+    assert.deepEqual(buildFreshCatalogueCachePrunes(db, cache(), now), [], "Missing canonical evidence must defer deletion, not assume raw provider coordinates");
     rememberProviderCatalogue(db, { show_id: "apothecary" }, canonicalCatalogue, now);
     rememberProviderCatalogue(db, { show_id: "apothecary" }, { ...timingCatalogue, validEpisodes: [episode(3, 2)] }, now);
     assert.equal(buildFreshCatalogueCachePrunes(db, cache(), now).length, 1, "A removed own-provider episode is still pruned");
