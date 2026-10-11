@@ -54,7 +54,7 @@ export function EpisodeCard({
     <Pressable
       onPress={onToggle}
       disabled={isUpdating || !canToggle}
-      className="overflow-hidden rounded-xl border-2 border-border-default bg-bg-surface active:bg-bg-elevated/80 active:scale-[0.98] disabled:opacity-40"
+      className="overflow-hidden rounded-xl border-2 border-border-default bg-bg-surface active:bg-bg-elevated active:scale-[0.98] disabled:opacity-40"
     >
       {/* Episode Image */}
       <View className="relative h-32 w-full overflow-hidden">

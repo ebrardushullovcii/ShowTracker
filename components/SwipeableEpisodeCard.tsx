@@ -1,5 +1,13 @@
 import { useMemo, useRef, useState } from "react";
-import { PanResponder, Platform, Pressable, Text, View, useWindowDimensions } from "react-native";
+import {
+  PanResponder,
+  Platform,
+  Pressable,
+  Text,
+  View,
+  useWindowDimensions,
+  type ViewStyle,
+} from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import ReanimatedSwipeable, {
   type SwipeableMethods,
@@ -32,6 +40,17 @@ type SwipeableEpisodeCardProps = {
 
 const ACTION_WIDTH = 96;
 const WEB_SWIPE_OPEN_THRESHOLD = ACTION_WIDTH * 0.45;
+// react-native-web passes CSS transitions through; used only when a released card settles.
+const WEB_SETTLE_TRANSITION = {
+  transitionProperty: "transform",
+  transitionDuration: "160ms",
+  transitionTimingFunction: "ease-out",
+} as ViewStyle;
+// Solid fills so nothing behind an action shows through it.
+const SWIPE_ACTION_TONES = {
+  success: { color: "#34d399", backgroundColor: "#17302a", borderColor: "#20614b" },
+  warning: { color: "#fbbf24", backgroundColor: "#3a311c", borderColor: "#745c1e" },
+} as const;
 
 function clampWebSwipeOffset(value: number, canOpenLeft: boolean) {
   const min = -ACTION_WIDTH;
@@ -64,11 +83,7 @@ function SwipeAction({
   onPress: () => void;
   activateOnPressIn?: boolean;
 }) {
-  const color = tone === "success" ? "#34d399" : "#fbbf24";
-  const backgroundClassName =
-    tone === "success"
-      ? "border-emerald-400/30 bg-emerald-500/15"
-      : "border-amber-300/30 bg-amber-400/15";
+  const { color, backgroundColor, borderColor } = SWIPE_ACTION_TONES[tone];
 
   return (
     <Pressable
@@ -76,8 +91,8 @@ function SwipeAction({
       onPressIn={activateOnPressIn ? onPress : undefined}
       accessibilityRole="button"
       accessibilityLabel={label}
-      className={`mx-1 h-full items-center justify-center rounded-xl border active:scale-95 ${backgroundClassName}`}
-      style={{ width: ACTION_WIDTH - 8 }}
+      className="mx-1 h-full items-center justify-center rounded-xl border active:scale-95"
+      style={{ width: ACTION_WIDTH - 8, backgroundColor, borderColor }}
     >
       <Ionicons name={icon} size={22} color={color} />
       <Text className="mt-1 text-[11px] font-black uppercase tracking-wide" style={{ color }}>
@@ -100,6 +115,7 @@ export function SwipeableEpisodeCard({
   const webOpenOffsetRef = useRef(0);
   const webDragStartOffsetRef = useRef(0);
   const [webOffset, setWebOffsetState] = useState(0);
+  const [isWebDragging, setIsWebDragging] = useState(false);
   const canToggle = availability.isReleased || watched;
   const isMobileWebTouch = Platform.OS === "web" && width < 1024 && hasWebTouchInput();
   const canSwipe = (Platform.OS !== "web" || isMobileWebTouch) && canToggle && !isUpdating;
@@ -123,6 +139,7 @@ export function SwipeableEpisodeCard({
         },
         onPanResponderGrant: () => {
           webDragStartOffsetRef.current = webOpenOffsetRef.current;
+          setIsWebDragging(true);
         },
         onPanResponderMove: (_, gestureState) => {
           const nextOffset = clampWebSwipeOffset(
@@ -132,6 +149,7 @@ export function SwipeableEpisodeCard({
           setWebOffset(nextOffset);
         },
         onPanResponderRelease: () => {
+          setIsWebDragging(false);
           if (webOpenOffsetRef.current > WEB_SWIPE_OPEN_THRESHOLD && watched) {
             setWebOffset(ACTION_WIDTH);
             return;
@@ -145,6 +163,7 @@ export function SwipeableEpisodeCard({
           setWebOffset(0);
         },
         onPanResponderTerminate: () => {
+          setIsWebDragging(false);
           setWebOffset(0);
         },
       }).panHandlers,
@@ -191,24 +210,37 @@ export function SwipeableEpisodeCard({
   };
 
   if (isMobileWebTouch) {
-    // Mount the actions only while the card is dragged or open. The card's
-    // pressed state shrinks it and lightens its background, which would flash
-    // the actions behind it on a plain tap.
+    // The actions sit just outside the card's edges and slide in with it, so they
+    // stay clipped at rest and a tap (which shrinks the pressed card) reveals nothing.
     return (
-      <View className="relative overflow-hidden rounded-xl">
-        {watched && webOffset > 0 ? (
-          <View className="absolute inset-y-0 left-0 flex-row items-stretch justify-start">
-            <SwipeAction
-              label="Unwatch"
-              icon="remove-circle"
-              tone="warning"
-              onPress={() => handleWebActionPress("unwatch")}
-            />
-          </View>
-        ) : null}
+      <View className="overflow-hidden rounded-xl">
+        <View
+          {...webPanHandlers}
+          style={[
+            { transform: [{ translateX: webOffset }] },
+            isWebDragging ? null : WEB_SETTLE_TRANSITION,
+          ]}
+        >
+          {watched ? (
+            <View
+              className="absolute inset-y-0 flex-row items-stretch"
+              style={{ right: "100%", width: ACTION_WIDTH }}
+            >
+              <SwipeAction
+                label="Unwatch"
+                icon="remove-circle"
+                tone="warning"
+                onPress={() => handleWebActionPress("unwatch")}
+              />
+            </View>
+          ) : null}
 
-        {webOffset < 0 ? (
-          <View className="absolute inset-y-0 right-0 flex-row items-stretch justify-end">
+          {card}
+
+          <View
+            className="absolute inset-y-0 flex-row items-stretch"
+            style={{ left: "100%", width: ACTION_WIDTH }}
+          >
             <SwipeAction
               label={rightActionLabel}
               icon={watched ? "refresh-circle" : "checkmark-circle"}
@@ -216,13 +248,6 @@ export function SwipeableEpisodeCard({
               onPress={() => handleWebActionPress(rightAction)}
             />
           </View>
-        ) : null}
-
-        <View
-          {...webPanHandlers}
-          style={{ transform: [{ translateX: webOffset }] }}
-        >
-          {card}
         </View>
       </View>
     );

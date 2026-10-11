@@ -12,7 +12,7 @@ When every season with a known episode count is fully watched, the detail route 
 
 When every loaded rail episode is watched, the rail opens at its end, so the caught-up card is in view. Earlier seasons still load when the user scrolls left, using the existing prepend compensation from ADR-0028.
 
-On mobile web, swipe actions mount only while the card is dragged or open.
+On mobile web, swipe actions are attached to the card's edges and slide in with it. They sit outside the card's clipped area at rest, so a tap reveals nothing, and they use solid fills so nothing shows through them. A released card eases to its open or closed position.
 
 ## Edge Cases
 
@@ -22,4 +22,4 @@ Watch progress, release availability, Home, and schedule paths are unchanged.
 
 ## Verification
 
-Open a fully watched show such as `/show/tmdb:tv:60059`: every season is collapsed and the rail shows the finale and the caught-up card. Scroll the rail left and confirm earlier seasons load without jumping. Open a partially watched show and confirm the next season with unwatched episodes is expanded. On a touch device, tap an episode card and confirm no action colors flash; swipe it and confirm the actions still appear and work.
+Open a fully watched show such as `/show/tmdb:tv:60059`: every season is collapsed and the rail shows the finale and the caught-up card. Scroll the rail left and confirm earlier seasons load without jumping. Open a partially watched show and confirm the next season with unwatched episodes is expanded. On a touch device, tap an episode card and confirm no action colors flash; swipe it and confirm the action slides in attached to the card edge and still works.
