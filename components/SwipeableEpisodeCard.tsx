@@ -191,9 +191,12 @@ export function SwipeableEpisodeCard({
   };
 
   if (isMobileWebTouch) {
+    // Mount the actions only while the card is dragged or open. The card's
+    // pressed state shrinks it and lightens its background, which would flash
+    // the actions behind it on a plain tap.
     return (
       <View className="relative overflow-hidden rounded-xl">
-        {watched ? (
+        {watched && webOffset > 0 ? (
           <View className="absolute inset-y-0 left-0 flex-row items-stretch justify-start">
             <SwipeAction
               label="Unwatch"
@@ -204,14 +207,16 @@ export function SwipeableEpisodeCard({
           </View>
         ) : null}
 
-        <View className="absolute inset-y-0 right-0 flex-row items-stretch justify-end">
-          <SwipeAction
-            label={rightActionLabel}
-            icon={watched ? "refresh-circle" : "checkmark-circle"}
-            tone="success"
-            onPress={() => handleWebActionPress(rightAction)}
-          />
-        </View>
+        {webOffset < 0 ? (
+          <View className="absolute inset-y-0 right-0 flex-row items-stretch justify-end">
+            <SwipeAction
+              label={rightActionLabel}
+              icon={watched ? "refresh-circle" : "checkmark-circle"}
+              tone="success"
+              onPress={() => handleWebActionPress(rightAction)}
+            />
+          </View>
+        ) : null}
 
         <View
           {...webPanHandlers}
