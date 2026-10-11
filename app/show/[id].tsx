@@ -1768,7 +1768,9 @@ export function ShowDetailScreen() {
     }
   }, [parsedId, seasonLoading, confirmedRelease]);
 
-  // Auto-expand earliest season with unwatched episodes
+  // Auto-expand earliest season with unwatched episodes. When every season is
+  // watched, keep the list collapsed and load only the last season so the quick
+  // rail opens at the end of the show instead of inside season 1.
   // Wait for tracking data so we know which episodes are watched
   const seasonProgressLoaded = watchedSeasonProgress !== undefined || !canTrackShow;
 
@@ -1784,27 +1786,37 @@ export function ShowDetailScreen() {
 
     // Sort seasons by season number (earliest first)
     const sortedSeasons = [...seasons].sort((a, b) => a.seasonNumber - b.seasonNumber);
-
-    const seasonWithUnwatched = sortedSeasons.find((season) => {
+    const getKnownEpisodeCount = (season: NormalizedSeason) => {
       const seasonEpisodeCount =
         season.episodeCount ?? season.episodes?.length ?? null;
-      if (typeof seasonEpisodeCount !== "number" || seasonEpisodeCount <= 0) {
-        return false;
-      }
-      return getSeasonWatchedCount(season.seasonNumber) < seasonEpisodeCount;
-    });
+      return typeof seasonEpisodeCount === "number" && seasonEpisodeCount > 0
+        ? seasonEpisodeCount
+        : null;
+    };
+    const countedSeasons = sortedSeasons.filter(
+      (season) => getKnownEpisodeCount(season) !== null
+    );
 
-    const seasonToExpand =
-      seasonWithUnwatched?.seasonNumber ?? sortedSeasons[0]?.seasonNumber ?? null;
+    const seasonWithUnwatched = countedSeasons.find(
+      (season) =>
+        getSeasonWatchedCount(season.seasonNumber) < (getKnownEpisodeCount(season) ?? 0)
+    );
+    const isEverySeasonWatched = !seasonWithUnwatched && countedSeasons.length > 0;
+
+    const seasonToExpand = isEverySeasonWatched
+      ? null
+      : (seasonWithUnwatched?.seasonNumber ?? sortedSeasons[0]?.seasonNumber ?? null);
+    const seasonToLoad = isEverySeasonWatched
+      ? countedSeasons[countedSeasons.length - 1]
+      : sortedSeasons.find((s) => s.seasonNumber === seasonToExpand);
 
     if (seasonToExpand !== null) {
       setExpandedSeasons({ [seasonToExpand]: true });
+    }
 
-      // Load episodes for the expanded season
-      const season = sortedSeasons.find((s) => s.seasonNumber === seasonToExpand);
-      if (season && !season.episodes && !seasonLoading[seasonToExpand!]) {
-        void resolveSeasonEpisodes(season);
-      }
+    // Load episodes for the expanded season, or the last season for the rail
+    if (seasonToLoad && !seasonToLoad.episodes && !seasonLoading[seasonToLoad.seasonNumber]) {
+      void resolveSeasonEpisodes(seasonToLoad);
     }
     setExpandedSeasonsInitialized(true);
   }, [
@@ -3823,7 +3835,11 @@ export function ShowDetailScreen() {
       nextEpisodeIndex = latestWatchedIndex >= 0 ? latestWatchedIndex + 1 : 0;
     }
 
-    const initialScrollIndex = Math.max(0, nextEpisodeIndex - 2);
+    // Everything loaded is watched: open at the end so the caught-up card is in view.
+    const initialScrollIndex =
+      nextEpisodeIndex >= loadedRailEpisodes.length
+        ? loadedRailEpisodes.length
+        : Math.max(0, nextEpisodeIndex - 2);
     return {
       latestWatchedIndex,
       nextEpisodeIndex,

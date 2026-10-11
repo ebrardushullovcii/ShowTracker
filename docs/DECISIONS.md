@@ -144,6 +144,7 @@ Most frequently relevant:
 | [ADR-0067](ADR-0067-franchise-sync-requires-tracking.md) | Anime franchise relation sync only extends franchises the user already tracks; viewing an anime never adds it. |
 | [ADR-0068](ADR-0068-stats-rebuild-off-request-path.md) | Profile statistics are read from the cached row only; tracking marks it stale and a paged background action rebuilds it. |
 | [ADR-0069](ADR-0069-fresh-schedule-catalogue-evidence.md) | Fresh VPS catalogues prune orphan schedule-cache entries; unconfirmed placeholders cannot create actionable releases. |
+| [ADR-0070](ADR-0070-caught-up-detail-opens-at-end.md) | Fully watched shows open the detail page with seasons collapsed and the quick rail at the caught-up card; mobile web swipe actions mount only while swiping. |
 
 ## Guidance policy
 
