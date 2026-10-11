@@ -1,5 +1,4 @@
-import { Link, type Href, useRouter } from "expo-router";
-import { useState } from "react";
+import { Link } from "expo-router";
 import {
   Platform,
   Pressable,
@@ -12,11 +11,10 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { BrandLoader } from "@/components/BrandLoader";
 import { LinearGradient } from "expo-linear-gradient";
-import { useAuthActions } from "@convex-dev/auth/react";
-import { useMutation } from "convex/react";
 import { DESKTOP_SIDEBAR_BREAKPOINT } from "@/constants/navigation";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { api } from "@/convex/_generated/api";
+import { AuthTicket } from "@/components/auth/AuthTicket";
+import { useSignInForm } from "@/components/auth/useAuthForms";
 
 const gradientBase = "absolute inset-0";
 const gradientDivider = "h-1 w-full";
@@ -42,102 +40,22 @@ function FeatureRow({
 }
 
 export function LoginScreen() {
-  const { signIn } = useAuthActions();
-  const checkPasswordAccount = useMutation(api.auth.checkPasswordAccount);
-  const router = useRouter();
   const { width } = useWindowDimensions();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
-  const [isPending, setIsPending] = useState(false);
+  const {
+    email,
+    setEmail,
+    password,
+    setPassword,
+    showPassword,
+    setShowPassword,
+    error,
+    success,
+    isPending,
+    handleSignIn,
+    handleAnonymousSignIn,
+  } = useSignInForm();
 
   const isDesktopAuth = Platform.OS === "web" && width >= DESKTOP_SIDEBAR_BREAKPOINT;
-
-  const handleAuthResult = (
-    result: Awaited<ReturnType<typeof signIn>>,
-    messages: { fallback: string }
-  ) => {
-    const { redirect, signingIn } = result;
-
-    if (redirect instanceof URL || typeof redirect === "string") {
-      const redirectTarget = redirect.toString();
-      if (Platform.OS === "web" && typeof window !== "undefined") {
-        window.location.href = redirectTarget;
-      } else {
-        router.replace(redirectTarget as Href);
-      }
-      return;
-    }
-
-    if (signingIn === true) {
-      setSuccess("Signed in. Opening your dashboard...");
-      return;
-    }
-
-    setError(messages.fallback);
-  };
-
-  const handleSignIn = async () => {
-    if (!email.trim()) {
-      setError("Please enter your email address.");
-      return;
-    }
-    if (!password) {
-      setError("Please enter your password.");
-      return;
-    }
-
-    setIsPending(true);
-    setError(null);
-    setSuccess(null);
-
-    try {
-      // Account check now returns generic response to prevent enumeration
-      // Proceed with sign-in attempt directly
-      await checkPasswordAccount({ email });
-
-      const result = await signIn("password", {
-        flow: "signIn",
-        email: email.trim().toLowerCase(),
-        password,
-      });
-
-      handleAuthResult(result, {
-        fallback: "Invalid email or password. Please try again.",
-      });
-    } catch (authError) {
-      const errorMessage = authError instanceof Error ? authError.message : "";
-
-      if (errorMessage.includes("Invalid") || errorMessage.includes("credential")) {
-        setError("Invalid email or password.");
-      } else if (errorMessage.includes("network") || errorMessage.includes("connection")) {
-        setError("Network error. Check your connection and try again.");
-      } else {
-        setError("Something went wrong. Please try again.");
-      }
-    } finally {
-      setIsPending(false);
-    }
-  };
-
-  const handleAnonymousSignIn = async () => {
-    setIsPending(true);
-    setError(null);
-    setSuccess(null);
-
-    try {
-      const result = await signIn("anonymous");
-      handleAuthResult(result, {
-        fallback: "Failed to continue as guest. Please try again.",
-      });
-    } catch {
-      setError("Failed to continue as guest.");
-    } finally {
-      setIsPending(false);
-    }
-  };
 
   return (
     <SafeAreaView className="flex-1 bg-bg-base" edges={["top", "bottom"]}>
@@ -341,4 +259,7 @@ export function LoginScreen() {
   );
 }
 
-export default LoginScreen;
+export default function LoginRoute() {
+  // Web uses the ticket page that matches the landing; native keeps this screen.
+  return Platform.OS === "web" ? <AuthTicket mode="signIn" /> : <LoginScreen />;
+}

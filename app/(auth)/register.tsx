@@ -1,5 +1,4 @@
-import { Link, useRouter } from "expo-router";
-import { useEffect, useRef, useState } from "react";
+import { Link } from "expo-router";
 import {
   Platform,
   Pressable,
@@ -12,9 +11,10 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { BrandLoader } from "@/components/BrandLoader";
 import { LinearGradient } from "expo-linear-gradient";
-import { useAuthActions } from "@convex-dev/auth/react";
 import { DESKTOP_SIDEBAR_BREAKPOINT } from "@/constants/navigation";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { AuthTicket } from "@/components/auth/AuthTicket";
+import { useRegisterForm } from "@/components/auth/useAuthForms";
 
 const fieldBase =
   "flex-row items-center gap-2 rounded-lg border-2 border-border-default bg-bg-base/70 px-3 py-2.5";
@@ -37,95 +37,25 @@ function BenefitRow({
 }
 
 export function RegisterScreen() {
-  const { signIn } = useAuthActions();
-  const router = useRouter();
   const { width } = useWindowDimensions();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
-  const [isPending, setIsPending] = useState(false);
+  const {
+    email,
+    setEmail,
+    password,
+    setPassword,
+    confirmPassword,
+    setConfirmPassword,
+    showPassword,
+    setShowPassword,
+    showConfirmPassword,
+    setShowConfirmPassword,
+    error,
+    success,
+    isPending,
+    handleRegister,
+  } = useRegisterForm();
   const isDesktopAuth =
     Platform.OS === "web" && width >= DESKTOP_SIDEBAR_BREAKPOINT;
-  const redirectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    return () => {
-      if (redirectTimerRef.current) {
-        clearTimeout(redirectTimerRef.current);
-        redirectTimerRef.current = null;
-      }
-    };
-  }, []);
-
-  const handleRegister = async () => {
-    if (!email.trim()) {
-      setError("Please enter your email address.");
-      return;
-    }
-    if (!password) {
-      setError("Please enter a password.");
-      return;
-    }
-    if (password.length < 6) {
-      setError("Password must be at least 6 characters long.");
-      return;
-    }
-    if (!confirmPassword) {
-      setError("Please confirm your password.");
-      return;
-    }
-    if (password !== confirmPassword) {
-      setError("Passwords do not match.");
-      return;
-    }
-
-    setIsPending(true);
-    setError(null);
-    setSuccess(null);
-
-    try {
-      const didSignIn = await signIn("password", {
-        flow: "signUp",
-        email: email.trim().toLowerCase(),
-        password,
-      });
-
-      if (didSignIn) {
-        setSuccess("Account ready. Taking you to your dashboard...");
-        if (redirectTimerRef.current) {
-          clearTimeout(redirectTimerRef.current);
-        }
-        redirectTimerRef.current = setTimeout(() => {
-          redirectTimerRef.current = null;
-          router.replace("/home");
-        }, 900);
-        return;
-      }
-
-      setError("Unable to create account. Please try again.");
-    } catch (authError) {
-      console.error("Register failed", authError);
-      const errorMessage = authError instanceof Error ? authError.message : "";
-
-      if (errorMessage.includes("already exists") || errorMessage.includes("taken")) {
-        setError("An account with this email already exists.");
-      } else if (errorMessage.includes("invalid") || errorMessage.includes("email")) {
-        setError("Please enter a valid email address.");
-      } else if (errorMessage.includes("weak") || errorMessage.includes("password")) {
-        setError("Password is too weak. Use at least 6 characters.");
-      } else if (errorMessage.includes("network") || errorMessage.includes("connection")) {
-        setError("Network error. Check your connection and try again.");
-      } else {
-        setError("Something went wrong. Please try again.");
-      }
-    } finally {
-      setIsPending(false);
-    }
-  };
 
   return (
     <SafeAreaView className="flex-1 bg-bg-base" edges={["top", "bottom"]}>
@@ -358,4 +288,7 @@ export function RegisterScreen() {
   );
 }
 
-export default RegisterScreen;
+export default function RegisterRoute() {
+  // Web uses the ticket page that matches the landing; native keeps this screen.
+  return Platform.OS === "web" ? <AuthTicket mode="signUp" /> : <RegisterScreen />;
+}
