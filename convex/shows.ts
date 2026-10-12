@@ -13,6 +13,7 @@ import { v } from "convex/values";
 import { computeWatchedHistoryAggregates } from "../lib/tracking/history-aggregates";
 import { resolveManualTrackingStatus } from "../lib/tracking/initial-status";
 import { confirmedReleaseFloor } from "../lib/tracking/confirmed-release";
+import { isEpisodeAtOrAfter } from "../lib/tracking/episode-order";
 import { paginationOptsValidator } from "convex/server";
 import { api, internal } from "./_generated/api";
 import {
@@ -7203,6 +7204,55 @@ export const unmarkSeasonWatched = mutation({
     return {
       removedCount,
       watchedEpisodes: refreshed?.watchedEpisodesCount ?? 0,
+    };
+  },
+});
+
+// Undoes a run of mistaken marks: the chosen episode and every later watched episode of
+// this title, including seasons the client has not loaded (ADR-0072).
+export const unmarkEpisodesWatchedFrom = mutation({
+  args: {
+    show: v.object(showInput),
+    season: v.number(),
+    episode: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getCurrentUserId(ctx);
+    const showId = await ensureShowRecordId(ctx, args.show);
+
+    const userShow = await ctx.db
+      .query("userShows")
+      .withIndex("by_user_show", (q) => q.eq("userId", userId).eq("showId", showId))
+      .unique();
+
+    const watchedEpisodes = await ctx.db
+      .query("watchedEpisodes")
+      .withIndex("by_user_show", (q) => q.eq("userId", userId).eq("showId", showId))
+      .collect();
+
+    const anchor = { season: args.season, episode: args.episode };
+    let removedCount = 0;
+    for (const entry of watchedEpisodes) {
+      if (isEpisodeAtOrAfter(entry, anchor)) {
+        await ctx.db.delete(entry._id);
+        removedCount++;
+      }
+    }
+
+    if (userShow && removedCount > 0 && userShow.status === "completed") {
+      await ctx.db.patch(userShow._id, {
+        status: "watching",
+        statusChangedAt: Date.now(),
+        completedAt: undefined,
+      });
+    }
+
+    const refreshed = await refreshUserShowTrackingAggregates(ctx, userId, showId);
+
+    return {
+      removedCount,
+      watchedEpisodes: refreshed?.watchedEpisodesCount ?? 0,
+      status: refreshed?.status,
     };
   },
 });
