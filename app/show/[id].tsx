@@ -1,4 +1,5 @@
 import { applyConfirmedRelease } from "@/lib/tracking/confirmed-release";
+import { isEpisodeAtOrAfter, parseEpisodeKey } from "@/lib/tracking/episode-order";
 import {
   useCallback,
   useEffect,
@@ -234,7 +235,15 @@ const ANIME_SETTINGS_UPDATE_TIMEOUT_MS = 12000;
 
 type WatchActionTarget =
   | { kind: "movie"; title: string; subtitle: string }
-  | { kind: "episode"; title: string; subtitle: string; episode: NormalizedEpisode }
+  | {
+      kind: "episode";
+      title: string;
+      subtitle: string;
+      episode: NormalizedEpisode;
+      laterWatchedCount: number;
+      // Opened from the Unwatch swipe, so Rewatch is not offered.
+      unwatchOnly: boolean;
+    }
   | {
       kind: "season";
       title: string;
@@ -974,6 +983,7 @@ export function ShowDetailScreen() {
   const batchRewatchEpisodes = useMutation(api.shows.batchRewatchEpisodes);
   const markSeasonWatched = useMutation(api.shows.markSeasonWatched);
   const unmarkSeasonWatched = useMutation(api.shows.unmarkSeasonWatched);
+  const unmarkEpisodesWatchedFrom = useMutation(api.shows.unmarkEpisodesWatchedFrom);
   const clearShowWatched = useMutation(api.shows.clearShowWatched);
   const clearRelatedAnimeWatched = useMutation(api.shows.clearRelatedAnimeWatched);
   const pauseOtherRelatedAnimeEntries = useMutation(
@@ -2741,6 +2751,41 @@ export function ShowDetailScreen() {
     ]
   );
 
+  // Loaded seasons count exact keys; later seasons that are not loaded use their progress counts.
+  const countLaterWatchedEpisodes = (anchor: NormalizedEpisode) => {
+    let count = 0;
+    for (const key of watchedEpisodeKeys) {
+      const position = parseEpisodeKey(key);
+      if (
+        position?.season === anchor.seasonNumber &&
+        position.episode > anchor.episodeNumber
+      ) {
+        count++;
+      }
+    }
+    for (const season of seasons) {
+      if (season.seasonNumber > anchor.seasonNumber) {
+        count += getSeasonWatchedCount(season.seasonNumber);
+      }
+    }
+    return count;
+  };
+
+  const openEpisodeWatchActions = (
+    episode: NormalizedEpisode,
+    laterWatchedCount: number,
+    unwatchOnly: boolean
+  ) => {
+    setWatchActionTarget({
+      kind: "episode",
+      title: episode.name ?? `Episode ${episode.episodeNumber}`,
+      subtitle: `S${String(episode.seasonNumber).padStart(2, "0")}E${String(episode.episodeNumber).padStart(2, "0")}`,
+      episode,
+      laterWatchedCount,
+      unwatchOnly,
+    });
+  };
+
   const handleToggleEpisodeWatched = async (episode: NormalizedEpisode) => {
     const key = `${episode.seasonNumber}:${episode.episodeNumber}`;
     const wasWatched = watchedEpisodeKeys.has(key);
@@ -2751,12 +2796,7 @@ export function ShowDetailScreen() {
     ).length;
 
     if (wasWatched) {
-      setWatchActionTarget({
-        kind: "episode",
-        title: episode.name ?? `Episode ${episode.episodeNumber}`,
-        subtitle: `S${String(episode.seasonNumber).padStart(2, "0")}E${String(episode.episodeNumber).padStart(2, "0")}`,
-        episode,
-      });
+      openEpisodeWatchActions(episode, countLaterWatchedEpisodes(episode), false);
       return;
     }
 
@@ -3144,7 +3184,78 @@ export function ShowDetailScreen() {
       return;
     }
 
+    const laterWatchedCount = countLaterWatchedEpisodes(episode);
+    if (laterWatchedCount > 0) {
+      openEpisodeWatchActions(episode, laterWatchedCount, true);
+      return;
+    }
+
     await runEpisodeToggle(episode, "toggle");
+  };
+
+  const handleUnwatchEpisodeAndLater = async (anchorEpisode: NormalizedEpisode) => {
+    if (!show || !canTrackShow) {
+      setTrackingError("This title cannot be tracked yet.");
+      return;
+    }
+
+    const anchor = { season: anchorEpisode.seasonNumber, episode: anchorEpisode.episodeNumber };
+    const isAffectedKey = (key: string) => {
+      const position = parseEpisodeKey(key);
+      return position !== null && isEpisodeAtOrAfter(position, anchor);
+    };
+    const affectedKeys = Array.from(watchedEpisodeKeys).filter(isAffectedKey);
+
+    setTrackingError(null);
+    setPendingOverrides((prev) => {
+      const next = { ...prev };
+      for (const key of affectedKeys) {
+        next[key] = false;
+      }
+      return next;
+    });
+
+    try {
+      const result = await unmarkEpisodesWatchedFrom({
+        show: buildShowPayload(show),
+        season: anchor.season,
+        episode: anchor.episode,
+      });
+
+      setSeasonWatchedKeys((prev) => {
+        const next: Record<number, Set<string>> = {};
+        for (const [seasonNum, seasonKeys] of Object.entries(prev)) {
+          next[Number(seasonNum)] = new Set(
+            Array.from(seasonKeys).filter((key) => !isAffectedKey(key))
+          );
+        }
+        return next;
+      });
+      setEpisodeWatchCounts((prev) => {
+        const next = { ...prev };
+        for (const key of Object.keys(next)) {
+          if (isAffectedKey(key)) {
+            delete next[key];
+          }
+        }
+        return next;
+      });
+      if (isTrackingStatus(result.status)) {
+        setOptimisticTrackingStatus(result.status);
+      }
+      setTrackingNotice(
+        `Marked ${result.removedCount} episode${result.removedCount === 1 ? "" : "s"} not watched.`
+      );
+    } catch (mutationError) {
+      setPendingOverrides((prev) => {
+        const next = { ...prev };
+        for (const key of affectedKeys) {
+          delete next[key];
+        }
+        return next;
+      });
+      throw mutationError;
+    }
   };
 
   const handleRewatchSeason = async (
@@ -3370,10 +3481,13 @@ export function ShowDetailScreen() {
   };
 
   const handleWatchActionChoice = async (
-    choice: "rewatch" | "not_watched" | "not_watched_related"
+    choice: "rewatch" | "not_watched" | "not_watched_from" | "not_watched_related"
   ) => {
     if (!watchActionTarget || isWatchActionRunning) return;
-    if (choice === "not_watched_related" && watchActionTarget.kind !== "show") {
+    if (
+      (choice === "not_watched_related" && watchActionTarget.kind !== "show") ||
+      (choice === "not_watched_from" && watchActionTarget.kind !== "episode")
+    ) {
       setTrackingError("Could not update watch status. Please try again.");
       setWatchActionTarget(null);
       setIsWatchActionRunning(false);
@@ -3391,6 +3505,8 @@ export function ShowDetailScreen() {
       if (watchActionTarget.kind === "episode") {
         if (choice === "rewatch") {
           await handleRewatchEpisode(watchActionTarget.episode);
+        } else if (choice === "not_watched_from") {
+          await handleUnwatchEpisodeAndLater(watchActionTarget.episode);
         } else {
           await runEpisodeToggle(watchActionTarget.episode, "toggle");
         }
@@ -4843,7 +4959,9 @@ export function ShowDetailScreen() {
           <View className="w-full max-w-sm overflow-hidden rounded-xl border-2 border-border-bright bg-bg-surface">
             <View className="border-b border-border-default px-4 pb-3 pt-4">
               <Text className="text-xs font-semibold uppercase tracking-wide text-text-secondary">
-                Watch Options
+                {watchActionTarget?.kind === "episode" && watchActionTarget.unwatchOnly
+                  ? "Unwatch"
+                  : "Watch Options"}
               </Text>
               <Text className="mt-1 text-lg font-black text-text-primary" numberOfLines={1}>
                 {watchActionTarget?.title}
@@ -4854,20 +4972,29 @@ export function ShowDetailScreen() {
             </View>
 
             <View className="gap-2 p-4">
-              <Pressable
-                disabled={isWatchActionRunning}
-                onPress={() => void handleWatchActionChoice("rewatch")}
-                className="items-center justify-center rounded-xl border border-border-default bg-bg-base py-3.5 active:bg-bg-elevated"
-              >
-                {isWatchActionRunning ? (
-                  <View className="flex-row items-center gap-2">
+              {watchActionTarget?.kind === "episode" && watchActionTarget.unwatchOnly ? (
+                isWatchActionRunning ? (
+                  <View className="flex-row items-center justify-center gap-2 py-3.5">
                     <BrandLoader compact />
                     <Text className="font-semibold text-text-secondary">Processing...</Text>
                   </View>
-                ) : (
-                  <Text className="font-semibold text-text-primary">Rewatch</Text>
-                )}
-              </Pressable>
+                ) : null
+              ) : (
+                <Pressable
+                  disabled={isWatchActionRunning}
+                  onPress={() => void handleWatchActionChoice("rewatch")}
+                  className="items-center justify-center rounded-xl border border-border-default bg-bg-base py-3.5 active:bg-bg-elevated"
+                >
+                  {isWatchActionRunning ? (
+                    <View className="flex-row items-center gap-2">
+                      <BrandLoader compact />
+                      <Text className="font-semibold text-text-secondary">Processing...</Text>
+                    </View>
+                  ) : (
+                    <Text className="font-semibold text-text-primary">Rewatch</Text>
+                  )}
+                </Pressable>
+              )}
 
               <Pressable
                 disabled={isWatchActionRunning}
@@ -4880,6 +5007,21 @@ export function ShowDetailScreen() {
                     : "Mark Not Watched"}
                 </Text>
               </Pressable>
+
+              {watchActionTarget?.kind === "episode" && watchActionTarget.laterWatchedCount > 0 ? (
+                <Pressable
+                  disabled={isWatchActionRunning}
+                  onPress={() => void handleWatchActionChoice("not_watched_from")}
+                  className="items-center justify-center rounded-xl border border-primary/35 bg-primary/10 py-3 active:bg-primary/15"
+                >
+                  <Text className="font-semibold text-primary">
+                    Mark This & Later Not Watched
+                  </Text>
+                  <Text className="mt-0.5 text-xs text-text-secondary">
+                    {`Also unwatches ${watchActionTarget.laterWatchedCount} later episode${watchActionTarget.laterWatchedCount === 1 ? "" : "s"}`}
+                  </Text>
+                </Pressable>
+              ) : null}
 
               {watchActionTarget?.kind === "show" && canClearRelatedAnimeWatched ? (
                 <Pressable

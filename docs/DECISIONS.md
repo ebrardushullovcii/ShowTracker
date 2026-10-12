@@ -146,6 +146,7 @@ Most frequently relevant:
 | [ADR-0069](ADR-0069-fresh-schedule-catalogue-evidence.md) | Fresh VPS catalogues prune orphan schedule-cache entries; unconfirmed placeholders cannot create actionable releases. |
 | [ADR-0070](ADR-0070-caught-up-detail-opens-at-end.md) | Fully watched shows open the detail page with seasons collapsed and the quick rail at the caught-up card; mobile web swipe actions slide in attached to the card edge. |
 | [ADR-0071](ADR-0071-web-auth-ticket-pages.md) | Web sign-in and register use the landing page's ticket design as plain DOM; native keeps its React Native auth screens; both share the auth form hooks. |
+| [ADR-0072](ADR-0072-unwatch-episode-and-later.md) | Unwatching an episode can also unwatch every later watched episode of the title, server-side and across unloaded seasons; specials and other franchise titles are untouched. |
 
 ## Guidance policy
 
