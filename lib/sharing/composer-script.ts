@@ -1,4 +1,6 @@
 /** Runs in the export document on web and in the native WebView. */
+import { imageLoaderScript } from "./image-loader-script";
+
 export const composerScript = String.raw`
 const SHOWS = PAYLOAD.shows;
 const $ = (s, root=document) => root.querySelector(s);
@@ -29,14 +31,7 @@ function renderGameLink(list){
 function toast(message){$('#notice').textContent=message;}
 function selectedShows(){const list=SHOWS.filter(s=>state.selected.has(s.id));if(state.sort==='title')list.sort((a,b)=>a.title.localeCompare(b.title));if(state.sort==='genre')list.sort((a,b)=>(a.genres[0]||'').localeCompare(b.genres[0]||''));return list;}
 function chunks(list,size){return Array.from({length:Math.ceil(list.length/size)},(_,i)=>list.slice(i*size,(i+1)*size));}
-function loadImage(url){
-  if(!url)return Promise.resolve(null);
-  if(!imageCache.has(url)){
-    const promise=new Promise(resolve=>{const img=new Image();let done=false;const finish=value=>{if(done)return;done=true;clearTimeout(timer);resolve(value);};const timer=setTimeout(()=>{img.src='';finish(null);},8000);img.crossOrigin='anonymous';img.onload=()=>finish(img);img.onerror=()=>finish(null);img.src=url;});
-    imageCache.set(url,promise);promise.then(img=>promise._loaded=img);
-  }
-  return imageCache.get(url);
-}
+${imageLoaderScript}
 async function prepare(list){let cursor=0;await Promise.all(Array.from({length:Math.min(4,list.length)},async()=>{while(cursor<list.length){const show=list[cursor++];await loadImage(show.poster);}}));await loadImage(BRAND);}
 function reset(){state.page=0;state.drafts.clear();refreshSelection();render();}
 function refreshSelection(){
@@ -52,6 +47,7 @@ function pagesFor(list){return current.format==='text'?textPages(current,list,st
 function editedMessages(list){return textPages(current,list,state).map((text,i)=>state.drafts.get(i)??text);}
 async function render(){
   const token=++revision,list=selectedShows(),pages=pagesFor(list);state.page=Math.max(0,Math.min(state.page,pages.length-1));canvas=null;
+  toast('');
   $('#description').textContent=current.layout==='grid'&&list.length===1?'One large poster with the title, year, and your message.':current.desc;
   $('#scope').textContent=list.length+' '+(list.length===1?'show':'shows')+' · all included titles';
   $('#prev').disabled=!state.page;$('#next').disabled=state.page>=pages.length-1;$('#page').textContent=pages.length?'Page '+(state.page+1)+' of '+pages.length:'';

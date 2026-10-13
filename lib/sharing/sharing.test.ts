@@ -7,6 +7,7 @@ import { shareFormats } from "./formats";
 import { toShareShow } from "./types";
 import { normalizeSharedGame } from "./share-link";
 import { pickTournament, startTournament } from "./tournament";
+import { imageLoaderScript } from "./image-loader-script";
 
 test("export boundary removes tracking data and qualifies normalized provider IDs", () => {
   const record = { title: "Example", mediaType: "tv", posterUrl: "http://image.tmdb.org/example.jpg", watchedEpisodes: 13, watchingWith: ["private friend"], status: "watching" };
@@ -77,4 +78,56 @@ test("share links retain only public fields and rebuild catalogue URLs", () => {
   assert.throws(() => normalizeSharedGame({ ...input, mode: "shortlist" }), /only game type/);
   assert.throws(() => normalizeSharedGame({ ...input, shows: [show, show] }), /Invalid show/);
   assert.throws(() => normalizeSharedGame({ ...input, shows: [{ ...show, poster: "data:image/png;base64,abc" }, other] }), /cover URL/);
+});
+
+test("canvas covers bypass ordinary image cache entries and retain successful decodes", async () => {
+  const requests: { url: string; options: RequestInit }[] = [];
+  const revoked: string[] = [];
+  class TestImage {
+    onload?: () => void;
+    set src(value: string) {
+      assert.equal(value, "blob:readable-cover");
+      queueMicrotask(() => this.onload?.());
+    }
+  }
+  const context = {
+    imageCache: new Map(), Image: TestImage, AbortController, setTimeout, clearTimeout,
+    URL: { createObjectURL: () => "blob:readable-cover", revokeObjectURL: (url: string) => revoked.push(url) },
+    fetch: async (url: string, options: RequestInit) => {
+      requests.push({ url, options });
+      return { ok: true, blob: async () => new Blob(["cover"], { type: "image/jpeg" }) };
+    },
+  };
+  const load = runInNewContext(imageLoaderScript + "\nloadImage", context);
+  const url = "https://image.tmdb.org/t/p/w342/cached.jpg";
+  const first = load(url), second = load(url);
+  assert.equal(first, second);
+  const image = await first;
+  assert.ok(image);
+  assert.equal(await load(url), image);
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].url, url);
+  assert.equal(requests[0].options.mode, "cors");
+  assert.equal(requests[0].options.cache, "reload");
+  assert.equal(requests[0].options.credentials, "omit");
+  assert.deepEqual(revoked, ["blob:readable-cover"]);
+});
+
+test("failed cover requests can recover on the next preview or download", async () => {
+  let attempts = 0;
+  class TestImage {
+    onload?: () => void;
+    set src(_value: string) { queueMicrotask(() => this.onload?.()); }
+  }
+  const imageCache = new Map();
+  const load = runInNewContext(imageLoaderScript + "\nloadImage", {
+    imageCache, Image: TestImage, AbortController, setTimeout, clearTimeout,
+    URL: { createObjectURL: () => "blob:cover", revokeObjectURL: () => {} },
+    fetch: async () => ({ ok: ++attempts > 1, blob: async () => new Blob(["cover"]) }),
+  });
+  const url = "https://image.tmdb.org/temporary-failure.jpg";
+  assert.equal(await load(url), null);
+  assert.equal(imageCache.has(url), false);
+  assert.ok(await load(url));
+  assert.equal(attempts, 2);
 });
