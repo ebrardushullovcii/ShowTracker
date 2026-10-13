@@ -9,7 +9,7 @@ export async function inspectSharing(browser, { baseUrl, outputDir, navigateWith
     const errors = [];
     page.on("pageerror", (error) => errors.push(error.message));
     const showUrl = `${baseUrl}/show/tvmaze:tv:44933`;
-    const name = `Sharing check ${width} ${Date.now()}`;
+    const name = `Sharing check ${width} ${Date.now()} A very long collection title for checking the phone share header`.slice(0, 100);
     let listUrl = null;
     let tracked = false;
     const share = () => page.frameLocator('iframe[title="Share preview and export options"]');
@@ -65,6 +65,7 @@ export async function inspectSharing(browser, { baseUrl, outputDir, navigateWith
       console.log(`[ui-inspect:sharing] ${width}px: all 16 formats, clipboard, PNG downloads, and recipient picks passed`);
       await closeShare();
       await page.getByRole("button", { name: "Add to watchlist", exact: true }).click();
+      await page.locator('[aria-label^="Tracking status:"]:not([disabled]):not([aria-disabled="true"])').waitFor();
       tracked = true;
       await page.goto(`${baseUrl}/library`);
       await page.getByText("1 matched", { exact: true }).waitFor();
@@ -95,6 +96,8 @@ export async function inspectSharing(browser, { baseUrl, outputDir, navigateWith
       assert.ok(text.includes(name));
       assert.match(text, /Severance \(2022\)/);
       assert.doesNotMatch(text, /Not started/);
+      const closeBox = await page.getByRole("button", { name: "Close share preview", exact: true }).boundingBox();
+      assert.ok(closeBox && closeBox.x >= 0 && closeBox.x + closeBox.width <= width, "Long list names must keep Close inside the viewport");
       await closeShare();
       assert.deepEqual(errors, []);
       console.log(`[ui-inspect:sharing] ${width}px: all 16 formats, clipboard, PNG, recipient picks, Library selection, and custom-list sharing passed`);
