@@ -25,6 +25,7 @@ async function inspectFullText(page, outputDir, width) {
     const edited = text + "\nMy final note.";
     await area.fill(edited);
     await frame.getByRole("button", { name: "Copy text", exact: true }).click();
+    await frame.locator("#notice").filter({ hasText: "Copied" }).waitFor();
     // Windows clipboard converts line endings to CRLF; compare the full text after normalization.
     assert.equal((await page.evaluate(() => navigator.clipboard.readText())).replace(/\r\n/g, "\n"), edited);
     assert.equal(await frame.getByRole("button", { name: "Copy all messages", exact: true }).count(), 0);
