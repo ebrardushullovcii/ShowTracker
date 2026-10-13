@@ -45,24 +45,15 @@ export async function inspectSharing(browser, { baseUrl, outputDir, navigateWith
             await share().getByRole("button", { name: "Shortlist Severance", exact: true }).click();
             await share().locator("summary").click();
           }
-          if (["local-ballot", "browseable-list"].includes(option.value)) {
-            const recipient = share().frameLocator('iframe[title="Try the recipient’s view"]');
-            await recipient.locator("[data-id]").waitFor();
-            assert.equal(await recipient.locator("[data-id]").count(), 1);
-            await recipient.locator("[data-id]").click();
-            await recipient.locator("#picks-count").filter({ hasText: "1 picked" }).waitFor();
-            await recipient.getByRole("button", { name: "Clear picks" }).click();
-            await recipient.locator("#picks-count").filter({ hasText: "0 picked" }).waitFor();
-            const html = page.waitForEvent("download");
-            await share().getByRole("button", { name: "Save recipient page (.html)", exact: true }).click();
-            await (await html).saveAs(path.join(outputDir, `sharing-${width}-${option.value}.html`));
-          } else if (category !== "Text") await share().locator("canvas").waitFor();
+          if (category !== "Text") await share().locator("canvas").waitFor();
           else assert.match(await share().locator("#text-output").inputValue(), /Severance/);
           formats.push(option.value);
         }
       }
-      assert.equal(formats.length, 16);
-      console.log(`[ui-inspect:sharing] ${width}px: all 16 formats, clipboard, PNG downloads, and recipient picks passed`);
+      assert.equal(formats.length, 14);
+      assert.ok(!formats.includes("local-ballot") && !formats.includes("browseable-list"));
+      assert.equal(await share().locator("iframe").count(), 0);
+      console.log(`[ui-inspect:sharing] ${width}px: all 14 formats, clipboard, PNG downloads passed`);
       await closeShare();
       await page.getByRole("button", { name: "Add to watchlist", exact: true }).click();
       await page.locator('[aria-label^="Tracking status:"]:not([disabled]):not([aria-disabled="true"])').waitFor();
@@ -100,7 +91,7 @@ export async function inspectSharing(browser, { baseUrl, outputDir, navigateWith
       assert.ok(closeBox && closeBox.x >= 0 && closeBox.x + closeBox.width <= width, "Long list names must keep Close inside the viewport");
       await closeShare();
       assert.deepEqual(errors, []);
-      console.log(`[ui-inspect:sharing] ${width}px: all 16 formats, clipboard, PNG, recipient picks, Library selection, and custom-list sharing passed`);
+      console.log(`[ui-inspect:sharing] ${width}px: all 14 formats, clipboard, PNG, Library selection, and custom-list sharing passed`);
     } catch (error) {
       await page.screenshot({ path: path.join(outputDir, `sharing-failure-${width}.png`) }).catch(() => {});
       throw error;

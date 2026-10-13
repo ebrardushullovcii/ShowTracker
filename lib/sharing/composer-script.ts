@@ -5,7 +5,7 @@ const $ = (s, root=document) => root.querySelector(s);
 const $$ = (s, root=document) => [...root.querySelectorAll(s)];
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const state = {selected:new Set(SHOWS.map(s=>s.id)),pins:new Set(),picks:new Set(),page:0,years:true,genres:false,missing:false,title:PAYLOAD.title,note:PAYLOAD.backlog?'I haven’t started these. Want to pick one together?':'Want to pick something to watch together?',name:'',sort:'original',context:PAYLOAD.backlog?'Not started':'Shared collection',collectionLabel:PAYLOAD.backlog?'PLANNED':'SHARED',drafts:new Map()};
-let current=CONCEPTS[0], category='Text', revision=0, canvas=null, recipientHtml='', busy=false;
+let current=CONCEPTS[0], category='Text', revision=0, canvas=null, busy=false;
 const imageCache=new Map();
 function toast(message){$('#notice').textContent=message;}
 function selectedShows(){const list=SHOWS.filter(s=>state.selected.has(s.id));if(state.sort==='title')list.sort((a,b)=>a.title.localeCompare(b.title));if(state.sort==='genre')list.sort((a,b)=>(a.genres[0]||'').localeCompare(b.genres[0]||''));return list;}
@@ -20,7 +20,6 @@ function loadImage(url){
   return imageCache.get(url);
 }
 async function prepare(list){let cursor=0;await Promise.all(Array.from({length:Math.min(4,list.length)},async()=>{while(cursor<list.length){const show=list[cursor++];await loadImage(show.poster);}}));await loadImage(BRAND);}
-function imageData(url){const img=imageCache.get(url)?._loaded;if(!img)return '';try{const c=document.createElement('canvas');c.width=Math.min(342,img.width);c.height=Math.round(img.height*c.width/img.width);c.getContext('2d').drawImage(img,0,0,c.width,c.height);return c.toDataURL('image/jpeg',.8);}catch{return '';}}
 function reset(){state.page=0;state.drafts.clear();state.picks.clear();refreshSelection();render();}
 function refreshSelection(){
   const q=$('#selection-search').value.toLowerCase();$('#selected-count').textContent=selectedShows().length+' of '+SHOWS.length+' included';
@@ -32,10 +31,10 @@ function formats(){
   $$('[data-category]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.category===category));
   $('#format').innerHTML=CONCEPTS.filter(c=>c.tag===category).map(c=>'<option value="'+c.slug+'">'+esc(c.name)+'</option>').join('');$('#format').value=current.slug;
 }
-function pagesFor(list){return current.format==='text'?textPages(current,list,state):current.format==='recipient'?[list]:chunks(list,current.cap);}
+function pagesFor(list){return current.format==='text'?textPages(current,list,state):chunks(list,current.cap);}
 function editedMessages(list){return textPages(current,list,state).map((text,i)=>state.drafts.get(i)??text);}
 async function render(){
-  const token=++revision,list=outputShows(),pages=pagesFor(list);state.page=Math.max(0,Math.min(state.page,pages.length-1));canvas=null;recipientHtml='';
+  const token=++revision,list=outputShows(),pages=pagesFor(list);state.page=Math.max(0,Math.min(state.page,pages.length-1));canvas=null;
   $('#description').textContent=current.layout==='grid'&&list.length===1?'One large poster with the title, year, and your message.':current.desc;
   $('#scope').textContent=list.length+' '+(list.length===1?'show':'shows')+' · '+(current.layout==='trio'?selectedShows().length+' included · shortlist':'all included titles');
   $('#prev').disabled=!state.page;$('#next').disabled=state.page>=pages.length-1;$('#page').textContent=pages.length?'Page '+(state.page+1)+' of '+pages.length:'';
@@ -49,12 +48,6 @@ async function render(){
     if(list.length===1&&list[0].appUrl)action('Copy show link',()=>copyText(list[0].appUrl));return;
   }
   $('#preview').innerHTML='<p class="loading" role="status">Preparing preview…</p>';
-  if(current.format==='recipient'){
-    const html=await recipientDocument(list,current.layout==='ballot');if(token!==revision)return;recipientHtml=html;
-    const frame=document.createElement('iframe');frame.title='Try the recipient’s view';frame.srcdoc=html;frame.className='recipient-preview';frame.allow='clipboard-write';$('#preview').replaceChildren(frame);
-    action('Save recipient page (.html)',()=>saveBlob(new Blob([recipientHtml],{type:'text/html;charset=utf-8'}),'showtracker-shared-shows.html'),true);action('Copy text list',()=>copyText(fullText(CONCEPTS[0],list,state)));
-    $('#description').textContent='Your friend opens the downloaded file, picks shows, and copies a reply. Picks stay in that page. No login or synced votes.';return;
-  }
   await prepare(pages[state.page]);if(token!==revision)return;
   const visualFormat=list.length===1&&current.layout==='grid'?{...current,layout:'single'}:current;
   canvas=renderCanvas(visualFormat,pages[state.page],state.page,pages.length,{...state,totalCount:list.length});$('#preview').replaceChildren(canvas);
@@ -76,13 +69,6 @@ function filename(page){return 'showtracker-'+current.slug+'-'+String(page+1).pa
 function canvasBlob(c){return new Promise((resolve,reject)=>c.toBlob(blob=>blob?resolve(blob):reject(new Error('Image export failed.')),'image/png'));}
 async function shareImage(){const file=new File([await canvasBlob(canvas)],filename(state.page),{type:'image/png'});if(!navigator.canShare?.({files:[file]})){toast('This browser cannot share image files. Save the PNG and attach it in your chat.');return;}try{await navigator.share({files:[file],title:state.title});}catch(e){if(e.name!=='AbortError')throw e;}}
 async function downloadAll(){const list=outputShows(),pages=chunks(list,current.cap),files=[],format=current,options={...state,totalCount:list.length};for(let i=0;i<pages.length;i++){toast('Preparing image '+(i+1)+' of '+pages.length+'…');await prepare(pages[i]);const c=renderCanvas(format,pages[i],i,pages.length,options);files.push({name:'showtracker-'+format.slug+'-'+String(i+1).padStart(2,'0')+'.png',data:new Uint8Array(await (await canvasBlob(c)).arrayBuffer())});c.width=1;c.height=1;}files.push({name:'shows.txt',data:new TextEncoder().encode(fullText(CONCEPTS[0],list,options))});await saveBlob(zipFiles(files),'showtracker-'+format.slug+'.zip');}
-async function recipientDocument(list,ballot){
-  await prepare(list);const shows=list.map(s=>({...s,year:state.years?s.year:'',poster:imageData(s.poster)}));
-  const genreList=[...new Set(shows.flatMap(s=>s.genres))].sort();
-  const markup='<header class="recipient-head"><small>SHOWTRACKER · SHARED SHOWS</small><h1>'+esc(state.title||'Shared shows')+'</h1><p>'+esc(state.note)+(state.name?'<br>From '+esc(state.name):'')+'</p><p>'+shows.length+' shows</p><div class="recipient-tools"><input id="recipient-search" type="search" placeholder="Search shows" aria-label="Search shared shows"><select id="recipient-genre" aria-label="Filter by genre"><option value="all">All genres</option>'+genreList.map(g=>'<option>'+esc(g)+'</option>').join('')+'</select></div></header><div id="recipient-items" class="'+(ballot?'ballot-list':'recipient-grid')+'"></div><div class="recipient-bottom"><span id="picks-count"></span><div><button id="clear-picks">Clear picks</button><button id="reply-picks" class="primary">Copy my reply</button></div></div><p class="sources">Picks stay in this opened page. Copy your reply and send it back in your chat.</p>';
-  const script='const shows='+JSON.stringify(shows).replace(/</g,'\\u003c')+';const ballot='+ballot+';const picks=new Set();const esc='+esc.toString()+';('+recipientOffline.toString()+')();';
-  return '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'+esc(state.title||'Shared shows')+'</title><style>'+RECIPIENT_CSS+'</style></head><body><main class="recipient">'+markup+'</main><script>'+script+'</scr'+'ipt></body></html>';
-}
 $$('[data-category]').forEach(b=>b.onclick=()=>{category=b.dataset.category;current=CONCEPTS.find(c=>c.tag===category);formats();reset();});
 $('#format').onchange=e=>{current=CONCEPTS.find(c=>c.slug===e.target.value);reset();};
 [['heading','title'],['note','note'],['sender','name']].forEach(([id,key])=>{$('#'+id).value=state[key];$('#'+id).oninput=e=>{state[key]=e.target.value;state.drafts.clear();render();};});
