@@ -24,8 +24,7 @@ export function createShareDocument(collection: ShareCollection, native = false)
 <div class="selection-tools"><button id="select-all">Include all</button><button id="select-none">Clear selection</button></div><div id="selection" class="selection-list"></div></div></details>
 <p class="privacy">Only included titles, covers, and catalogue details are shared. Your progress, watch history, and friends’ names are left out.</p>
 </section><section class="stage" aria-label="Export preview"><div class="stage-header"><h3>Preview</h3><div class="pagination"><button id="prev" aria-label="Previous page">←</button><span id="page"></span><button id="next" aria-label="Next page">→</button></div></div>
-<div id="duel" hidden><button id="shuffle">Shuffle a pair</button><button id="pick-a">Pick A</button><button id="pick-b">Pick B</button><button id="copy-picks">Copy my picks</button></div>
-<div id="preview"></div><div id="actions"></div><div id="notice" role="status" aria-live="polite"></div></section></main>
+<div id="preview"></div><div id="game-link" hidden></div><div id="actions"></div><div id="notice" role="status" aria-live="polite"></div></section></main>
 <script>const PAYLOAD=${scriptJson(collection)};const NATIVE=${native};const CONCEPTS=${scriptJson(shareFormats)};
 ${rendererScript}
 ${composerScript}

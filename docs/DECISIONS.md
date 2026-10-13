@@ -150,6 +150,7 @@ Most frequently relevant:
 
 - [ADR-0073](ADR-0073-show-sharing-exports.md): share public catalogue snapshots through one preview with text, images, and self-contained recipient files.
 - [ADR-0074](ADR-0074-text-and-image-sharing-only.md): remove downloadable recipient HTML and retain fourteen text and image formats.
+- [ADR-0075](ADR-0075-playable-sharing-links.md): Choose together creates public playable links with temporary choices and a final result.
 
 ## Guidance policy
 

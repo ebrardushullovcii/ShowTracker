@@ -127,7 +127,7 @@ export const shareFormats = [
     "layout": "trio",
     "cap": 3,
     "accent": "#fbbf24",
-    "desc": "Choose up to three shows before sending. Your friend gets a manageable decision."
+    "desc": "Star up to three shows, then share a link where your friend can choose favorites and send back a result."
   },
   {
     "slug": "this-or-that",
@@ -137,6 +137,6 @@ export const shareFormats = [
     "layout": "duel",
     "cap": 2,
     "accent": "#38bdf8",
-    "desc": "Two choices at a time. Shuffle a pair, choose a winner, then send the pair or your picks."
+    "desc": "Share a playable game. Your friend picks between pairs, winners advance, and one show wins. No account needed."
   }
 ] as const;

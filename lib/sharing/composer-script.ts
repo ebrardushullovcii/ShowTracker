@@ -4,9 +4,24 @@ const SHOWS = PAYLOAD.shows;
 const $ = (s, root=document) => root.querySelector(s);
 const $$ = (s, root=document) => [...root.querySelectorAll(s)];
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const state = {selected:new Set(SHOWS.map(s=>s.id)),pins:new Set(),picks:new Set(),page:0,years:true,genres:false,missing:false,title:PAYLOAD.title,note:PAYLOAD.backlog?'I haven’t started these. Want to pick one together?':'Want to pick something to watch together?',name:'',sort:'original',context:PAYLOAD.backlog?'Not started':'Shared collection',collectionLabel:PAYLOAD.backlog?'PLANNED':'SHARED',drafts:new Map()};
+const state = {selected:new Set(SHOWS.map(s=>s.id)),pins:new Set(),page:0,years:true,genres:false,missing:false,title:PAYLOAD.title,note:PAYLOAD.backlog?'I haven’t started these. Want to pick one together?':'Want to pick something to watch together?',name:'',sort:'original',context:PAYLOAD.backlog?'Not started':'Shared collection',collectionLabel:PAYLOAD.backlog?'PLANNED':'SHARED',drafts:new Map()};
 let current=CONCEPTS[0], category='Text', revision=0, canvas=null, busy=false;
 const imageCache=new Map();
+const gameLinks=new Map(),shareRequests=new Map(),HOST_ORIGIN=NATIVE?'':parent.location.origin;let shareRequestId=0;
+function resolveShareReply(message){const pending=shareRequests.get(message.requestId);if(!pending)return;shareRequests.delete(message.requestId);clearTimeout(pending.timer);if(message.error)pending.reject(new Error(message.error));else pending.resolve(message.result);}
+function requestShare(data){return new Promise((resolve,reject)=>{const requestId=++shareRequestId,timer=setTimeout(()=>{shareRequests.delete(requestId);reject(new Error('The link request timed out. Try again.'));},45000);shareRequests.set(requestId,{resolve,reject,timer});const message={...data,requestId};try{if(NATIVE)bridge(message);else parent.postMessage(message,HOST_ORIGIN);}catch(error){clearTimeout(timer);shareRequests.delete(requestId);reject(error);}});}
+window.addEventListener('message',e=>{if(e.source===parent&&e.origin===HOST_ORIGIN&&e.data?.type==='game-link-reply')resolveShareReply(e.data);});
+function gameSnapshot(list){return {mode:current.layout==='duel'?'duel':'shortlist',title:state.title,note:state.note,name:state.name,shows:list.map(s=>({...s,year:state.years?s.year:''}))};}
+function renderGameLink(list){
+  const snapshot=gameSnapshot(list),key=JSON.stringify(snapshot),link=gameLinks.get(key),box=$('#game-link');box.hidden=false;
+  box.innerHTML='<p class="privacy">Anyone with this link can play without signing in. It contains this selection and message, expires in 30 days, and can be removed below.</p>';
+  if(!link){if(snapshot.mode==='duel'&&list.length<2){box.innerHTML+='<p>Include at least two shows to play This or that.</p>';return;}action('Create share link',async()=>{const created=await requestShare({type:'create-game-link',snapshot});gameLinks.set(key,created);render();},true);return;}
+  box.innerHTML+='<label class="field">Share link<input id="share-url" aria-label="Share link" readonly value="'+esc(link.url)+'"></label>';
+  action('Copy link',()=>copyText(link.url),true);action('Share link',()=>shareText(link.url));
+  if(NATIVE)action('Open game',()=>bridge({type:'open-game',token:link.token}));
+  else{const a=document.createElement('a');a.href=link.url;a.target='_blank';a.rel='noopener noreferrer';a.textContent='Open game';a.className='game-open';$('#actions').append(a);}
+  action('Remove link',async()=>{await requestShare({type:'revoke-game-link',token:link.token});gameLinks.delete(key);render();toast('Link removed. It can no longer be opened.');});
+}
 function toast(message){$('#notice').textContent=message;}
 function selectedShows(){const list=SHOWS.filter(s=>state.selected.has(s.id));if(state.sort==='title')list.sort((a,b)=>a.title.localeCompare(b.title));if(state.sort==='genre')list.sort((a,b)=>(a.genres[0]||'').localeCompare(b.genres[0]||''));return list;}
 function outputShows(){const list=selectedShows();return current.layout==='trio'?list.filter(s=>state.pins.has(s.id)):list;}
@@ -20,7 +35,7 @@ function loadImage(url){
   return imageCache.get(url);
 }
 async function prepare(list){let cursor=0;await Promise.all(Array.from({length:Math.min(4,list.length)},async()=>{while(cursor<list.length){const show=list[cursor++];await loadImage(show.poster);}}));await loadImage(BRAND);}
-function reset(){state.page=0;state.drafts.clear();state.picks.clear();refreshSelection();render();}
+function reset(){state.page=0;state.drafts.clear();refreshSelection();render();}
 function refreshSelection(){
   const q=$('#selection-search').value.toLowerCase();$('#selected-count').textContent=selectedShows().length+' of '+SHOWS.length+' included';
   $('#selection').innerHTML=SHOWS.filter(s=>s.title.toLowerCase().includes(q)).map(s=>'<label class="selection-row"><input type="checkbox" data-select="'+esc(s.id)+'" '+(state.selected.has(s.id)?'checked':'')+'><span>'+esc(s.title)+'<small>'+esc([s.year,s.kind].filter(Boolean).join(' · '))+'</small></span>'+(current.layout==='trio'?'<button type="button" data-pin="'+esc(s.id)+'" aria-label="Shortlist '+esc(s.title)+'" aria-pressed="'+state.pins.has(s.id)+'">'+(state.pins.has(s.id)?'★':'☆')+'</button>':'')+'</label>').join('');
@@ -38,7 +53,7 @@ async function render(){
   $('#description').textContent=current.layout==='grid'&&list.length===1?'One large poster with the title, year, and your message.':current.desc;
   $('#scope').textContent=list.length+' '+(list.length===1?'show':'shows')+' · '+(current.layout==='trio'?selectedShows().length+' included · shortlist':'all included titles');
   $('#prev').disabled=!state.page;$('#next').disabled=state.page>=pages.length-1;$('#page').textContent=pages.length?'Page '+(state.page+1)+' of '+pages.length:'';
-  $('#shortlist-help').hidden=current.layout!=='trio';$('#duel').hidden=current.layout!=='duel';
+  $('#shortlist-help').hidden=current.layout!=='trio';$('#game-link').hidden=true;$('#game-link').innerHTML='';
   $('#preview').innerHTML='';$('#actions').innerHTML='';
   if(!list.length){$('#preview').innerHTML='<div class="empty"><h3>'+ (current.layout==='trio'?'Choose your three picks':'No shows included')+'</h3><p>'+(current.layout==='trio'?'Open Edit selection & message and star up to three titles.':'Open Edit selection & message to include titles.')+'</p></div>';return;}
   if(current.format==='text'){
@@ -47,18 +62,15 @@ async function render(){
     if(pages.length>1)action('Copy all messages',()=>copyText(editedMessages(list).join('\n\n———\n\n')));
     if(list.length===1&&list[0].appUrl)action('Copy show link',()=>copyText(list[0].appUrl));return;
   }
+  if(current.tag==='Choose together')renderGameLink(list);
   $('#preview').innerHTML='<p class="loading" role="status">Preparing preview…</p>';
   await prepare(pages[state.page]);if(token!==revision)return;
   const visualFormat=list.length===1&&current.layout==='grid'?{...current,layout:'single'}:current;
   canvas=renderCanvas(visualFormat,pages[state.page],state.page,pages.length,{...state,totalCount:list.length});$('#preview').replaceChildren(canvas);
   const missing=pages[state.page].filter(s=>s.poster&&!imageCache.get(s.poster)?._loaded).length;if(missing)toast(missing+' covers unavailable on this page. Their titles are still included.');
-  action(NATIVE?'Save or share image':'Save this PNG',async()=>saveBlob(await canvasBlob(canvas),filename(state.page)),true);
+  action(NATIVE?'Save or share image':'Save this PNG',async()=>saveBlob(await canvasBlob(canvas),filename(state.page)),current.tag!=='Choose together');
   if(!NATIVE)action('Share image',shareImage);
   if(pages.length>1)action(NATIVE?'Share all images (.zip)':'Save all images (.zip)',downloadAll);
-  if(current.layout==='duel'){
-    ['a','b'].forEach((key,i)=>{$('#pick-'+key).disabled=!pages[state.page][i];$('#pick-'+key).onclick=()=>{state.picks.add(pages[state.page][i].id);state.page=Math.min(state.page+1,pages.length-1);render();};});
-    $('#copy-picks').disabled=!state.picks.size;$('#copy-picks').textContent='Copy my '+state.picks.size+' picks';
-  }
 }
 function action(label,callback,primary=false){const button=document.createElement('button');button.textContent=label;button.className=primary?'primary':'';button.disabled=busy;button.onclick=async()=>{if(busy)return;busy=true;$$('#actions button').forEach(b=>b.disabled=true);try{await callback();}catch(error){toast(error.message||'Could not export. Try again.');}finally{busy=false;$$('#actions button').forEach(b=>b.disabled=false);}};$('#actions').append(button);}
 function bridge(data){window.ReactNativeWebView.postMessage(JSON.stringify(data));}
@@ -76,8 +88,6 @@ $('#format').onchange=e=>{current=CONCEPTS.find(c=>c.slug===e.target.value);rese
 $('#sort').onchange=e=>{state.sort=e.target.value;reset();};$('#selection-search').oninput=refreshSelection;
 $('#select-all').onclick=()=>{state.selected=new Set(SHOWS.map(s=>s.id));reset();};$('#select-none').onclick=()=>{state.selected.clear();state.pins.clear();reset();};
 $('#prev').onclick=()=>{state.page--;render();};$('#next').onclick=()=>{state.page++;render();};
-$('#shuffle').onclick=()=>{state.page=Math.floor(Math.random()*Math.ceil(outputShows().length/2));render();};
-$('#copy-picks').onclick=()=>copyText('I’d watch these together:\n'+outputShows().filter(s=>state.picks.has(s.id)).map(s=>'• '+s.title).join('\n'));
-window.addEventListener('keydown',e=>{if(e.key==='Escape'&&!NATIVE)parent.postMessage({type:'showtracker-close-share'},location.origin);});
+window.addEventListener('keydown',e=>{if(e.key==='Escape'&&!NATIVE)parent.postMessage({type:'showtracker-close-share'},HOST_ORIGIN);});
 formats();refreshSelection();render();
 `;

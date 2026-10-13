@@ -90,8 +90,70 @@ export async function inspectSharing(browser, { baseUrl, outputDir, navigateWith
       const closeBox = await page.getByRole("button", { name: "Close share preview", exact: true }).boundingBox();
       assert.ok(closeBox && closeBox.x >= 0 && closeBox.x + closeBox.width <= width, "Long list names must keep Close inside the viewport");
       await closeShare();
+      for (const id of ["tvmaze:tv:169", "tvmaze:tv:82"]) {
+        await page.goto(`${baseUrl}/show/${id}`);
+        await page.getByRole("button", { name: "More show actions" }).click();
+        await page.getByRole("button", { name: "Add to List", exact: true }).click();
+        await page.getByText(name, { exact: true }).click();
+        await page.getByText(id.endsWith("169") ? "2 shows" : "3 shows", { exact: true }).waitFor();
+        await page.getByText("Done", { exact: true }).click();
+      }
+      await page.goto(listUrl);
+      await page.getByRole("button", { name: "Share list", exact: true }).click();
+      await share().getByRole("button", { name: "Choose together", exact: true }).click();
+      for (const format of ["three-picks", "this-or-that"]) {
+        await share().locator("#format").selectOption(format);
+        if (format === "three-picks") {
+          await share().locator("summary").click();
+          for (let i = 0; i < 3; i++) await share().locator('[data-pin][aria-pressed="false"]').first().click();
+          await share().locator("summary").click();
+        }
+        await share().getByRole("button", { name: "Create share link", exact: true }).click();
+        await share().locator("#share-url").waitFor();
+        const url = await share().locator("#share-url").inputValue();
+        assert.match(url, /\/share\/[a-f0-9]{40}$/);
+        await share().getByRole("button", { name: "Copy link", exact: true }).click();
+        assert.equal(await page.evaluate(() => navigator.clipboard.readText()), url);
+        const recipientContext = await browser.newContext({ viewport: { width, height: 900 }, permissions: ["clipboard-read", "clipboard-write"] });
+        const recipient = await recipientContext.newPage();
+        recipient.on("pageerror", (error) => errors.push(error.message));
+        try {
+          await recipient.goto(url);
+          await recipient.getByRole("button", { name: format === "this-or-that" ? "Start game" : "Choose my favorites", exact: true }).click();
+          assert.equal(recipient.url(), url, "Public games must work without a login redirect");
+          await recipient.waitForFunction(() => !document.querySelector('[data-testid="game-cover-loading"]'));
+          await recipient.screenshot({ path: path.join(outputDir, `sharing-game-${width}-${format}.png`) });
+          if (format === "this-or-that") {
+            await recipient.getByRole("button", { name: /^Pick / }).first().click();
+            await recipient.getByRole("button", { name: "Undo last choice", exact: true }).click();
+            await recipient.getByText("Round 1 · 2 choices to your winner", { exact: true }).waitFor();
+            await recipient.getByRole("button", { name: /^Pick / }).first().click();
+            await recipient.getByRole("button", { name: /^Pick / }).first().click();
+            await recipient.getByText("Your winner", { exact: true }).waitFor();
+          } else {
+            await recipient.getByRole("checkbox", { name: /^Choose / }).first().click();
+            await recipient.getByRole("button", { name: "See my result", exact: true }).click();
+            await recipient.getByText("Your picks", { exact: true }).waitFor();
+          }
+          await recipient.waitForFunction(() => !document.querySelector('[data-testid="game-cover-loading"]'));
+          const resultBox = await recipient.getByText(/^I’d watch /).boundingBox();
+          assert.ok(resultBox && resultBox.x >= 0 && resultBox.x + resultBox.width <= width, "Result text must fit the phone viewport");
+          await recipient.screenshot({ path: path.join(outputDir, `sharing-result-${width}-${format}.png`) });
+          await recipient.getByRole("button", { name: "Copy my result", exact: true }).click();
+          assert.match(await recipient.evaluate(() => navigator.clipboard.readText()), /I’d watch .+!\r?\nhttps:\/\/showtrackerapp\.netlify\.app\/share\/[a-f0-9]{40}/);
+          await recipient.getByRole("button", { name: "Play again", exact: true }).click();
+          assert.equal(await recipient.getByRole("button", { name: "Copy my result", exact: true }).count(), 0);
+        } finally {
+          await share().getByRole("button", { name: "Remove link", exact: true }).click();
+          await share().locator("#notice").filter({ hasText: "Link removed" }).waitFor();
+          await recipient.reload();
+          await recipient.getByText("This link is unavailable", { exact: true }).waitFor();
+          await recipientContext.close();
+        }
+      }
+      await closeShare();
       assert.deepEqual(errors, []);
-      console.log(`[ui-inspect:sharing] ${width}px: all 14 formats, clipboard, PNG, Library selection, and custom-list sharing passed`);
+      console.log(`[ui-inspect:sharing] ${width}px: all 14 formats, clipboard, PNG, Library/custom-list sharing, signed-out games, results, replay, and link revocation passed`);
     } catch (error) {
       await page.screenshot({ path: path.join(outputDir, `sharing-failure-${width}.png`) }).catch(() => {});
       throw error;
