@@ -149,6 +149,7 @@ Most frequently relevant:
 | [ADR-0072](ADR-0072-unwatch-episode-and-later.md) | Unwatching an episode can also unwatch every later watched episode of the title, server-side and across unloaded seasons; specials and other franchise titles are untouched. |
 
 - [ADR-0073](ADR-0073-show-sharing-exports.md): share public catalogue snapshots through one preview with text, images, and self-contained recipient files.
+- [ADR-0074](ADR-0074-text-and-image-sharing-only.md): remove downloadable recipient HTML and retain fourteen text and image formats.
 
 ## Guidance policy
 

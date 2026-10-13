@@ -130,16 +130,6 @@ export const shareFormats = [
     "desc": "Choose up to three shows before sending. Your friend gets a manageable decision."
   },
   {
-    "slug": "local-ballot",
-    "name": "Let your friend pick",
-    "tag": "Choose together",
-    "format": "recipient",
-    "layout": "ballot",
-    "cap": 8,
-    "accent": "#a78bfa",
-    "desc": "A recipient view where your friend can check favorites and copy a reply."
-  },
-  {
     "slug": "this-or-that",
     "name": "This or that",
     "tag": "Choose together",
@@ -148,15 +138,5 @@ export const shareFormats = [
     "cap": 2,
     "accent": "#38bdf8",
     "desc": "Two choices at a time. Shuffle a pair, choose a winner, then send the pair or your picks."
-  },
-  {
-    "slug": "browseable-list",
-    "name": "A list they can browse",
-    "tag": "Choose together",
-    "format": "recipient",
-    "layout": "browse",
-    "cap": 12,
-    "accent": "#34d399",
-    "desc": "A self-contained recipient page with search, filters, posters, and a copyable shortlist."
   }
 ] as const;

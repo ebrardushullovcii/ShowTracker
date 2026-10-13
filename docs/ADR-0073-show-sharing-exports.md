@@ -1,5 +1,7 @@
 # ADR-0073: Share public show snapshots from one export preview
 
+The downloadable recipient HTML formats below were removed by [ADR-0074](ADR-0074-text-and-image-sharing-only.md). The snapshot, privacy, rendering, and entry-point decisions still apply to the fourteen text and image formats.
+
 Library's header shares all records matching its current filters, including cards not yet rendered. Custom-list detail shares the saved list order. The existing show action menu shares one title. Each opens the same export preview, with text, images, and options for choosing together.
 
 Exports accept an explicit list of public catalogue fields. Progress, watch history, people metadata, and internal tracking records never enter the document. Planned scope comes from the active Library status filter, independently of the editable heading. Selection and message edits belong to this temporary export and do not change synced Library or list data.

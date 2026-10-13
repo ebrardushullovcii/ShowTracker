@@ -2,7 +2,7 @@ import type { ShareCollection } from "./types";
 import { shareFormats } from "./formats";
 import { rendererScript } from "./renderer-script";
 import { composerScript } from "./composer-script";
-import { shareStyles, recipientStyles } from "./styles";
+import { shareStyles } from "./styles";
 
 /** Escape catalogue/user strings before embedding them in a script element. */
 function scriptJson(value: unknown) {
@@ -26,7 +26,7 @@ export function createShareDocument(collection: ShareCollection, native = false)
 </section><section class="stage" aria-label="Export preview"><div class="stage-header"><h3>Preview</h3><div class="pagination"><button id="prev" aria-label="Previous page">←</button><span id="page"></span><button id="next" aria-label="Next page">→</button></div></div>
 <div id="duel" hidden><button id="shuffle">Shuffle a pair</button><button id="pick-a">Pick A</button><button id="pick-b">Pick B</button><button id="copy-picks">Copy my picks</button></div>
 <div id="preview"></div><div id="actions"></div><div id="notice" role="status" aria-live="polite"></div></section></main>
-<script>const PAYLOAD=${scriptJson(collection)};const NATIVE=${native};const CONCEPTS=${scriptJson(shareFormats)};const RECIPIENT_CSS=${scriptJson(recipientStyles)};
+<script>const PAYLOAD=${scriptJson(collection)};const NATIVE=${native};const CONCEPTS=${scriptJson(shareFormats)};
 ${rendererScript}
 ${composerScript}
 </script></body></html>`;
