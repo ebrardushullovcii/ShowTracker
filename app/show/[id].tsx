@@ -32,6 +32,8 @@ import { ProgressBar } from "@/components/ProgressBar";
 import { OverlayDetailFrame } from "@/components/OverlayDetailFrame";
 import { ShowHeader } from "@/components/ShowHeader";
 import { ShowActionBar } from "@/components/ShowActionBar";
+import { ShareModal } from "@/components/sharing/ShareModal";
+import { toShareShow, type ShareCollection } from "@/lib/sharing/types";
 import { SeasonAccordion } from "@/components/SeasonAccordion";
 import {
   ContinueTrackingRail,
@@ -902,6 +904,7 @@ export function ShowDetailScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isAddToListModalVisible, setIsAddToListModalVisible] = useState(false);
+  const [shareCollection, setShareCollection] = useState<ShareCollection | null>(null);
   const [isTogglingMovieWatch, setIsTogglingMovieWatch] = useState(false);
   const [movieWatchCount, setMovieWatchCount] = useState<number | null>(null);
   const [episodeWatchCounts, setEpisodeWatchCounts] = useState<Record<string, number>>({});
@@ -4265,6 +4268,7 @@ export function ShowDetailScreen() {
                 }}
                 onEditStatus={handleOpenStatusMenu}
                 onAddToList={() => setIsAddToListModalVisible(true)}
+                onShare={() => setShareCollection({ title: show.title, context: "Single show", shows: [toShareShow(show, show.id)] })}
                 onRepairTracking={() => {
                   void handleRepairTracking();
                 }}
@@ -5538,6 +5542,7 @@ export function ShowDetailScreen() {
       </Modal>
 
       {/* Add to List Modal */}
+      <ShareModal collection={shareCollection} onClose={() => setShareCollection(null)} />
       <AddToListModal
         visible={isAddToListModalVisible}
         onClose={() => setIsAddToListModalVisible(false)}

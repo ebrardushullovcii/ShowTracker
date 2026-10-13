@@ -568,7 +568,7 @@ async function main() {
       .join(",")}`
   );
 
-  const browser = await chromium.launch({ headless });
+  const browser = await chromium.launch({ headless, channel: process.env.UI_BROWSER_CHANNEL || undefined });
   const allFindings = [];
 
   try {
@@ -585,6 +585,10 @@ async function main() {
         contextEntry.routes
       );
       allFindings.push(...findings);
+    }
+    if (booleanEnv("UI_INSPECT_SHARING")) {
+      const { inspectSharing } = await import("./ui-inspect-sharing.mjs");
+      await inspectSharing(browser, { baseUrl, outputDir, navigateWithAuthRecovery });
     }
   } finally {
     await browser.close();

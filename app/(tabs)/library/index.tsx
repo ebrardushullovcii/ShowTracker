@@ -22,6 +22,9 @@ import {
   FilterBar,
 } from "@/components/FilterBar";
 import { PageIntro } from "@/components/PageIntro";
+import { ShareButton } from "@/components/sharing/ShareButton";
+import { ShareModal } from "@/components/sharing/ShareModal";
+import { toShareShow, type ShareCollection } from "@/lib/sharing/types";
 import { SearchInput } from "@/components/SearchInput";
 import { ScreenWrapper } from "@/components/ScreenWrapper";
 import { BrandLoader } from "@/components/BrandLoader";
@@ -62,6 +65,7 @@ type LibraryItem = {
   lastActivityAt: number;
   genres: string[];
   rating?: number | null;
+  episodeRuntime?: number | null;
 };
 
 type LibraryDashboardItem = LibraryItem;
@@ -277,6 +281,7 @@ function LibraryCard({
 export default function LibraryScreen() {
   const params = useLocalSearchParams<{ media?: string | string[] }>();
   const [activeTab, setActiveTab] = useState<LibraryMediaTab>("all");
+  const [shareCollection, setShareCollection] = useState<ShareCollection | null>(null);
   const [statusFilter, setStatusFilter] = useState<LibraryStatusFilter>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedGenres, setSelectedGenres] = useState<string[]>([]);
@@ -621,6 +626,17 @@ export default function LibraryScreen() {
                         : "tv-outline"
                   }
                   rightLabel={`${stableActiveItemsCount} matched`}
+                  keepRightSlotOnCompact
+                  rightSlot={<View className="items-end gap-1">
+                    <ShareButton disabled={isLoading || !activeItems.length || searchQuery !== debouncedSearchQuery}
+                      onPress={() => setShareCollection({
+                        title: statusFilter === "plan_to_watch" ? "What should we watch next?" : "My shows",
+                        context: `Library · ${tabOptions.find((o) => o.value === activeTab)?.label} · ${statusOptions.find((o) => o.value === statusFilter)?.label} · ${activeItems.length} matched`,
+                        backlog: statusFilter === "plan_to_watch",
+                        shows: activeItems.map((item) => toShareShow(item, getRouteId(item) ?? getItemKey(item))),
+                      })} />
+                    <Text className="text-[10px] text-text-secondary">{stableActiveItemsCount} matched</Text>
+                  </View>}
                   className="mb-4"
                   compact={isCompactLayout}
                 />
@@ -842,6 +858,7 @@ export default function LibraryScreen() {
           </View>
         )}
       </View>
+      <ShareModal collection={shareCollection} onClose={() => setShareCollection(null)} />
     </ScreenWrapper>
   );
 }

@@ -12,6 +12,7 @@ interface PageIntroProps {
   icon?: keyof typeof Ionicons.glyphMap;
   className?: string;
   compact?: boolean;
+  keepRightSlotOnCompact?: boolean;
 }
 
 export function PageIntro({
@@ -24,6 +25,7 @@ export function PageIntro({
   icon,
   className,
   compact = false,
+  keepRightSlotOnCompact = false,
 }: PageIntroProps) {
   const isFabricEnabled =
     "NativeFabricUIManager" in globalThis || "__turboModuleProxy" in globalThis;
@@ -71,7 +73,7 @@ export function PageIntro({
             ) : null}
           </View>
 
-          {rightSlot && !compact ? (
+          {rightSlot && (!compact || keepRightSlotOnCompact) ? (
             <View className="shrink-0">{rightSlot}</View>
           ) : rightLabel && !compact ? (
             <View className="shrink-0 rounded-md border border-border-default bg-bg-base/45 px-2 py-1">

@@ -203,6 +203,20 @@ export const getListDetail = query({
   args: {
     listId: v.id("customLists"),
   },
+  returns: v.union(v.null(), v.object({
+    id: v.id("customLists"),
+    name: v.string(),
+    description: v.optional(v.string()),
+    shows: v.array(v.object({
+      id: v.id("shows"), externalId: v.string(), title: v.string(),
+      mediaType: v.union(v.literal("tv"), v.literal("anime"), v.literal("movie")),
+      posterUrl: v.optional(v.string()), backdropUrl: v.optional(v.string()),
+      overview: v.optional(v.string()), rating: v.optional(v.number()),
+      firstAired: v.optional(v.string()), genres: v.optional(v.array(v.string())),
+      episodeRuntime: v.optional(v.number()),
+    })),
+    createdAt: v.number(), updatedAt: v.number(),
+  })),
   handler: async (ctx, args) => {
     const userId = await getCurrentUserId(ctx);
 
@@ -238,6 +252,9 @@ export const getListDetail = query({
           backdropUrl: show.backdropUrl,
           overview: show.overview,
           rating: show.rating,
+          firstAired: show.firstAired,
+          genres: show.genres,
+          episodeRuntime: show.episodeRuntime,
         };
       })
     );
@@ -246,7 +263,7 @@ export const getListDetail = query({
       id: list._id,
       name: list.name,
       description: list.description,
-      shows: shows.filter(Boolean),
+      shows: shows.filter((show): show is NonNullable<typeof show> => show !== null),
       createdAt: list.createdAt,
       updatedAt: list.updatedAt,
     };

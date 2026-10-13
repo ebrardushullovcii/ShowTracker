@@ -5562,6 +5562,7 @@ export const getLibrary = query({
           genres: show.genres ?? [],
           rating: show.rating ?? null,
           lastActivityAt: userShow.lastWatchedAt ?? userShow.addedAt,
+          episodeRuntime: show.episodeRuntime ?? null,
         };
       })
     );

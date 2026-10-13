@@ -36,6 +36,8 @@ Treat production bugs as cross-system until proven otherwise. A detail page can 
 
 Expo Router 6 with authenticated shell routes and direct-linkable detail and list routes. Show details open as overlay routes in-app while direct URLs still work (ADR-0001). Styling is NativeWind.
 
+Library, custom lists, and show details share public catalogue snapshots through one export preview (ADR-0073). Its bundled renderer produces editable text, paginated PNGs/ZIPs, and self-contained recipient HTML. Web uses an iframe; native uses a WebView with Expo copy/file sharing. Exports do not persist tracking changes or introduce hosted collaboration state.
+
 ## Provider Layer
 
 `lib/api/` clients return normalized types from `lib/api/types.ts`; screens never consume raw provider responses. Normalize first, then persist through Convex where synced user state is involved.
