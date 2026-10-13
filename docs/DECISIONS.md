@@ -148,6 +148,8 @@ Most frequently relevant:
 | [ADR-0071](ADR-0071-web-auth-ticket-pages.md) | Web sign-in and register use the landing page's ticket design as plain DOM; native keeps its React Native auth screens; both share the auth form hooks. |
 | [ADR-0072](ADR-0072-unwatch-episode-and-later.md) | Unwatching an episode can also unwatch every later watched episode of the title, server-side and across unloaded seasons; specials and other franchise titles are untouched. |
 
+- [ADR-0073](ADR-0073-show-sharing-exports.md): share public catalogue snapshots through one preview with text, images, and self-contained recipient files.
+
 ## Guidance policy
 
 - [ADR-0061](ADR-0061-minimal-agent-guidance.md): retain decisions, remove process scaffolding, and document decisions rather than every patch.

@@ -18,6 +18,7 @@ type ShowActionBarProps = {
   onEditStatus: () => void;
   onAddToList: () => void;
   onRepairTracking?: () => void;
+  onShare?: () => void;
 };
 
 type ActionButtonProps = {
@@ -81,6 +82,7 @@ export function ShowActionBar({
   onEditStatus,
   onAddToList,
   onRepairTracking,
+  onShare,
 }: ShowActionBarProps) {
   const [isMoreVisible, setIsMoreVisible] = useState(false);
   const [moreButtonFrame, setMoreButtonFrame] = useState({ x: 0, y: 0, width: 42, height: 42 });
@@ -199,6 +201,11 @@ export function ShowActionBar({
               </View>
             ) : null}
 
+            {onShare ? (
+              <View className="border-b border-border-default">
+                <MenuAction label="Share this show" icon="share-outline" onPress={() => { closeMore(); onShare(); }} />
+              </View>
+            ) : null}
             {canAddToList ? (
               <MenuAction
                 label="Add to List"

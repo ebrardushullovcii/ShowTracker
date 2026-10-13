@@ -16,6 +16,9 @@ import { api } from "@/convex/_generated/api";
 import { Ionicons } from "@expo/vector-icons";
 import { AppBackButton } from "@/components/AppBackButton";
 import { PageIntro } from "@/components/PageIntro";
+import { ShareButton } from "@/components/sharing/ShareButton";
+import { ShareModal } from "@/components/sharing/ShareModal";
+import { toShareShow, type ShareCollection } from "@/lib/sharing/types";
 import { ScreenWrapper } from "@/components/ScreenWrapper";
 import { BrandLoader } from "@/components/BrandLoader";
 import { SearchShowsModal } from "@/components/SearchShowsModal";
@@ -32,6 +35,9 @@ type ShowItem = {
   backdropUrl?: string;
   overview?: string;
   rating?: number;
+  firstAired?: string;
+  genres?: string[];
+  episodeRuntime?: number;
 };
 
 type ConfirmActionState =
@@ -247,6 +253,7 @@ export function ListDetailScreen() {
   const [localShows, setLocalShows] = useState<ShowItem[]>([]);
   const [gridWidth, setGridWidth] = useState(0);
   const [isSearchModalVisible, setIsSearchModalVisible] = useState(false);
+  const [shareCollection, setShareCollection] = useState<ShareCollection | null>(null);
   const [confirmActionState, setConfirmActionState] = useState<ConfirmActionState | null>(
     null
   );
@@ -429,6 +436,11 @@ export function ListDetailScreen() {
               leftSlot={<AppBackButton fallbackHref="/profile" />}
             />
             <View className="-mt-1 mb-1 flex-row justify-end gap-2">
+              <ShareButton label="Share list" disabled={!shows.length} onPress={() => setShareCollection({
+                title: list.name,
+                context: `Custom list · ${list.name}`,
+                shows: shows.map((item) => toShareShow(item, item.externalId)),
+              })} />
               <Pressable
                 onPress={() => setIsSearchModalVisible(true)}
                 accessibilityRole="button"
@@ -664,6 +676,7 @@ export function ListDetailScreen() {
           existingShowIds={shows.map((s) => s.id)}
         />
       )}
+      <ShareModal collection={shareCollection} onClose={() => setShareCollection(null)} />
     </ScreenWrapper>
   );
 }
