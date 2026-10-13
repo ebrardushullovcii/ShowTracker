@@ -12,15 +12,19 @@ function resolveShareReply(message){const pending=shareRequests.get(message.requ
 function requestShare(data){return new Promise((resolve,reject)=>{const requestId=++shareRequestId,timer=setTimeout(()=>{shareRequests.delete(requestId);reject(new Error('The link request timed out. Try again.'));},45000);shareRequests.set(requestId,{resolve,reject,timer});const message={...data,requestId};try{if(NATIVE)bridge(message);else parent.postMessage(message,HOST_ORIGIN);}catch(error){clearTimeout(timer);shareRequests.delete(requestId);reject(error);}});}
 window.addEventListener('message',e=>{if(e.source===parent&&e.origin===HOST_ORIGIN&&e.data?.type==='game-link-reply')resolveShareReply(e.data);});
 function gameSnapshot(list){return {mode:'duel',title:state.title,note:state.note,name:state.name,shows:list.map(s=>({...s}))};}
+function gameCard(list){
+  const link=gameLinks.get(JSON.stringify(gameSnapshot(list))),shown=list.slice(0,list.length>8?7:8);
+  const posters=shown.map(s=>'<span class="game-cover" title="'+esc(s.title)+'"><span>'+esc(s.title.slice(0,1))+'</span>'+(s.poster?'<img src="'+esc(s.poster)+'" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">':'')+'</span>').join('')+(list.length>8?'<span class="game-cover">+'+(list.length-7)+'</span>':'');
+  return '<div class="game-creator"><div class="game-head"><small>THIS OR THAT</small>'+(link?'<span class="game-ready">Link ready</span>':'')+'</div><h2>'+esc(state.title||'What should we watch?')+'</h2><p class="game-count">'+list.length+' '+(list.length===1?'show':'shows')+' · '+Math.max(0,list.length-1)+' '+(list.length===2?'pick':'picks')+' to a winner</p><div class="game-posters" aria-hidden="true">'+posters+'</div>'+(state.note||state.name?'<p class="game-note">'+(state.note?'“'+esc(state.note)+'”':'')+(state.name?'<span>From '+esc(state.name)+'</span>':'')+'</p>':'')+'</div>';
+}
 function renderGameLink(list){
   const snapshot=gameSnapshot(list),key=JSON.stringify(snapshot),link=gameLinks.get(key),box=$('#game-link');box.hidden=false;
-  box.innerHTML='<p class="privacy">Anyone with this link can play without signing in. It contains this selection and message, expires in 30 days, and can be removed below.</p>';
-  if(!link){if(list.length<2){box.innerHTML+='<p>Include at least two shows to play This or that.</p>';return;}action('Create share link',async()=>{const created=await requestShare({type:'create-game-link',snapshot});gameLinks.set(key,created);render();},true);return;}
-  box.innerHTML+='<label class="field">Share link<input id="share-url" aria-label="Share link" readonly value="'+esc(link.url)+'"></label>';
+  if(!link){if(list.length<2){box.innerHTML='<p class="game-warning">Include at least two shows to play This or that.</p>';return;}box.innerHTML='<p class="privacy">Anyone with the link can play without signing in. Links expire after 30 days.</p>';action('Create share link',async()=>{const created=await requestShare({type:'create-game-link',snapshot});gameLinks.set(key,created);render();},true);return;}
+  box.innerHTML='<label class="field">Share link<input id="share-url" aria-label="Share link" readonly value="'+esc(link.url)+'"></label><p class="privacy">Anyone with the link can play. It expires in 30 days, or remove it any time.</p>';
   action('Copy link',()=>copyText(link.url),true);action('Share link',()=>shareText(link.url));
   if(NATIVE)action('Open game',()=>bridge({type:'open-game',token:link.token}));
   else{const a=document.createElement('a');a.href=link.url;a.target='_blank';a.rel='noopener noreferrer';a.textContent='Open game';a.className='game-open';$('#actions').append(a);}
-  action('Remove link',async()=>{await requestShare({type:'revoke-game-link',token:link.token});gameLinks.delete(key);render();toast('Link removed. It can no longer be opened.');});
+  action('Remove link',async()=>{await requestShare({type:'revoke-game-link',token:link.token});gameLinks.delete(key);render();toast('Link removed. It can no longer be opened.');});$('#actions').lastElementChild.classList.add('quiet');
 }
 function toast(message){$('#notice').textContent=message;}
 function selectedShows(){const list=SHOWS.filter(s=>state.selected.has(s.id));if(state.sort==='title')list.sort((a,b)=>a.title.localeCompare(b.title));if(state.sort==='genre')list.sort((a,b)=>(a.genres[0]||'').localeCompare(b.genres[0]||''));return list;}
@@ -51,7 +55,7 @@ async function render(){
   $('#description').textContent=current.layout==='grid'&&list.length===1?'One large poster with the title, year, and your message.':current.desc;
   $('#scope').textContent=list.length+' '+(list.length===1?'show':'shows')+' · all included titles';
   $('#prev').disabled=!state.page;$('#next').disabled=state.page>=pages.length-1;$('#page').textContent=pages.length?'Page '+(state.page+1)+' of '+pages.length:'';
-  const game=current.format==='game';$('#format-field').hidden=game;$('#export-details').hidden=game;$('#pagination').hidden=game;$('#stage-title').textContent=game?'Game creator':'Preview';$('#edit-summary').textContent=game?'Edit game & shows':'Edit selection & message';$('#game-link').hidden=true;$('#game-link').innerHTML='';
+  const game=current.format==='game';$('#format-field').hidden=game;$('#export-details').hidden=game;$('#pagination').hidden=game;$('#stage-title').textContent=game?'Game creator':'Preview';$('#edit-summary').textContent=game?'Edit game & shows':'Edit selection & message';$('#scope').hidden=game;$('#game-link').hidden=true;$('#game-link').innerHTML='';
   $('#preview').innerHTML='';$('#actions').innerHTML='';
   if(!list.length){$('#preview').innerHTML='<div class="empty"><h3>No shows included</h3><p>Open '+(game?'Edit game & shows':'Edit selection & message')+' to include titles.</p></div>';return;}
   if(current.format==='text'){
@@ -60,7 +64,7 @@ async function render(){
     if(pages.length>1)action('Copy all messages',()=>copyText(editedMessages(list).join('\n\n———\n\n')));
     if(list.length===1&&list[0].appUrl)action('Copy show link',()=>copyText(list[0].appUrl));return;
   }
-  if(game){$('#preview').innerHTML='<div class="game-creator"><small>THIS OR THAT</small><h2>'+esc(state.title||'What should we watch?')+'</h2><p class="game-count">'+list.length+' shows · '+Math.max(0,list.length-1)+' choices to a winner</p><p>Your friend chooses between pairs. Winners advance through the rounds until one show wins.</p><p class="game-included">Includes '+esc(list.slice(0,3).map(s=>s.title).join(', '))+(list.length>3?' and '+(list.length-3)+' more':'')+'.</p><p class="privacy">Create a link below, then send it in your chat. No account needed to play.</p></div>';renderGameLink(list);return;}
+  if(game){$('#preview').innerHTML=gameCard(list);renderGameLink(list);return;}
   $('#preview').innerHTML='<p class="loading" role="status">Preparing preview…</p>';
   await prepare(pages[state.page]);if(token!==revision)return;
   const visualFormat=list.length===1&&current.layout==='grid'?{...current,layout:'single'}:current;

@@ -127,6 +127,6 @@ export const shareFormats = [
     "layout": "duel",
     "cap": 2,
     "accent": "#38bdf8",
-    "desc": "Share a playable game. Your friend picks between pairs, winners advance, and one show wins. No account needed."
+    "desc": "Send a link to a quick game. Your friend picks between pairs until one show wins."
   }
 ] as const;

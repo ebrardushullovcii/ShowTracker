@@ -108,9 +108,17 @@ export async function inspectSharing(browser, { baseUrl, outputDir, navigateWith
         assert.deepEqual(await share().locator("#actions button").allTextContents(), ["Create share link"]);
         // The game creator renders immediately; let the app modal's fade finish.
         await page.waitForTimeout(350);
+        await share().locator(".game-cover img").evaluateAll((nodes) => Promise.all(nodes.map((node) => node.decode().catch(() => {}))));
         await page.screenshot({ path: path.join(outputDir, `sharing-creator-${width}.png`) });
+        const firstCover = share().locator(".game-cover").first();
+        await firstCover.locator("img").evaluate((node) => node.dispatchEvent(new Event("error")));
+        assert.equal(await firstCover.locator("img").count(), 0, "Failed creator covers must show their fallback");
+        assert.equal(await firstCover.locator("span").textContent(), "S");
         await share().getByRole("button", { name: "Create share link", exact: true }).click();
         await share().locator("#share-url").waitFor();
+        await share().getByText("Link ready", { exact: true }).waitFor();
+        await share().locator(".game-cover img").evaluateAll((nodes) => Promise.all(nodes.map((node) => node.decode().catch(() => {}))));
+        await page.screenshot({ path: path.join(outputDir, `sharing-link-ready-${width}.png`) });
         assert.deepEqual(await share().locator("#actions button").allTextContents(), ["Copy link", "Share link", "Remove link"]);
         const url = await share().locator("#share-url").inputValue();
         assert.match(url, /\/share\/[a-f0-9]{40}$/);
@@ -121,6 +129,8 @@ export async function inspectSharing(browser, { baseUrl, outputDir, navigateWith
         recipient.on("pageerror", (error) => errors.push(error.message));
         try {
           await recipient.goto(url);
+          await recipient.getByRole("button", { name: "Start game", exact: true }).waitFor();
+          await recipient.screenshot({ path: path.join(outputDir, `sharing-intro-${width}.png`) });
           await recipient.getByRole("button", { name: "Start game", exact: true }).click();
           assert.equal(recipient.url(), url, "Public games must work without a login redirect");
           await recipient.waitForFunction(() => !document.querySelector('[data-testid="game-cover-loading"]'));
@@ -135,6 +145,15 @@ export async function inspectSharing(browser, { baseUrl, outputDir, navigateWith
           const resultBox = await recipient.getByText(/^I’d watch /).boundingBox();
           assert.ok(resultBox && resultBox.x >= 0 && resultBox.x + resultBox.width <= width, "Result text must fit the phone viewport");
           await recipient.screenshot({ path: path.join(outputDir, `sharing-result-${width}-${format}.png`) });
+          if (width === 390) {
+            await recipient.setViewportSize({ width: 320, height: 640 });
+            for (const label of ["Share my result", "Copy my result"]) {
+              const box = await recipient.getByRole("button", { name: label, exact: true }).boundingBox();
+              assert.ok(box && box.x >= 0 && box.x + box.width <= 320, "Result actions must fit small phones");
+            }
+            await recipient.screenshot({ path: path.join(outputDir, "sharing-result-320.png") });
+            await recipient.setViewportSize({ width, height: 900 });
+          }
           await recipient.getByRole("button", { name: "Copy my result", exact: true }).click();
           assert.match(await recipient.evaluate(() => navigator.clipboard.readText()), /I’d watch .+!\r?\nhttps:\/\/showtrackerapp\.netlify\.app\/share\/[a-f0-9]{40}/);
           await recipient.getByRole("button", { name: "Play again", exact: true }).click();
