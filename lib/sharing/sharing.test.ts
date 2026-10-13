@@ -3,6 +3,7 @@ import { test } from "node:test";
 import { runInNewContext } from "node:vm";
 import { createShareDocument } from "./document";
 import { rendererScript } from "./renderer-script";
+import { composerScript } from "./composer-script";
 import { shareFormats } from "./formats";
 import { toShareShow } from "./types";
 
@@ -38,4 +39,19 @@ test("embedded titles and messages cannot terminate the script element", () => {
   const html = createShareDocument({ title: hostile, context: "Custom list", shows: [toShareShow({ title: hostile, mediaType: "anime" }, "anilist:anime:123")] });
   assert.equal((html.match(/<\/script>/g) ?? []).length, 1);
   assert.ok(html.includes("\\u003c/script>"));
+});
+
+test("recipient identifier attributes escape malformed catalogue identifiers", () => {
+  const nodes: Record<string, Record<string, unknown>> = {};
+  const document = {
+    getElementById: (id: string) => nodes[id] ??= { value: id === "recipient-genre" ? "all" : "" },
+    querySelectorAll: () => [],
+  };
+  const shows = [{ id: 'bad" onclick="alert(1)', title: "A title", year: "2022", genres: [], poster: "" }];
+  const escapeSource = composerScript.match(/^const esc = .+;$/m)?.[0];
+  assert.ok(escapeSource);
+  runInNewContext(escapeSource + "\n" + rendererScript + "\nrecipientOffline();", { document, shows, ballot: false, picks: new Set(), TextEncoder, Blob });
+  const html = String(nodes["recipient-items"].innerHTML);
+  assert.ok(html.includes('data-id="bad&quot; onclick=&quot;alert(1)"'));
+  assert.ok(!html.includes(' onclick="'));
 });
