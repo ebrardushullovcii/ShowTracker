@@ -27,7 +27,7 @@ function titleFit(ctx,text,x,y,w,h,size,color,weight=700,family=SANS){const f=fi
 function cover(ctx,s,x,y,w,h,o=state,light=false,r=12){const img=imageCache.get(s.poster)?._loaded,missing=o.missing&&SHOWS.indexOf(s)%7===0;ctx.save();ctx.beginPath();roundPath(ctx,x,y,w,h,r);ctx.clip();if(img&&!missing){const k=Math.max(w/img.width,h/img.height),dw=img.width*k,dh=img.height*k;ctx.drawImage(img,x+(w-dw)/2,y+(h-dh)/2,dw,dh);}else{rect(ctx,x,y,w,h,light?'#e7dcc6':'#18181b');ctx.textAlign='center';const roomy=w>=110;if(roomy)titleFit(ctx,s.title,x+w/2,y+h*.3,w-Math.max(16,w*.16),h*.42,Math.min(30,Math.round(w*.13)),light?'#211914':'#fafafa',700);write(ctx,'NO COVER',x+w/2,roomy?y+h-Math.min(36,h*.14):y+h/2-7,w-8,roomy?14:11,light?'#746657':'#71717a',800,16,1);ctx.textAlign='left';}ctx.restore();stroke(ctx,x,y,w,h,light?'#d5c9b3':'#27272a',r,2);}
 function badge(ctx,label,right,y,color,light){ctx.font=\`800 16px \${SANS}\`;const bw=ctx.measureText(label).width+26,x=right-bw;rect(ctx,x,y,bw,32,color+(light?'1f':'26'),8);stroke(ctx,x,y,bw,32,color+'70',8,1.5);ctx.fillStyle=color;ctx.fillText(label,x+13,y+8);}
 // Resolve cached image promises once, so rendering remains synchronous.
-const CANVAS_DIMS={single:[1080,1200],grid:[1080,1800],wall:[1080,1080],story:[1080,1920],contact:[1600,1120],trio:[1080,1100],duel:[1080,1180],titles:[1080,1420],ticket:[1080,1450],editorial:[1080,1480],library:[1080,1160]};
+const CANVAS_DIMS={single:[1080,1200],grid:[1080,1800],wall:[1080,1080],story:[1080,1920],contact:[1600,1120],titles:[1080,1420],ticket:[1080,1450],editorial:[1080,1480],library:[1080,1160]};
 function renderCanvas(c,list,page=0,total=1,o=state){
  const light=['ticket','contact'].includes(c.layout),bg=light?'#f3ead7':'#09090b',fg=light?'#211914':'#fafafa',muted=light?'#746657':'#a1a1aa',line=light?'#d5c9b3':'#27272a',surface=light?'#ebe0ca':'#18181b';
  const [w,h]=CANVAS_DIMS[c.layout]||[1080,1500];const canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;canvas.setAttribute('role','img');canvas.setAttribute('aria-label',\`\${c.name}, page \${page+1} of \${total}: \${list.map(s=>s.title).join(', ')}\`);const ctx=canvas.getContext('2d');ctx.textBaseline='top';rect(ctx,0,0,w,h,bg);
@@ -64,10 +64,6 @@ function renderCanvas(c,list,page=0,total=1,o=state){
    const cols=big?1:2,rowN=Math.ceil(c.cap/cols),rowH=(bottom-y)/rowN,colGap=big?0:40,colW=(inner-colGap*(cols-1))/cols;
    list.forEach((s,i)=>{const col=Math.floor(i/rowN),row=i%rowN,x=m+col*(colW+colGap),cy=y+row*rowH,tx=x+58,tw=colW-62-(big?44:0);write(ctx,String(page*c.cap+i+1).padStart(2,'0'),x,cy+(big?12:8),52,big?20:18,accent,800,24,1,MONO);const used=titleFit(ctx,s.title,tx,cy+(big?6:4),tw,rowH*.5,big?34:25,fg,700);if(o.years)write(ctx,\`\${s.year} · \${s.kind}\`,tx,cy+(big?12:8)+used,tw,big?19:17,muted,500,22,1);rect(ctx,x,cy+rowH-8,colW-(big?44:0),1.5,line);});
    if(big){ctx.setLineDash([8,8]);ctx.strokeStyle='#b6a68c';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(w-28,40);ctx.lineTo(w-28,h-40);ctx.stroke();ctx.setLineDash([]);}
- }else if(c.layout==='trio'||c.layout==='duel'){
-   const duel=c.layout==='duel',cols=duel?2:3,gap=duel?40:26,cw=(inner-gap*(cols-1))/cols,ph=Math.min(duel?580:520,contentH-176);
-   list.forEach((s,i)=>{const x=m+i*(cw+gap);cover(ctx,s,x,y,cw,ph,o,false,16);write(ctx,duel?(i?'OPTION B':'OPTION A'):\`PICK \${i+1}\`,x,y+ph+22,cw,18,accent,800,22,1,MONO);const used=titleFit(ctx,s.title,x,y+ph+52,cw,80,30,fg,800);write(ctx,sub(s),x,y+ph+60+used,cw,20,muted,500,24,1);});
-   if(duel&&list.length===2){const cx=m+cw+gap/2,cy=y+ph/2;ctx.beginPath();ctx.arc(cx,cy,34,0,Math.PI*2);ctx.fillStyle=bg;ctx.fill();ctx.lineWidth=2;ctx.strokeStyle='#3f3f46';ctx.stroke();ctx.textAlign='center';write(ctx,'OR',cx,cy-11,60,20,fg,800,22,1,MONO);ctx.textAlign='left';}
  }else{
    write(ctx,fullText(c,list,o),m,y,inner,c.layout==='links'?21:25,fg,400,35,Math.floor(contentH/35));
  }

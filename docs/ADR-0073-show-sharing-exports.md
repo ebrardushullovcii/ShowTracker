@@ -1,8 +1,8 @@
 # ADR-0073: Share public show snapshots from one export preview
 
-The downloadable recipient HTML formats below were removed by [ADR-0074](ADR-0074-text-and-image-sharing-only.md). The snapshot, privacy, rendering, and entry-point decisions still apply to the fourteen text and image formats.
+The downloadable recipient HTML formats below were removed by [ADR-0074](ADR-0074-text-and-image-sharing-only.md). The snapshot, privacy, rendering, and entry-point decisions still apply to text and image exports.
 
-Choose together now also supports hosted playable links under [ADR-0075](ADR-0075-playable-sharing-links.md), revising the no-hosted-sharing restriction below.
+Hosted playable links were added by [ADR-0075](ADR-0075-playable-sharing-links.md) and simplified to a link-only This or that creator by [ADR-0076](ADR-0076-link-only-game-creator.md), revising the no-hosted-sharing restriction below.
 
 Library's header shares all records matching its current filters, including cards not yet rendered. Custom-list detail shares the saved list order. The existing show action menu shares one title. Each opens the same export preview, with text, images, and options for choosing together.
 

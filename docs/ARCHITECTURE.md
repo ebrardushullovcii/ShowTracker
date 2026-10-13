@@ -36,7 +36,7 @@ Treat production bugs as cross-system until proven otherwise. A detail page can 
 
 Expo Router 6 with authenticated shell routes and direct-linkable detail and list routes. Show details open as overlay routes in-app while direct URLs still work (ADR-0001). Styling is NativeWind.
 
-Library, custom lists, and show details share public catalogue snapshots through one export preview (ADR-0073, ADR-0074, ADR-0075). Its bundled renderer produces editable text and paginated PNGs/ZIPs. Web uses an iframe; native uses a WebView with Expo copy/file sharing. Choose together creates expiring, revocable Convex snapshots exposed through unguessable public `/share/[token]` links. Recipients play a full-screen tournament or choose shortlist favorites, then share a final result; their choices remain local to the session. Sharing never persists tracking changes.
+Library, custom lists, and show details share public catalogue snapshots through one export preview (ADR-0073 through ADR-0076). Text and Images produce editable text and paginated PNGs/ZIPs. Web uses an iframe; native uses a WebView with Expo copy/file sharing. This or that is a link-only game creator with expiring, revocable Convex snapshots exposed through unguessable public `/share/[token]` links. Recipients play a full-screen tournament and share its final winner; their choices remain local to the session. Previously sent shortlist links remain readable until expiry. Sharing never persists tracking changes.
 
 ## Provider Layer
 

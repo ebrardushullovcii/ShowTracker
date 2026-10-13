@@ -35,25 +35,24 @@ export async function inspectSharing(browser, { baseUrl, outputDir, navigateWith
       await page.screenshot({ path: path.join(outputDir, `sharing-modal-${width}.png`) });
 
       const formats = [];
-      for (const category of ["Text", "Images", "Choose together"]) {
+      for (const category of ["Text", "Images"]) {
         await share().getByRole("button", { name: category, exact: true }).click();
         const options = await share().locator("#format option").evaluateAll((nodes) => nodes.map((node) => ({ value: node.value, name: node.textContent })));
         for (const option of options) {
           await share().locator("#format").selectOption(option.value);
-          if (option.value === "three-picks") {
-            await share().locator("summary").click();
-            await share().getByRole("button", { name: "Shortlist Severance", exact: true }).click();
-            await share().locator("summary").click();
-          }
           if (category !== "Text") await share().locator("canvas").waitFor();
           else assert.match(await share().locator("#text-output").inputValue(), /Severance/);
           formats.push(option.value);
         }
       }
-      assert.equal(formats.length, 14);
+      assert.equal(formats.length, 12);
       assert.ok(!formats.includes("local-ballot") && !formats.includes("browseable-list"));
       assert.equal(await share().locator("iframe").count(), 0);
-      console.log(`[ui-inspect:sharing] ${width}px: all 14 formats, clipboard, PNG downloads passed`);
+      console.log(`[ui-inspect:sharing] ${width}px: all 12 exports, clipboard, PNG downloads passed`);
+      await share().getByRole("button", { name: "This or that", exact: true }).click();
+      await share().getByText("Include at least two shows to play This or that.", { exact: true }).waitFor();
+      assert.equal(await share().locator("canvas, [data-pin]").count(), 0);
+      assert.equal(await share().getByRole("button", { name: /Save|image|zip|Shortlist/ }).count(), 0);
       await closeShare();
       await page.getByRole("button", { name: "Add to watchlist", exact: true }).click();
       await page.locator('[aria-label^="Tracking status:"]:not([disabled]):not([aria-disabled="true"])').waitFor();
@@ -100,16 +99,19 @@ export async function inspectSharing(browser, { baseUrl, outputDir, navigateWith
       }
       await page.goto(listUrl);
       await page.getByRole("button", { name: "Share list", exact: true }).click();
-      await share().getByRole("button", { name: "Choose together", exact: true }).click();
-      for (const format of ["three-picks", "this-or-that"]) {
-        await share().locator("#format").selectOption(format);
-        if (format === "three-picks") {
-          await share().locator("summary").click();
-          for (let i = 0; i < 3; i++) await share().locator('[data-pin][aria-pressed="false"]').first().click();
-          await share().locator("summary").click();
-        }
+      await share().getByRole("button", { name: "This or that", exact: true }).click();
+      {
+        const format = "this-or-that";
+        assert.equal(await share().locator("canvas, [data-pin]").count(), 0);
+        assert.equal(await share().locator("#format").isVisible(), false);
+        assert.equal(await share().locator("#pagination").isVisible(), false);
+        assert.deepEqual(await share().locator("#actions button").allTextContents(), ["Create share link"]);
+        // The game creator renders immediately; let the app modal's fade finish.
+        await page.waitForTimeout(350);
+        await page.screenshot({ path: path.join(outputDir, `sharing-creator-${width}.png`) });
         await share().getByRole("button", { name: "Create share link", exact: true }).click();
         await share().locator("#share-url").waitFor();
+        assert.deepEqual(await share().locator("#actions button").allTextContents(), ["Copy link", "Share link", "Remove link"]);
         const url = await share().locator("#share-url").inputValue();
         assert.match(url, /\/share\/[a-f0-9]{40}$/);
         await share().getByRole("button", { name: "Copy link", exact: true }).click();
@@ -119,22 +121,16 @@ export async function inspectSharing(browser, { baseUrl, outputDir, navigateWith
         recipient.on("pageerror", (error) => errors.push(error.message));
         try {
           await recipient.goto(url);
-          await recipient.getByRole("button", { name: format === "this-or-that" ? "Start game" : "Choose my favorites", exact: true }).click();
+          await recipient.getByRole("button", { name: "Start game", exact: true }).click();
           assert.equal(recipient.url(), url, "Public games must work without a login redirect");
           await recipient.waitForFunction(() => !document.querySelector('[data-testid="game-cover-loading"]'));
           await recipient.screenshot({ path: path.join(outputDir, `sharing-game-${width}-${format}.png`) });
-          if (format === "this-or-that") {
-            await recipient.getByRole("button", { name: /^Pick / }).first().click();
-            await recipient.getByRole("button", { name: "Undo last choice", exact: true }).click();
-            await recipient.getByText("Round 1 · 2 choices to your winner", { exact: true }).waitFor();
-            await recipient.getByRole("button", { name: /^Pick / }).first().click();
-            await recipient.getByRole("button", { name: /^Pick / }).first().click();
-            await recipient.getByText("Your winner", { exact: true }).waitFor();
-          } else {
-            await recipient.getByRole("checkbox", { name: /^Choose / }).first().click();
-            await recipient.getByRole("button", { name: "See my result", exact: true }).click();
-            await recipient.getByText("Your picks", { exact: true }).waitFor();
-          }
+          await recipient.getByRole("button", { name: /^Pick / }).first().click();
+          await recipient.getByRole("button", { name: "Undo last choice", exact: true }).click();
+          await recipient.getByText("Round 1 · 2 choices to your winner", { exact: true }).waitFor();
+          await recipient.getByRole("button", { name: /^Pick / }).first().click();
+          await recipient.getByRole("button", { name: /^Pick / }).first().click();
+          await recipient.getByText("Your winner", { exact: true }).waitFor();
           await recipient.waitForFunction(() => !document.querySelector('[data-testid="game-cover-loading"]'));
           const resultBox = await recipient.getByText(/^I’d watch /).boundingBox();
           assert.ok(resultBox && resultBox.x >= 0 && resultBox.x + resultBox.width <= width, "Result text must fit the phone viewport");
@@ -153,7 +149,7 @@ export async function inspectSharing(browser, { baseUrl, outputDir, navigateWith
       }
       await closeShare();
       assert.deepEqual(errors, []);
-      console.log(`[ui-inspect:sharing] ${width}px: all 14 formats, clipboard, PNG, Library/custom-list sharing, signed-out games, results, replay, and link revocation passed`);
+      console.log(`[ui-inspect:sharing] ${width}px: all 12 exports, clipboard, PNG, Library/custom-list sharing, signed-out games, results, replay, and link revocation passed`);
     } catch (error) {
       await page.screenshot({ path: path.join(outputDir, `sharing-failure-${width}.png`) }).catch(() => {});
       throw error;
