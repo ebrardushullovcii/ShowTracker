@@ -590,6 +590,10 @@ async function main() {
       const { inspectSharing } = await import("./ui-inspect-sharing.mjs");
       await inspectSharing(browser, { baseUrl, outputDir, navigateWithAuthRecovery });
     }
+    if (booleanEnv("UI_INSPECT_EXPORT_COVERS")) {
+      const { inspectExportCovers } = await import("./ui-inspect-export-covers.mjs");
+      await inspectExportCovers(browser, { baseUrl, outputDir });
+    }
   } finally {
     await browser.close();
   }
