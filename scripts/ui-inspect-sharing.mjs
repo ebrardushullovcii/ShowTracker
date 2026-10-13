@@ -65,7 +65,7 @@ export async function inspectSharing(browser, { baseUrl, outputDir, navigateWith
       console.log(`[ui-inspect:sharing] ${width}px: all 16 formats, clipboard, PNG downloads, and recipient picks passed`);
       await closeShare();
       await page.getByRole("button", { name: "Add to watchlist", exact: true }).click();
-      await page.getByRole("button", { name: /^Tracking status:/ }).waitFor();
+      await page.locator('[aria-label^="Tracking status:"]:not([disabled]):not([aria-disabled="true"])').waitFor();
       tracked = true;
       await page.goto(`${baseUrl}/library`);
       await page.getByText("1 matched", { exact: true }).waitFor();
