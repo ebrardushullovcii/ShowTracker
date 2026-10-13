@@ -22,18 +22,16 @@ test("export boundary removes tracking data and qualifies normalized provider ID
   assert.equal(toShareShow(record, "123").url, "");
 });
 
-test("text pagination includes every title exactly once and retains global numbers", () => {
-  const shows = Array.from({ length: 61 }, (_, i) => toShareShow({ title: `Show ${i}`, mediaType: "tv", genres: [i % 2 ? "Comedy" : "Drama"] }, `tmdb:tv:${i + 1}`));
+test("every text format includes the full collection exactly once in one message", () => {
+  const shows = Array.from({ length: 634 }, (_, i) => toShareShow({ title: `Show ${String(i + 1).padStart(4, "0")}`, mediaType: "tv", genres: [i % 2 ? "Comedy" : "Drama"] }, `tmdb:tv:${i + 1}`));
   const options = { title: "Planned is just my heading", note: "", name: "", context: "Shared collection", years: true, genres: false };
-  const chunks = <T,>(list: T[], size: number) => Array.from({ length: Math.ceil(list.length / size) }, (_, i) => list.slice(i * size, (i + 1) * size));
-  const context = { shows, options, chunks, chat: shareFormats[1], grouped: shareFormats[2], state: options, TextEncoder, Blob };
-  const result = runInNewContext(rendererScript + "\n({pages:textPages(chat,shows,options),grouped:fullText(grouped,shows,options),text:fullText(chat,shows,options)})", context);
-  assert.equal(result.pages.length, 7);
-  assert.match(result.pages[6], /61\. Show 60/);
-  assert.doesNotMatch(result.pages.join("\n"), /\(\)|undefined/);
-  assert.equal(result.grouped.split("\n").filter((line: string) => line.startsWith("• ")).length, 61);
-  assert.match(result.text, /61 shows · Shared collection/);
-  assert.doesNotMatch(result.text, /Not started/);
+  for (const format of shareFormats.filter((format) => format.format === "text")) {
+    const text = runInNewContext(rendererScript + "\nfullText(format,shows,options)", { shows, options, format, state: options, TextEncoder, Blob });
+    assert.match(text, /634 shows · Shared collection/);
+    assert.doesNotMatch(text, /\(\)|undefined|Not started/);
+    for (const show of shows) assert.equal(text.split(show.title).length - 1, 1);
+    if (format.layout === "chat") assert.match(text, /634\. Show 0634/);
+  }
 });
 
 test("embedded titles and messages cannot terminate the script element", () => {

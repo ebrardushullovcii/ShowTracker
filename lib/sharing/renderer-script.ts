@@ -12,7 +12,6 @@ function fullText(c,list,o=state) {
  else body=list.map(s=>'• '+label(s)).join('\\n');
  return prefix+'\\n\\n'+body;
 }
-function textPages(c,list,o=state) { if(c.layout!=='chat')return [fullText(c,list,o)];const groups=chunks(list,10);return groups.map((items,i)=>\`\${o.title.trim()||'Shared shows'}\${groups.length>1?\` · \${i+1}/\${groups.length}\`:''}\\n\${o.note.trim()}\\n\\n\${items.map((s,j)=>\`\${i*10+j+1}. \${s.title}\${o.years&&s.year?\` (\${s.year})\`:''}\${o.genres&&s.genres.length?\` — \${s.genres[0]}\`:''}\`).join('\\n')}\\n\\nWhich numbers would you be up for?\`); }
 
 // The visible preview IS the export canvas: saved PNGs use exactly these pixels.
 function roundPath(ctx,x,y,w,h,r){r=Math.max(0,Math.min(r,w/2,h/2));if(ctx.roundRect){ctx.roundRect(x,y,w,h,r);return;}ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();}

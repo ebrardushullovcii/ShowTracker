@@ -1,5 +1,42 @@
 import assert from "node:assert/strict";
 import path from "node:path";
+import fs from "node:fs";
+
+/** Temporary export-only fixture: no Library or custom-list writes. */
+async function inspectFullText(page, outputDir, width) {
+  const frame = await (await page.locator('iframe[title="Share preview and export options"]').elementHandle()).contentFrame();
+  await frame.evaluate(async () => {
+    const script = document.createElement("script");
+    script.textContent = "SHOWS.splice(0,SHOWS.length,...Array.from({length:634},(_,i)=>({...SHOWS[0],id:'tmdb:tv:'+(10000000+i),title:'Show '+String(i+1).padStart(4,'0'),genres:[i%2?'Comedy':'Drama']})));state.selected=new Set(SHOWS.map(s=>s.id));refreshSelection();";
+    document.body.append(script); script.remove();
+    await eval("render()");
+  });
+  const options = await frame.locator("#format option").evaluateAll((nodes) => nodes.map((node) => node.value));
+  assert.equal(options.length, 4);
+  for (const format of options) {
+    await frame.locator("#format").selectOption(format);
+    assert.equal(await frame.locator("#pagination").isVisible(), false);
+    const area = frame.locator("#text-output");
+    const text = await area.inputValue();
+    assert.match(text, /634 shows/);
+    assert.equal((text.match(/Show \d{4}/g) || []).length, 634);
+    assert.match(text, /Show 0634/);
+    if (format === "chat-message") assert.match(text, /634\. Show 0634/);
+    const edited = text + "\nMy final note.";
+    await area.fill(edited);
+    await frame.getByRole("button", { name: "Copy text", exact: true }).click();
+    // Windows clipboard converts line endings to CRLF; compare the full text after normalization.
+    assert.equal((await page.evaluate(() => navigator.clipboard.readText())).replace(/\r\n/g, "\n"), edited);
+    assert.equal(await frame.getByRole("button", { name: "Copy all messages", exact: true }).count(), 0);
+    const download = page.waitForEvent("download");
+    await frame.getByRole("button", { name: "Save .txt", exact: true }).click();
+    const file = path.join(outputDir, `full-text-${width}-${format}.txt`);
+    await (await download).saveAs(file);
+    assert.equal(fs.readFileSync(file, "utf8"), edited);
+  }
+  await page.screenshot({ path: path.join(outputDir, `full-text-${width}.png`) });
+  console.log(`[ui-inspect:text] ${width}px: all four formats include 634 titles in one preview; edited copy and saved text match exactly`);
+}
 
 /** Explicit sharing preset: creates and removes a fixture in a fresh guest account. */
 export async function inspectSharing(browser, { baseUrl, outputDir, navigateWithAuthRecovery }) {
@@ -27,6 +64,10 @@ export async function inspectSharing(browser, { baseUrl, outputDir, navigateWith
       await share().getByRole("button", { name: "Copy text", exact: true }).click();
       await share().locator("#notice").filter({ hasText: "Copied" }).waitFor();
       assert.match(await page.evaluate(() => navigator.clipboard.readText()), /Severance/);
+      await inspectFullText(page, outputDir, width);
+      await closeShare();
+      await page.getByRole("button", { name: "More show actions" }).click();
+      await page.getByRole("button", { name: "Share this show" }).click();
       await share().getByRole("button", { name: "Images", exact: true }).click();
       await share().locator("canvas").waitFor();
       const png = page.waitForEvent("download");
