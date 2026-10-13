@@ -43,21 +43,19 @@ function formats(){
   $$('[data-category]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.category===category));
   $('#format').innerHTML=CONCEPTS.filter(c=>c.tag===category).map(c=>'<option value="'+c.slug+'">'+esc(c.name)+'</option>').join('');$('#format').value=current.slug;
 }
-function pagesFor(list){return current.format==='text'?textPages(current,list,state):current.format==='game'?[list]:chunks(list,current.cap);}
-function editedMessages(list){return textPages(current,list,state).map((text,i)=>state.drafts.get(i)??text);}
+function pagesFor(list){return current.format==='text'?[fullText(current,list,state)]:current.format==='game'?[list]:chunks(list,current.cap);}
 async function render(){
   const token=++revision,list=selectedShows(),pages=pagesFor(list);state.page=Math.max(0,Math.min(state.page,pages.length-1));canvas=null;
   toast('');
   $('#description').textContent=current.layout==='grid'&&list.length===1?'One large poster with the title, year, and your message.':current.desc;
   $('#scope').textContent=list.length+' '+(list.length===1?'show':'shows')+' · all included titles';
   $('#prev').disabled=!state.page;$('#next').disabled=state.page>=pages.length-1;$('#page').textContent=pages.length?'Page '+(state.page+1)+' of '+pages.length:'';
-  const game=current.format==='game';$('#format-field').hidden=game;$('#export-details').hidden=game;$('#pagination').hidden=game;$('#stage-title').textContent=game?'Game creator':'Preview';$('#edit-summary').textContent=game?'Edit game & shows':'Edit selection & message';$('#scope').hidden=game;$('#game-link').hidden=true;$('#game-link').innerHTML='';
+  const game=current.format==='game';$('#format-field').hidden=game;$('#export-details').hidden=game;$('#pagination').hidden=current.format!=='image';$('#stage-title').textContent=game?'Game creator':'Preview';$('#edit-summary').textContent=game?'Edit game & shows':'Edit selection & message';$('#scope').hidden=game;$('#game-link').hidden=true;$('#game-link').innerHTML='';
   $('#preview').innerHTML='';$('#actions').innerHTML='';
   if(!list.length){$('#preview').innerHTML='<div class="empty"><h3>No shows included</h3><p>Open '+(game?'Edit game & shows':'Edit selection & message')+' to include titles.</p></div>';return;}
   if(current.format==='text'){
     const area=document.createElement('textarea');area.id='text-output';area.setAttribute('aria-label','Editable export text');area.value=state.drafts.get(state.page)??pages[state.page];area.oninput=()=>state.drafts.set(state.page,area.value);$('#preview').append(area);
-    action('Copy text',()=>copyText(area.value),true);action('Share text',()=>shareText(area.value));action('Save .txt',()=>saveBlob(new Blob([editedMessages(list).join('\n\n———\n\n')],{type:'text/plain;charset=utf-8'}),'showtracker-shows.txt'));
-    if(pages.length>1)action('Copy all messages',()=>copyText(editedMessages(list).join('\n\n———\n\n')));
+    action('Copy text',()=>copyText(area.value),true);action('Share text',()=>shareText(area.value));action('Save .txt',()=>saveBlob(new Blob([area.value],{type:'text/plain;charset=utf-8'}),'showtracker-shows.txt'));
     if(list.length===1&&list[0].appUrl)action('Copy show link',()=>copyText(list[0].appUrl));return;
   }
   if(game){$('#preview').innerHTML=gameCard(list);renderGameLink(list);return;}
