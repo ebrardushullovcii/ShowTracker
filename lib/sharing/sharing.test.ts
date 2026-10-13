@@ -5,6 +5,8 @@ import { createShareDocument } from "./document";
 import { rendererScript } from "./renderer-script";
 import { shareFormats } from "./formats";
 import { toShareShow } from "./types";
+import { normalizeSharedGame } from "./share-link";
+import { pickTournament, startTournament } from "./tournament";
 
 test("export boundary removes tracking data and qualifies normalized provider IDs", () => {
   const record = { title: "Example", mediaType: "tv", posterUrl: "http://image.tmdb.org/example.jpg", watchedEpisodes: 13, watchingWith: ["private friend"], status: "watching" };
@@ -38,4 +40,39 @@ test("embedded titles and messages cannot terminate the script element", () => {
   const html = createShareDocument({ title: hostile, context: "Custom list", shows: [toShareShow({ title: hostile, mediaType: "anime" }, "anilist:anime:123")] });
   assert.equal((html.match(/<\/script>/g) ?? []).length, 1);
   assert.ok(html.includes("\\u003c/script>"));
+});
+
+test("a tournament includes every contender and finishes in exactly N minus one choices", () => {
+  for (const count of [2, 3, 5, 20, 101]) {
+    let game = startTournament(count, () => 0.5);
+    const appeared = new Set<number>();
+    let choices = 0;
+    while (game.contenders.length > 1) {
+      const pair = game.contenders.slice(game.cursor, game.cursor + 2);
+      assert.equal(pair.length, 2);
+      pair.forEach((index) => appeared.add(index));
+      const previous = structuredClone(game);
+      game = pickTournament(game, pair[0]);
+      assert.equal(previous.decisions, choices);
+      choices++;
+      assert.ok(choices < count);
+    }
+    assert.equal(choices, count - 1);
+    assert.equal(appeared.size, count);
+    assert.equal(game.decisions, count - 1);
+    assert.throws(() => pickTournament(game, game.contenders[0]));
+  }
+});
+
+test("share links retain only public fields and rebuild catalogue URLs", () => {
+  const show = toShareShow({ title: "Severance", mediaType: "tv", firstAired: "2022-01-01" }, "tvmaze:tv:44933");
+  const input = { mode: "shortlist" as const, title: "Our picks", note: "Choose one", name: "", shows: [{ ...show, url: "javascript:alert(1)", appUrl: "https://evil.example", status: "watching", watchingWith: ["private"] }], ownerId: "private owner" };
+  const snapshot = normalizeSharedGame(input);
+  assert.equal(snapshot.shows[0].url, "https://www.tvmaze.com/shows/44933");
+  assert.equal(snapshot.shows[0].appUrl, "https://showtrackerapp.netlify.app/show/tvmaze%3Atv%3A44933");
+  assert.equal(JSON.stringify(snapshot).includes("private"), false);
+  assert.equal("status" in snapshot.shows[0], false);
+  assert.throws(() => normalizeSharedGame({ ...input, mode: "duel" }), /at least two/);
+  assert.throws(() => normalizeSharedGame({ ...input, shows: [show, show] }), /Invalid show/);
+  assert.throws(() => normalizeSharedGame({ ...input, shows: [{ ...show, poster: "data:image/png;base64,abc" }] }), /cover URL/);
 });

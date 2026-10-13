@@ -18,7 +18,7 @@ export function AuthGate({ children }: PropsWithChildren) {
 
     const isAuthRoute = pathname === "/login" || pathname === "/register";
     const isLandingRoute = pathname === "/" || pathname === "/lp" || pathname === "/lp/landing";
-    const isPublicRoute = isAuthRoute || (!isNative && isLandingRoute);
+    const isPublicRoute = isAuthRoute || pathname.startsWith("/share/") || (!isNative && isLandingRoute);
 
     const unauthenticatedRedirect = isNative ? "/login" : "/";
 

@@ -2,9 +2,16 @@ import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import { authTables } from "@convex-dev/auth/server";
 import { confirmedReleaseFields } from "./confirmedReleaseValidator";
+import { sharedGameFields } from "./shareValidators";
 
 export default defineSchema({
   ...authTables,
+  sharedGames: defineTable({
+    ...sharedGameFields,
+    ownerId: v.id("users"),
+    token: v.string(),
+    expiresAt: v.number(),
+  }).index("by_token", ["token"]).index("by_ownerId", ["ownerId"]),
   userProfiles: defineTable({
     userId: v.id("users"),
     avatarUrl: v.optional(v.string()),

@@ -16,6 +16,9 @@ import type * as lib_homeScheduleSignalPolicy from "../lib/homeScheduleSignalPol
 import type * as lists from "../lists.js";
 import type * as schedule from "../schedule.js";
 import type * as scheduleConfidence from "../scheduleConfidence.js";
+import type * as shareValidators from "../shareValidators.js";
+import type * as sharedGameActions from "../sharedGameActions.js";
+import type * as sharedGames from "../sharedGames.js";
 import type * as shows from "../shows.js";
 import type * as stats from "../stats.js";
 
@@ -34,6 +37,9 @@ declare const fullApi: ApiFromModules<{
   lists: typeof lists;
   schedule: typeof schedule;
   scheduleConfidence: typeof scheduleConfidence;
+  shareValidators: typeof shareValidators;
+  sharedGameActions: typeof sharedGameActions;
+  sharedGames: typeof sharedGames;
   shows: typeof shows;
   stats: typeof stats;
 }>;

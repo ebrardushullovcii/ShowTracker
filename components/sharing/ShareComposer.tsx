@@ -1,21 +1,40 @@
 import { useMemo, useRef } from "react";
-import { Alert, Share } from "react-native";
+import { Alert, Linking, Share } from "react-native";
 import { WebView, type WebViewMessageEvent } from "react-native-webview";
 import * as Clipboard from "expo-clipboard";
 import * as Sharing from "expo-sharing";
 import { File, Paths } from "expo-file-system";
 import { createShareDocument } from "@/lib/sharing/document";
 import type { ShareCollection } from "@/lib/sharing/types";
+import { useShareLinks } from "./useShareLinks";
 
 export default function ShareComposer({ collection }: { collection: ShareCollection; onClose?: () => void }) {
   const webView = useRef<WebView>(null);
   const sharing = useRef(false);
+  const handleLink = useShareLinks();
   const html = useMemo(() => createShareDocument(collection, true), [collection]);
   const onMessage = async (event: WebViewMessageEvent) => {
+    let message;
+    try { message = JSON.parse(event.nativeEvent.data); } catch { return; }
+    if (!message || typeof message !== "object") return;
+    if (message.type === "open-game" && typeof message.token === "string" && /^[a-f0-9]{40}$/.test(message.token)) {
+      try { await Linking.openURL(`https://showtrackerapp.netlify.app/share/${message.token}`); }
+      catch { Alert.alert("Could not open game", "Copy the share link and open it in your browser."); }
+      return;
+    }
+    if (["create-game-link", "revoke-game-link"].includes(message.type) && typeof message.requestId === "number") {
+      const requestId = message.requestId;
+      try {
+        const result = await handleLink(message);
+        webView.current?.injectJavaScript(`resolveShareReply(${JSON.stringify({ requestId, result }).replace(/</g, "\\u003c")});true;`);
+      } catch (error) {
+        webView.current?.injectJavaScript(`resolveShareReply(${JSON.stringify({ requestId, error: error instanceof Error ? error.message : "Could not create the link." }).replace(/</g, "\\u003c")});true;`);
+      }
+      return;
+    }
     if (sharing.current) return;
     sharing.current = true;
     try {
-      const message = JSON.parse(event.nativeEvent.data);
       if (message.type === "copy" && typeof message.text === "string") {
         await Clipboard.setStringAsync(message.text);
         webView.current?.injectJavaScript("toast('Copied. Paste it into your chat.');true;");
