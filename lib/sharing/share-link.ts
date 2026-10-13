@@ -1,6 +1,7 @@
 import { toShareShow, type ShareShow } from "./types";
 
 export type SharedGame = {
+  // Shortlist is read-only compatibility for links created before ADR-0076.
   mode: "duel" | "shortlist";
   title: string;
   note: string;
@@ -9,13 +10,14 @@ export type SharedGame = {
 };
 
 /** One public snapshot boundary for the bridge and the server. */
-export function normalizeSharedGame(value: SharedGame): SharedGame {
-  if (!value || !["duel", "shortlist"].includes(value.mode) || !Array.isArray(value.shows)) throw new Error("Invalid game.");
+export function normalizeSharedGame(value: SharedGame): SharedGame & { mode: "duel" } {
+  if (!value || value.mode !== "duel") throw new Error("This or that is the only game type.");
+  if (!Array.isArray(value.shows)) throw new Error("Invalid game.");
   for (const [field, limit] of [["title", 100], ["note", 130], ["name", 30]] as const) {
     if (typeof value[field] !== "string" || value[field].length > limit) throw new Error(`The ${field} is too long.`);
   }
-  if (value.shows.length < (value.mode === "duel" ? 2 : 1)) throw new Error(value.mode === "duel" ? "Include at least two shows to play This or that." : "Star at least one show for your shortlist.");
-  if (value.shows.length > 2000 || (value.mode === "shortlist" && value.shows.length > 3)) throw new Error("Too many shows for this game.");
+  if (value.shows.length < 2) throw new Error("Include at least two shows to play This or that.");
+  if (value.shows.length > 2000) throw new Error("Too many shows for this game.");
   const ids = new Set<string>();
   const shows = value.shows.map((show) => {
     const id = typeof show.id === "string" ? show.id.match(/^(tmdb|anilist|jikan|tvmaze|imdb):(tv|anime|movie):([a-z0-9]+)$/i) : null;

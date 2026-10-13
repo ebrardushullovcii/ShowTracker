@@ -1,0 +1,5 @@
+# ADR-0076: This or that is a link-only game creator
+
+The game mode creates a playable link, rather than mixing image export and shortlisting with game setup. Replace Choose together with a direct This or that tab. Remove the three-pick format, stars, comparison image templates, and all PNG/ZIP export actions from this mode. Its creator summarizes the included shows, accepts an optional heading and message, and creates a link to the existing full-screen tournament and final winner. Copy, share, open, and remove link actions remain.
+
+Text and Images retain their twelve existing export formats. No game choices or favorites are made in the creator. Recipients make those choices in the game. New link creation accepts only This or that; already shared shortlist links remain readable until their existing expiry so this UI simplification does not break previously sent links. The public snapshot, expiry, authorization, and temporary-choice boundaries from ADR-0075 still apply. No VPS behavior changes.

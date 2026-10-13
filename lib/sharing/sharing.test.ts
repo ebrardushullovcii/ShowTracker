@@ -66,13 +66,15 @@ test("a tournament includes every contender and finishes in exactly N minus one 
 
 test("share links retain only public fields and rebuild catalogue URLs", () => {
   const show = toShareShow({ title: "Severance", mediaType: "tv", firstAired: "2022-01-01" }, "tvmaze:tv:44933");
-  const input = { mode: "shortlist" as const, title: "Our picks", note: "Choose one", name: "", shows: [{ ...show, url: "javascript:alert(1)", appUrl: "https://evil.example", status: "watching", watchingWith: ["private"] }], ownerId: "private owner" };
+  const other = toShareShow({ title: "Breaking Bad", mediaType: "tv" }, "tvmaze:tv:169");
+  const input = { mode: "duel" as const, title: "Our game", note: "Choose one", name: "", shows: [{ ...show, url: "javascript:alert(1)", appUrl: "https://evil.example", status: "watching", watchingWith: ["private"] }, other], ownerId: "private owner" };
   const snapshot = normalizeSharedGame(input);
   assert.equal(snapshot.shows[0].url, "https://www.tvmaze.com/shows/44933");
   assert.equal(snapshot.shows[0].appUrl, "https://showtrackerapp.netlify.app/show/tvmaze%3Atv%3A44933");
   assert.equal(JSON.stringify(snapshot).includes("private"), false);
   assert.equal("status" in snapshot.shows[0], false);
-  assert.throws(() => normalizeSharedGame({ ...input, mode: "duel" }), /at least two/);
+  assert.throws(() => normalizeSharedGame({ ...input, shows: [show] }), /at least two/);
+  assert.throws(() => normalizeSharedGame({ ...input, mode: "shortlist" }), /only game type/);
   assert.throws(() => normalizeSharedGame({ ...input, shows: [show, show] }), /Invalid show/);
-  assert.throws(() => normalizeSharedGame({ ...input, shows: [{ ...show, poster: "data:image/png;base64,abc" }] }), /cover URL/);
+  assert.throws(() => normalizeSharedGame({ ...input, shows: [{ ...show, poster: "data:image/png;base64,abc" }, other] }), /cover URL/);
 });

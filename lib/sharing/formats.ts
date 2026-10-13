@@ -120,20 +120,10 @@ export const shareFormats = [
     "desc": "A light, landscape reference sheet with many small covers and clear title labels."
   },
   {
-    "slug": "three-picks",
-    "name": "Three I’d start with",
-    "tag": "Choose together",
-    "format": "image",
-    "layout": "trio",
-    "cap": 3,
-    "accent": "#fbbf24",
-    "desc": "Star up to three shows, then share a link where your friend can choose favorites and send back a result."
-  },
-  {
     "slug": "this-or-that",
     "name": "This or that",
-    "tag": "Choose together",
-    "format": "image",
+    "tag": "Game",
+    "format": "game",
     "layout": "duel",
     "cap": 2,
     "accent": "#38bdf8",
