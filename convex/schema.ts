@@ -211,6 +211,16 @@ export default defineSchema({
     .index("by_date", ["date"])
     .index("by_date_type", ["date", "mediaType"])
     .index("by_type_date", ["mediaType", "date"]),
+  // Compact identity evidence for moved-date pruning. Episode payloads remain
+  // canonical in scheduleCache; writers maintain both in the same transaction.
+  scheduleCacheIndex: defineTable({
+    bucketId: v.id("scheduleCache"),
+    date: v.string(),
+    mediaType: v.union(v.literal("tv"), v.literal("anime")),
+    identities: v.string(),
+  }).index("by_bucket", ["bucketId"])
+    .index("by_type_date", ["mediaType", "date"]),
+  scheduleCacheIndexState: defineTable({ version: v.number(), complete: v.boolean() }),
   // Pre-computed per-user per-show projections for Home/Upcoming feeds.
   // Eliminates the N+1 join of userShows → shows on every page load.
   // Updated incrementally by mutations and scheduled refresh jobs.

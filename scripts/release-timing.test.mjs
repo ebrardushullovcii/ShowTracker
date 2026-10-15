@@ -27,7 +27,7 @@ test("fresh confirmation requires exact identity, non-generic name, first future
 function makeDb(users = 55) {
   const show = { _id: "show", mediaType: "tv", tmdbId: 94664, tvmazeId: 52279, title: "Mushoku Tensei", releasedEpisodes: 59, totalEpisodes: 61, lastUpdated: now };
   const other = { showId: "tmdb:tv:999", normalizedTitle: "unrelated", episode: { seasonNumber: 1, episodeNumber: 1 } };
-  const tables = { shows: [show], userShows: [], feedProjections: [], userScheduleEvents: [], scheduleCache: [
+  const tables = { shows: [show], userShows: [], feedProjections: [], userScheduleEvents: [], scheduleCacheIndex: [], scheduleCache: [
     { _id: "old", date: tomorrow, mediaType: "tv", episodes: JSON.stringify([other, { showId: "tvmaze:52279", episode: { seasonNumber: 3, episodeNumber: 13 } }]) },
   ] };
   for (let i = 0; i < users; i++) {
@@ -48,11 +48,12 @@ function makeDb(users = 55) {
         withIndex(_name, callback) { const q = { eq(k, v) { conditions.push([k, v]); return q; } }; callback(q); return this; },
         async take(n) { assert.ok(n <= 17); const rows = select().slice(0, n); reads += rows.length; return rows; },
         async unique() { const rows = select(); assert.ok(rows.length <= 1); reads += rows.length; return rows[0] ?? null; },
+        async collect() { const rows = select(); assert.ok(rows.length <= 1); reads += rows.length; return rows; },
         async paginate({ cursor, numItems }) { assert.equal(numItems, 25); const rows = select(); const at = Number(cursor ?? 0); const page = rows.slice(at, at + numItems); reads += page.length; return { page, isDone: at + numItems >= rows.length, continueCursor: String(at + numItems) }; },
       };
     },
     async patch(id, patch) { const row = Object.values(tables).flat().find(r => r._id === id); assert.ok(row); Object.assign(row, patch); },
-    async insert(table, value) { tables[table].push({ _id: `${table}${tables[table].length}`, ...value }); },
+    async insert(table, value) { const id = `${table}${tables[table].length}`; tables[table].push({ _id: id, ...value }); return id; },
   };
   return { db, tables, get reads() { return reads; } };
 }
@@ -75,6 +76,8 @@ test("bounded mutation paginates growing users, is replay-safe, and never reads 
     if (["paused", "dropped", "plan_to_watch"].includes(before[i].status)) assert.equal(after.status, before[i].status);
   }
   assert.equal(JSON.parse(fake.tables.scheduleCache.find(r => r._id === "old").episodes)[0].showId, "tmdb:tv:999");
+  assert.equal(fake.tables.scheduleCacheIndex.length, 2);
+  assert.ok(fake.tables.scheduleCacheIndex.every(row => fake.tables.scheduleCache.some(bucket => bucket._id === row.bucketId)));
   assert.equal(fake.tables.userScheduleEvents.every(e => e.airtimeMs === stamp), true);
   assert.deepEqual(fake.tables.feedProjections[0].watchingWithNames, ["Friend"]);
   assert.equal(fake.tables.feedProjections[0].watchingWithOthers, true);

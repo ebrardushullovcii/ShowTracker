@@ -5506,6 +5506,8 @@ async function applyConvex(deltaPath, options) {
         "scheduleCacheBytesRead",
         "scheduleCacheBucketsWritten",
         "scheduleCacheBytesWritten",
+        "scheduleCacheIndexRowsRead",
+        "scheduleCacheIndexBytesRead",
         "skippedTitleFallback",
         "skippedUnchangedShows",
         "skippedUnchangedUserShows",

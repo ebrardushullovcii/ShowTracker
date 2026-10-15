@@ -45,6 +45,22 @@ code because production redacts generic exception messages. The CLI splits resou
 marks deltas applied only after successful transactions. Physical bucket/byte
 counters in the apply response distinguish this work from logical delta counts.
 
+Moved-date windows can span years when the latest released episode is old and
+the next season is newly scheduled. Reading full buckets repeatedly is still
+expensive even with batching. Keep a compact `scheduleCacheIndex` row per bucket
+containing its unique provider-ID/normalized-title pairs. Pruning reads these
+small rows and loads full buckets only for potential matches, using exactly the
+existing ID, title, and season-title predicates. The transaction's working copy
+includes earlier edits, inserts, and deletes. Exact-date upserts still read all
+buckets for that date so duplicate collapse is preserved.
+
+Every cache writer updates or removes its identity index in the same transaction:
+provider hydration, nightly pruning/upserts, intraday corrections, synthetic
+fixtures/cleanup, and global reset. An internal paged backfill builds existing
+index rows and marks complete coverage only on its final page. Until that marker
+exists, pruning retains the original full scan. An invalid index encoding widens
+the read. Episode facts stay in `scheduleCache`; the index never decides releases.
+
 No release correctness rule, provider priority, status policy, schedule window,
 or intraday timer frequency changes. ADR-0065's idle ticks still make no Convex
 calls. Heavy provider work remains on the VPS. This does not add an app-driven
@@ -59,6 +75,8 @@ handlers, verify lossless sparse/absolute/duplicate coordinates, exercise actual
 watch/rewatch/unwatch/undo mutations, and check partial-reset invalidation.
 
 Deployment includes the explicit production summary backfill and a VPS import/apply run.
+Run `scheduleCacheIndex:backfillPage` with null cursor and resume its
+`continueCursor` until `isDone` before measuring indexed cache pruning.
 Compare production future-count results for every existing user and inspect
 Convex execution-log database I/O before/after. Verify the live Home and Schedule.
 Fixture byte counts exclude Convex index costs and retries; they are not billing

@@ -19,6 +19,7 @@ import type { NormalizedScheduleEntry } from "../lib/api/types";
 import { getTvMazeScheduleByDate } from "../lib/api/tvmaze";
 import { internal } from "./_generated/api";
 import { readWatchedEpisodeRanges, watchedEpisodesFromRanges } from "../lib/tracking/watched-episode-ranges";
+import { writeScheduleCacheBucket, deleteScheduleCacheBucket } from "./lib/scheduleCacheIndex";
 
 const HYDRATE_BATCH_SIZE = 3;
 const SCHEDULE_CACHE_FRESH_MS = 1000 * 60 * 60 * 6;
@@ -2464,14 +2465,14 @@ export const upsertScheduleBucketInternal = internalMutation({
       const hasPayloadChanged = first.episodes !== args.episodes;
 
       if (hasPayloadChanged) {
-        await ctx.db.patch(first._id, {
+        await writeScheduleCacheBucket(ctx, first._id, { date: dateKey, mediaType: args.mediaType,
           episodes: args.episodes,
           lastUpdated: args.lastUpdated,
         });
       }
 
       for (const duplicate of rest) {
-        await ctx.db.delete(duplicate._id);
+        await deleteScheduleCacheBucket(ctx, duplicate._id);
       }
 
       return {
@@ -2480,7 +2481,7 @@ export const upsertScheduleBucketInternal = internalMutation({
       };
     }
 
-    await ctx.db.insert("scheduleCache", {
+    await writeScheduleCacheBucket(ctx, null, {
       date: dateKey,
       mediaType: args.mediaType,
       episodes: args.episodes,
