@@ -93,6 +93,25 @@ ssh showtracker-vps "journalctl -u showtracker-schedule-confidence.service -n 16
 
 Run the service after syncing `main` when a schedule/release fix needs to affect production immediately.
 
+## Database I/O
+
+ADR-0077 keeps exact watched coordinates in a compact `userShows` summary,
+maintained by tracking mutations. Exports and schedule reads use that summary;
+missing summaries retain the original watched-history fallback. After deploying
+the schema, run `watchedEpisodeRanges:backfillBatch` internally against the target
+deployment with `{ "cursor": null }`, then resume with its `continueCursor` until
+`isDone`. It processes at most 100 tracking rows per action, one per mutation,
+without changing counters, history, or statuses. Investigate any reported
+`skippedOversized` rows before claiming full summary coverage.
+
+The nightly runner applies 25 release deltas per transaction. Overlapping
+schedule buckets are read once and their final content written once per batch.
+Resource-limited batches split automatically. The apply totals include
+`scheduleCacheBucketsRead`, `scheduleCacheBytesRead`,
+`scheduleCacheBucketsWritten`, and `scheduleCacheBytesWritten`; these document
+estimates exclude index/OCC costs. Use production Convex execution-log usage
+statistics to verify the actual database I/O reduction.
+
 ## Bounded intraday release timing
 
 ADR-0065 adds a separate `showtracker-release-timing.timer` every 15 minutes.

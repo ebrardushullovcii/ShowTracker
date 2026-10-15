@@ -149,6 +149,8 @@ export default defineSchema({
     addedAt: v.number(),
     lastWatchedAt: v.optional(v.number()),
     watchedEpisodesCount: v.optional(v.number()),
+    // Lossless coordinate ranges, updated with watch mutations (ADR-0077).
+    watchedEpisodeRanges: v.optional(v.string()),
     watchedTotalCount: v.optional(v.number()),
     watchedRuntimeMinutes: v.optional(v.number()),
     watchedHistoryEpisodesCount: v.optional(v.number()),

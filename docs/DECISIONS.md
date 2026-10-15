@@ -153,6 +153,8 @@ Most frequently relevant:
 - [ADR-0075](ADR-0075-playable-sharing-links.md): Choose together creates public playable links with temporary choices and a final result.
 - [ADR-0076](ADR-0076-link-only-game-creator.md): This or that is a link-only game creator; remove shortlist and image exports from game setup.
 
+- [ADR-0077](ADR-0077-schedule-database-io.md): lossless watched-coordinate summaries and shared schedule-bucket batching reduce recurring database I/O while preserving release matching.
+
 ## Guidance policy
 
 - [ADR-0061](ADR-0061-minimal-agent-guidance.md): retain decisions, remove process scaffolding, and document decisions rather than every patch.
