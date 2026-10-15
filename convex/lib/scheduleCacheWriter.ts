@@ -1,5 +1,6 @@
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
+import { ConvexError } from "convex/values";
 
 type MediaType = "tv" | "anime";
 type Payload = Pick<Doc<"scheduleCache">, "date" | "mediaType" | "episodes" | "lastUpdated">;
@@ -50,7 +51,7 @@ export class ScheduleCacheWriter {
         this.metrics.bytesRead += new TextEncoder().encode(JSON.stringify(row)).length;
       }
       if (this.metrics.bytesRead > this.maxReadBytes) {
-        throw new Error("SCHEDULE_CACHE_BATCH_BUDGET: retry with fewer release deltas");
+        throw new ConvexError({ code: "SCHEDULE_CACHE_BATCH_BUDGET" });
       }
     }
     const ranges = [...this.covered[mediaType], { start, end }].sort((a, b) => a.start.localeCompare(b.start));

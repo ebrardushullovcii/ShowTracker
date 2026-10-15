@@ -5,6 +5,8 @@ import { getFutureUpcomingCountsForWatchlistForUser } from "../convex/schedule.t
 import { backfillPage } from "../convex/watchedEpisodeRanges.ts";
 import { toggleEpisodeWatched, unmarkEpisodesWatchedFrom, resetUserTrackingDataBatch } from "../convex/shows.ts";
 import { buildWatchedEpisodeRanges } from "../lib/tracking/watched-episode-ranges.ts";
+import { applyReleaseDeltaBatches } from "./schedule-confidence.mjs";
+import { ScheduleCacheWriter } from "../convex/lib/scheduleCacheWriter.ts";
 
 // Counts the documents/JSON bytes the real handlers read, including nested reads.
 // These are fixture document costs, not Convex billing/index/OCC measurements.
@@ -78,6 +80,40 @@ function database(seed) {
 }
 
 const token = "test-only-token";
+
+test("production-redacted budget errors split batches and mark only committed deltas", async () => {
+  const deltas = Array.from({ length: 25 }, (_, id) => ({ id }));
+  const committed = [], marked = [], calls = [];
+  const results = await applyReleaseDeltaBatches(deltas, {
+    batchSize: 25,
+    applyBatch: async batch => {
+      calls.push(batch.length);
+      if (batch.length > 5) throw Object.assign(new Error("Server Error"), { data: { code: "SCHEDULE_CACHE_BATCH_BUDGET" } });
+      committed.push(...batch.map(delta => delta.id));
+      return batch.length;
+    },
+    onApplied: batch => marked.push(...batch.map(delta => delta.id)),
+  });
+  assert.equal(calls[0], 25);
+  assert.deepEqual(committed, deltas.map(delta => delta.id));
+  assert.deepEqual(marked, committed);
+  assert.equal(results.reduce((sum, count) => sum + count, 0), 25);
+  let attempts = 0;
+  await assert.rejects(() => applyReleaseDeltaBatches(deltas, {
+    batchSize: 25,
+    applyBatch: async () => { attempts++; throw new Error("Invalid provider evidence"); },
+    onApplied: () => assert.fail("Failed deltas must not be marked applied"),
+  }), /Invalid provider evidence/);
+  assert.equal(attempts, 1);
+});
+
+test("cache budget is a structured Convex error and stops before any cache writes", async () => {
+  const date = "2026-10-15";
+  const instance = database({ scheduleCache: [{ _id: "bucket", mediaType: "tv", date, episodes: "[]", lastUpdated: 1 }] });
+  const cache = new ScheduleCacheWriter(instance, 1);
+  await assert.rejects(() => cache.readDate("tv", date), error => error.data?.code === "SCHEDULE_CACHE_BATCH_BUDGET");
+  assert.equal(instance.writes, 0);
+});
 function librarySeed() {
   const watched = Array.from({ length: 1200 }, (_, i) => ({ _id: `w${i}`, userId: "u", showId: "s", season: 1, episode: i + 1, watchedAt: i + 1, watchCount: 2, runtime: 25, watchHistory: [i + 1, i + 2], sourceEpisodeId: `import:episode:${i}` }));
   return {
