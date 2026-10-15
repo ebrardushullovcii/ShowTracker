@@ -40,7 +40,8 @@ function withSceneManifest(config) {
         UIWindowSceneSessionRoleApplication: [
           {
             UISceneConfigurationName: "Default Configuration",
-            UISceneDelegateClassName: "$(PRODUCT_MODULE_NAME).SceneDelegate",
+            // Matches the explicit @objc(SceneDelegate) runtime name in SceneDelegate.swift.
+            UISceneDelegateClassName: "SceneDelegate",
           },
         ],
       },
