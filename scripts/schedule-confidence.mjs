@@ -5392,6 +5392,32 @@ async function applyScheduleProjections(db, options) {
   };
 }
 
+// Structured errors survive Convex production redaction; generic exception
+// messages do not. Keep correctness failures fatal and mark only committed pages.
+async function applyReleaseDeltaBatches(deltas, { batchSize, applyBatch, onApplied = () => {} }) {
+  const results = [];
+  const apply = async (batch) => {
+    let result;
+    try {
+      result = await applyBatch(batch);
+    } catch (error) {
+      const budgetExceeded = error?.data?.code === "SCHEDULE_CACHE_BATCH_BUDGET";
+      const readLimitExceeded = /Too many bytes read|Too many documents read/i.test(String(error));
+      if (batch.length <= 1 || (!budgetExceeded && !readLimitExceeded)) throw error;
+      const middle = Math.ceil(batch.length / 2);
+      await apply(batch.slice(0, middle));
+      await apply(batch.slice(middle));
+      return;
+    }
+    results.push(result);
+    await onApplied(batch, result);
+  };
+  for (let index = 0; index < deltas.length; index += batchSize) {
+    await apply(deltas.slice(index, index + batchSize));
+  }
+  return results;
+}
+
 async function applyConvex(deltaPath, options) {
   const convexUrl = options.convexUrl ?? process.env.EXPO_PUBLIC_CONVEX_URL;
   const importToken = options.importToken ?? process.env.SCHEDULE_CONFIDENCE_IMPORT_TOKEN;
@@ -5405,43 +5431,22 @@ async function applyConvex(deltaPath, options) {
   const applyReleaseDeltas = makeFunctionReference("scheduleConfidence:applyReleaseDeltas");
   const batchSize = options.batchSize ?? 25;
   const runId = options.runId ?? `local-${payload.generatedAt}`;
-  const applyDeltas = async (deltas, { generatedAt, markApplied } = {}) => {
-    const batchResults = [];
-    const applyBatch = async (batch) => {
-      let result;
-      try {
-        result = await client.mutation(applyReleaseDeltas, {
-          importToken, runId, generatedAt: generatedAt ?? payload.generatedAt, deltas: batch,
-        });
-      } catch (error) {
-        // A failed Convex mutation is atomic. Split only resource-limit failures;
-        // provider/correctness errors still stop the run without marking applied.
-        if (batch.length <= 1 || !/SCHEDULE_CACHE_BATCH_BUDGET|Too many bytes read|Too many documents read/i.test(String(error))) throw error;
-        const middle = Math.ceil(batch.length / 2);
-        await applyBatch(batch.slice(0, middle));
-        await applyBatch(batch.slice(middle));
-        return;
-      }
-      batchResults.push(result);
-      if (!markApplied || !options.db) {
-        return;
-      }
+  const applyDeltas = (deltas, { generatedAt, markApplied } = {}) => applyReleaseDeltaBatches(deltas, {
+    batchSize,
+    applyBatch: (batch) => client.mutation(applyReleaseDeltas, {
+      importToken, runId, generatedAt: generatedAt ?? payload.generatedAt, deltas: batch,
+    }),
+    onApplied: (batch) => {
+      if (!markApplied || !options.db) return;
       const appliedAt = Date.now();
       const markAppliedStatement = options.db.prepare(
         "UPDATE convex_deltas SET applied_at = ? WHERE canonical_key = ?"
       );
       for (const delta of batch) {
-        markAppliedStatement.run(
-          appliedAt,
-          convexDeltaStorageKey(delta.canonicalKey, delta.showId)
-        );
+        markAppliedStatement.run(appliedAt, convexDeltaStorageKey(delta.canonicalKey, delta.showId));
       }
-    };
-    for (let index = 0; index < deltas.length; index += batchSize) {
-      await applyBatch(deltas.slice(index, index + batchSize));
-    }
-    return batchResults;
-  };
+    },
+  });
 
   const results = await applyDeltas(payload.deltas, { markApplied: true });
   let scheduleCacheMaintenance = {
@@ -8431,7 +8436,7 @@ async function main() {
   }
 }
 
-export { loadEnvFile, fetchTmdbDetails, fetchTvMazeEpisodes, dedupeProviderEventsForReleaseFact,
+export { applyReleaseDeltaBatches, loadEnvFile, fetchTmdbDetails, fetchTvMazeEpisodes, dedupeProviderEventsForReleaseFact,
   initDb, upsertLibraryItem, rememberProviderCatalogue, buildFreshCatalogueCachePrunes,
   isUnconfirmedProviderPlaceholder, hydrateProviderEventsFromRealApis };
 

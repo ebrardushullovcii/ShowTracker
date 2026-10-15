@@ -40,7 +40,8 @@ working copy of the schedule buckets it has read, including empty date ranges.
 Overlapping title windows read only uncovered ranges. Subsequent deltas see
 preceding changes; the transaction commits each bucket's final content once.
 No provider/date/alias pruning policy changes. Writes that return a bucket to
-its original content are skipped. The CLI splits resource-limited batches and
+its original content are skipped. Budget guards use a structured `ConvexError`
+code because production redacts generic exception messages. The CLI splits resource-limited batches and
 marks deltas applied only after successful transactions. Physical bucket/byte
 counters in the apply response distinguish this work from logical delta counts.
 
