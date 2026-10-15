@@ -104,6 +104,8 @@ run("build", "xcodebuild", [
   "-allowProvisioningDeviceRegistration",
   `DEVELOPMENT_TEAM=${team}`,
   "CODE_SIGN_STYLE=Automatic",
+  // Xcode 27 rejects the 9.0 target of SDWebImage's resource bundle; every other target is 15.1.
+  "IPHONEOS_DEPLOYMENT_TARGET=15.1",
   "build",
 ], iosDir);
 
