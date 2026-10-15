@@ -8,7 +8,7 @@
 //   EXPO_PUBLIC_CONVEX_URL, EXPO_PUBLIC_CONVEX_SITE_URL  the backend to bundle
 // Other EXPO_PUBLIC_* values come from the usual .env files.
 //
-// Flags: --refresh-native regenerates ios/ and reinstalls Pods; --no-install only builds.
+// Flags: --refresh-native regenerates ios/ from scratch; --no-install only builds.
 import { execFileSync, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
@@ -83,14 +83,16 @@ if (execFileSync("git", ["status", "--porcelain"], { cwd: root, encoding: "utf8"
 const commit = execFileSync("git", ["rev-parse", "--short", "HEAD"], { cwd: root, encoding: "utf8" }).trim();
 console.log(`Building ${commit} against ${convexUrl}`);
 
-if (args.has("--refresh-native") || !fs.existsSync(path.join(iosDir, "Podfile"))) {
-  run("prebuild", "npx", ["expo", "prebuild", "--platform", "ios", "--clean", "--no-install"]);
-  // Prebuild adds run scripts to package.json; this project keeps native folders generated.
-  execFileSync("git", ["checkout", "--", "package.json"], { cwd: root });
+if (spawnSync("npm", ["ls", "--depth=0"], { cwd: root, stdio: "ignore" }).status !== 0) {
+  throw new Error("node_modules does not match package.json; run npm install first");
 }
-if (args.has("--refresh-native") || !fs.existsSync(path.join(iosDir, "Pods/Manifest.lock"))) {
-  run("pods", "pod", ["install"], iosDir);
-}
+// A non-clean prebuild and pod install pick up config and native module changes in seconds
+// and keep the build cache. --refresh-native regenerates ios/ from scratch.
+const prebuildArgs = ["expo", "prebuild", "--platform", "ios", "--no-install"];
+run("prebuild", "npx", args.has("--refresh-native") ? [...prebuildArgs, "--clean"] : prebuildArgs);
+// Prebuild adds run scripts to package.json; this project keeps native folders generated.
+execFileSync("git", ["checkout", "--", "package.json"], { cwd: root });
+run("pods", "pod", ["install"], iosDir);
 
 const udid = deviceUdid();
 run("build", "xcodebuild", [
