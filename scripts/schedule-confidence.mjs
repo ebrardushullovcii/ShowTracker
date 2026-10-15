@@ -5407,17 +5407,24 @@ async function applyConvex(deltaPath, options) {
   const runId = options.runId ?? `local-${payload.generatedAt}`;
   const applyDeltas = async (deltas, { generatedAt, markApplied } = {}) => {
     const batchResults = [];
-    for (let index = 0; index < deltas.length; index += batchSize) {
-      const batch = deltas.slice(index, index + batchSize);
-      const result = await client.mutation(applyReleaseDeltas, {
-        importToken,
-        runId,
-        generatedAt: generatedAt ?? payload.generatedAt,
-        deltas: batch,
-      });
+    const applyBatch = async (batch) => {
+      let result;
+      try {
+        result = await client.mutation(applyReleaseDeltas, {
+          importToken, runId, generatedAt: generatedAt ?? payload.generatedAt, deltas: batch,
+        });
+      } catch (error) {
+        // A failed Convex mutation is atomic. Split only resource-limit failures;
+        // provider/correctness errors still stop the run without marking applied.
+        if (batch.length <= 1 || !/SCHEDULE_CACHE_BATCH_BUDGET|Too many bytes read|Too many documents read/i.test(String(error))) throw error;
+        const middle = Math.ceil(batch.length / 2);
+        await applyBatch(batch.slice(0, middle));
+        await applyBatch(batch.slice(middle));
+        return;
+      }
       batchResults.push(result);
       if (!markApplied || !options.db) {
-        continue;
+        return;
       }
       const appliedAt = Date.now();
       const markAppliedStatement = options.db.prepare(
@@ -5429,6 +5436,9 @@ async function applyConvex(deltaPath, options) {
           convexDeltaStorageKey(delta.canonicalKey, delta.showId)
         );
       }
+    };
+    for (let index = 0; index < deltas.length; index += batchSize) {
+      await applyBatch(deltas.slice(index, index + batchSize));
     }
     return batchResults;
   };
@@ -5487,6 +5497,10 @@ async function applyConvex(deltaPath, options) {
         "repairedStaleProjections",
         "scheduleCacheRowsUpdated",
         "scheduleCacheRowsSkipped",
+        "scheduleCacheBucketsRead",
+        "scheduleCacheBytesRead",
+        "scheduleCacheBucketsWritten",
+        "scheduleCacheBytesWritten",
         "skippedTitleFallback",
         "skippedUnchangedShows",
         "skippedUnchangedUserShows",

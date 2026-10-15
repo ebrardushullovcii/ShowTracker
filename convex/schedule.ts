@@ -18,6 +18,7 @@ import {
 import type { NormalizedScheduleEntry } from "../lib/api/types";
 import { getTvMazeScheduleByDate } from "../lib/api/tvmaze";
 import { internal } from "./_generated/api";
+import { readWatchedEpisodeRanges, watchedEpisodesFromRanges } from "../lib/tracking/watched-episode-ranges";
 
 const HYDRATE_BATCH_SIZE = 3;
 const SCHEDULE_CACHE_FRESH_MS = 1000 * 60 * 60 * 6;
@@ -1178,6 +1179,7 @@ async function getScheduleProjectionStatus(
     startDate: string;
     endDate: string;
     mediaFilter?: ScheduleMediaFilter;
+    includeFeedTimestamp?: boolean;
   }
 ): Promise<ScheduleProjectionStatus> {
   const windows = await ctx.db
@@ -1199,7 +1201,9 @@ async function getScheduleProjectionStatus(
         args.userId,
         args.mediaFilter
       ),
-      getLatestFeedProjectionUpdatedAt(ctx, args.userId, args.mediaFilter),
+      args.includeFeedTimestamp
+        ? getLatestFeedProjectionUpdatedAt(ctx, args.userId, args.mediaFilter)
+        : Promise.resolve(0),
     ]);
 
   if (!coveredWindow) {
@@ -1679,7 +1683,13 @@ async function getWatchedScheduleEpisodeIndexForShows(
 
   await Promise.all(
     uniqueShowIds.map(async (showId) => {
-      const watchedEpisodes = await ctx.db
+      const userShow = await ctx.db.query("userShows")
+        .withIndex("by_user_show", q => q.eq("userId", userId).eq("showId", showId))
+        .unique();
+      const ranges = readWatchedEpisodeRanges(userShow?.watchedEpisodeRanges);
+      const watchedEpisodes = ranges !== null
+        ? Array.from(watchedEpisodesFromRanges(ranges))
+        : await ctx.db
         .query("watchedEpisodes")
         .withIndex("by_user_show", (q) =>
           q.eq("userId", userId).eq("showId", showId)
@@ -1782,6 +1792,7 @@ export const getScheduleProjectionDiagnostics = query({
       startDate: range.startDate,
       endDate: range.endDate,
       mediaFilter: args.mediaFilter,
+      includeFeedTimestamp: true,
     });
     const projectedRows = await getProjectedScheduleEvents(ctx, {
       userId: typedUserId,
@@ -1918,12 +1929,6 @@ async function getProjectedFutureUpcomingCountsForUser(
     return null;
   }
 
-  const rows = await getProjectedScheduleEvents(ctx, args);
-  const currentRows = await filterProjectedRowsToCurrentFeedProjections(
-    ctx,
-    args.userId,
-    rows
-  );
   const previousStartDate = formatDate(
     addUtcDays(
       parseRequiredScheduleDateKey(
@@ -1937,33 +1942,15 @@ async function getProjectedFutureUpcomingCountsForUser(
     previousStartDate < coveredWindow.scheduleStartDate
       ? args.startDate
       : previousStartDate;
-  const duplicateRows =
-    duplicateStartDate === args.startDate
-      ? currentRows
-      : await filterProjectedRowsToCurrentFeedProjections(
-          ctx,
-          args.userId,
-          await getProjectedScheduleEvents(ctx, {
-            userId: args.userId,
-            startDate: duplicateStartDate,
-            endDate: args.endDate,
-            mediaFilter: args.mediaFilter,
-          })
-        );
-  const projectionIds = Array.from(
-    new Set(duplicateRows.map((row) => row.feedProjectionId))
-  );
-  const projections = await Promise.all(
-    projectionIds.map((projectionId) => ctx.db.get(projectionId))
-  );
-  const projectionById = new Map(
-    projections
-      .filter(
-        (projection): projection is Doc<"feedProjections"> =>
-          !!projection && projection.userId === args.userId
-      )
-      .map((projection) => [projection._id, projection])
-  );
+  const rows = await getProjectedScheduleEvents(ctx, {
+    ...args, startDate: duplicateStartDate,
+  });
+  const projectionById = await getProjectionByIdForScheduleRows(ctx, args.userId, rows);
+  const duplicateRows = rows.filter(row => {
+    const projection = projectionById.get(row.feedProjectionId);
+    return projection && (projection.mediaType === "tv" || projection.mediaType === "anime");
+  });
+  const currentRows = duplicateRows.filter(row => row.date >= args.startDate);
   const watchedEpisodes = await getWatchedScheduleEpisodeIndexForShows(
     ctx,
     args.userId,

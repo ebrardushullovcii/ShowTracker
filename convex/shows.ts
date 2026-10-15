@@ -14,6 +14,7 @@ import { computeWatchedHistoryAggregates } from "../lib/tracking/history-aggrega
 import { resolveManualTrackingStatus } from "../lib/tracking/initial-status";
 import { confirmedReleaseFloor } from "../lib/tracking/confirmed-release";
 import { isEpisodeAtOrAfter } from "../lib/tracking/episode-order";
+import { buildWatchedEpisodeRanges } from "../lib/tracking/watched-episode-ranges";
 import { paginationOptsValidator } from "convex/server";
 import { api, internal } from "./_generated/api";
 import {
@@ -2614,7 +2615,9 @@ async function refreshUserShowTrackingAggregatesForDoc(
 
   const aggregates = computeWatchedEpisodeAggregates(watchedEpisodes, show);
   const now = Date.now();
+  const watchedEpisodeRanges = buildWatchedEpisodeRanges(watchedEpisodes);
   const patch: Partial<Doc<"userShows">> = {
+    watchedEpisodeRanges,
     watchedEpisodesCount: aggregates.watchedEpisodesCount,
     watchedTotalCount: aggregates.watchedTotalCount,
     watchedRuntimeMinutes: aggregates.watchedRuntimeMinutes,
@@ -2669,6 +2672,7 @@ async function refreshUserShowTrackingAggregatesForDoc(
 
   const patched =
     hasUserShowAggregateChanges(userShow, nextStatus, aggregates) ||
+    userShow.watchedEpisodeRanges !== watchedEpisodeRanges ||
     shouldClearWatchingWithOthers;
   if (patched) {
     await ctx.db.patch(userShow._id, patch);
@@ -7841,6 +7845,20 @@ const RESET_USER_DATA_MAX_BATCHES = 250;
 const RESET_GLOBAL_MEDIA_BATCH_SIZE = 500;
 const RESET_GLOBAL_MEDIA_MAX_BATCHES = 1000;
 
+async function invalidateWatchedEpisodeRanges(
+  ctx: MutationCtx,
+  rows: Pick<Doc<"watchedEpisodes">, "userId" | "showId">[]
+) {
+  const identities = new Map(rows.map(row => [`${row.userId}:${row.showId}`, row]));
+  for (const { userId, showId } of identities.values()) {
+    const userShow = await ctx.db.query("userShows")
+      .withIndex("by_user_show", q => q.eq("userId", userId).eq("showId", showId)).unique();
+    if (userShow?.watchedEpisodeRanges !== undefined) {
+      await ctx.db.patch(userShow._id, { watchedEpisodeRanges: undefined });
+    }
+  }
+}
+
 export const resetUserTrackingDataBatch = internalMutation({
   args: {
     userId: v.id("users"),
@@ -7854,6 +7872,7 @@ export const resetUserTrackingDataBatch = internalMutation({
       .withIndex("by_user", (q) => q.eq("userId", args.userId))
       .take(remaining);
 
+    await invalidateWatchedEpisodeRanges(ctx, watchedEpisodes);
     for (const entry of watchedEpisodes) {
       await ctx.db.delete(entry._id);
     }
@@ -7999,6 +8018,7 @@ export const resetGlobalMediaDataBatch = internalMutation({
     let remaining = Math.max(1, Math.floor(args.limit));
 
     const watchedEpisodes = await ctx.db.query("watchedEpisodes").take(remaining);
+    await invalidateWatchedEpisodeRanges(ctx, watchedEpisodes);
     for (const entry of watchedEpisodes) {
       await ctx.db.delete(entry._id);
     }

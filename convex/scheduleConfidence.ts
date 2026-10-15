@@ -5,6 +5,8 @@ import { paginationOptsValidator } from "convex/server";
 import { v } from "convex/values";
 import { confirmedReleaseFields } from "./confirmedReleaseValidator";
 import { confirmedReleaseFloor, isConfirmedReleaseValid } from "../lib/tracking/confirmed-release";
+import { readWatchedEpisodeRanges, watchedEpisodeAnchorsFromRanges } from "../lib/tracking/watched-episode-ranges";
+import { ScheduleCacheWriter } from "./lib/scheduleCacheWriter";
 
 const IMPORT_BATCH_LIMIT = 200;
 const APPLY_DELTA_LIMIT = 50;
@@ -1178,7 +1180,7 @@ async function patchProjectionForUserShow(
 }
 
 async function pruneMovedScheduleCacheEntries(
-  ctx: MutationCtx,
+  cache: ScheduleCacheWriter,
   args: {
     mediaType: "tv" | "anime";
     normalizedTitle: string;
@@ -1238,12 +1240,7 @@ async function pruneMovedScheduleCacheEntries(
   const rows = (
     await Promise.all(
       mediaTypes.map((mediaType) =>
-        ctx.db
-          .query("scheduleCache")
-          .withIndex("by_type_date", (q) =>
-            q.eq("mediaType", mediaType).gte("date", startDate).lte("date", endDate)
-          )
-          .collect()
+        cache.readRange(mediaType, startDate, endDate)
       )
     )
   ).flat();
@@ -1300,7 +1297,7 @@ async function pruneMovedScheduleCacheEntries(
       continue;
     }
 
-    await ctx.db.patch(row._id, {
+    cache.write(row, {
       episodes: serializeCompactScheduleEntries(entries),
       lastUpdated: Date.now(),
     });
@@ -1311,7 +1308,7 @@ async function pruneMovedScheduleCacheEntries(
 }
 
 async function pruneStaleScheduleCacheProviderEntries(
-  ctx: MutationCtx,
+  cache: ScheduleCacheWriter,
   delta: {
     mediaType: "tv" | "anime" | "movie";
     providerIds: {
@@ -1376,22 +1373,17 @@ async function pruneStaleScheduleCacheProviderEntries(
   const startDate = addDaysToDateKey(todayKey, -STALE_PROVIDER_PRUNE_PAST_DAYS);
   const endDate = addDaysToDateKey(todayKey, STALE_PROVIDER_PRUNE_FUTURE_DAYS);
   // New prunes carry exact dates. Undated legacy deltas retain their bounded window.
-  const rows: Doc<"scheduleCache">[] = [];
+  const rows: Awaited<ReturnType<ScheduleCacheWriter["readRange"]>> = [];
   if (staleEpisodeKeys.size > 0) {
     const limit = STALE_PROVIDER_PRUNE_PAST_DAYS + STALE_PROVIDER_PRUNE_FUTURE_DAYS + 2;
-    const legacyRows = await ctx.db.query("scheduleCache")
-      .withIndex("by_type_date", (q) =>
-        q.eq("mediaType", mediaType).gte("date", startDate).lte("date", endDate)
-      ).take(limit);
-    if (legacyRows.length === limit) throw new Error("Too many schedule buckets for provider prune");
+    const legacyRows = await cache.readRange(mediaType, startDate, endDate);
+    if (legacyRows.length >= limit) throw new Error("Too many schedule buckets for provider prune");
     rows.push(...legacyRows);
   } else {
     if (staleDates.size > 128) throw new Error("Too many dates for provider prune");
     for (const date of staleDates) {
       if (date < startDate || date > endDate) continue;
-      const buckets = await ctx.db.query("scheduleCache")
-        .withIndex("by_type_date", (q) => q.eq("mediaType", mediaType).eq("date", date))
-        .take(2);
+      const buckets = await cache.readDate(mediaType, date);
       if (buckets.length > 1) throw new Error("Duplicate schedule buckets for provider prune");
       rows.push(...buckets);
     }
@@ -1413,7 +1405,7 @@ async function pruneStaleScheduleCacheProviderEntries(
       continue;
     }
 
-    await ctx.db.patch(row._id, {
+    cache.write(row, {
       episodes: serializeCompactScheduleEntries(entries),
       lastUpdated: Date.now(),
     });
@@ -1424,7 +1416,7 @@ async function pruneStaleScheduleCacheProviderEntries(
 }
 
 async function upsertScheduleCacheEntry(
-  ctx: MutationCtx,
+  cache: ScheduleCacheWriter,
   delta: {
     title: string;
     mediaType: "tv" | "anime" | "movie";
@@ -1507,7 +1499,7 @@ async function upsertScheduleCacheEntry(
     }
   }
 
-  rowsUpdated += await pruneMovedScheduleCacheEntries(ctx, {
+  rowsUpdated += await pruneMovedScheduleCacheEntries(cache, {
     mediaType,
     normalizedTitle,
     totalEpisodes: delta.totalEpisodes,
@@ -1516,10 +1508,7 @@ async function upsertScheduleCacheEntry(
   });
 
   for (const [date, dateFacts] of factsByDate) {
-    const rows = await ctx.db
-      .query("scheduleCache")
-      .withIndex("by_date_type", (q) => q.eq("date", date).eq("mediaType", mediaType))
-      .collect();
+    const rows = await cache.readDate(mediaType, date);
     const [row, ...duplicates] = rows;
     const existingEntries = row ? parseCompactScheduleEntries(row.episodes) : [];
     const desiredEntries = dateFacts.map((fact) => ({
@@ -1582,17 +1571,17 @@ async function upsertScheduleCacheEntry(
       if (row.episodes === nextEpisodes) {
         skippedUnchanged += 1;
       } else {
-        await ctx.db.patch(row._id, payload);
+        cache.write(row, payload);
         rowsUpdated += 1;
       }
       for (const duplicate of duplicates) {
-        await ctx.db.delete(duplicate._id);
+        cache.delete(duplicate);
         rowsUpdated += 1;
       }
       continue;
     }
 
-    await ctx.db.insert("scheduleCache", payload);
+    cache.insert(payload);
     rowsUpdated += 1;
   }
 
@@ -1667,20 +1656,46 @@ export const exportTrackedLibrary = query({
     importToken: v.string(),
     paginationOpts: paginationOptsValidator,
   },
+  returns: v.object({
+    isDone: v.boolean(),
+    continueCursor: v.string(),
+    splitCursor: v.optional(v.union(v.string(), v.null())),
+    pageStatus: v.optional(v.union(v.literal("SplitRecommended"), v.literal("SplitRequired"), v.null())),
+    page: v.array(v.object({
+      projectionId: v.id("feedProjections"), userId: v.id("users"),
+      showId: v.id("shows"), userShowId: v.id("userShows"),
+      title: v.string(), mediaType: mediaTypeValidator,
+      posterUrl: v.union(v.string(), v.null()), status: v.string(),
+      showStatus: v.union(v.string(), v.null()), projectionNeedsRepair: v.boolean(),
+      watchedEpisodesCount: v.number(),
+      watchedEpisodeAnchors: v.array(v.object({ season: v.number(), episode: v.number() })),
+      totalEpisodes: v.union(v.number(), v.null()), remainingEpisodes: v.union(v.number(), v.null()),
+      tmdbId: v.union(v.number(), v.null()), tvmazeId: v.union(v.number(), v.null()),
+      anilistId: v.union(v.number(), v.null()), malId: v.union(v.number(), v.null()),
+      imdbId: v.union(v.string(), v.null()), firstAired: v.union(v.string(), v.null()),
+      lastWatchedAt: v.number(), newEpisodeSignalAt: v.union(v.number(), v.null()),
+    })),
+  }),
   handler: async (ctx, args) => {
     requireImportToken(args.importToken);
     const page = await ctx.db.query("feedProjections").paginate({
       ...args.paginationOpts,
       numItems: Math.min(args.paginationOpts.numItems, IMPORT_BATCH_LIMIT),
     });
-    const shows = await Promise.all(
-      page.page.map((projection) => ctx.db.get(projection.showId))
-    );
+    const showIds = [...new Set(page.page.map(projection => projection.showId))];
+    const showsById = new Map(await Promise.all(
+      showIds.map(async showId => [showId, await ctx.db.get(showId)] as const)
+    ));
     const watchedEpisodeAnchors = await Promise.all(
       page.page.map(async (projection) => {
         if (projection.mediaType !== "tv" && projection.mediaType !== "anime") {
           return [];
         }
+
+        const userShow = await ctx.db.get(projection.userShowId);
+        const ranges = userShow?.userId === projection.userId && userShow.showId === projection.showId
+          ? readWatchedEpisodeRanges(userShow.watchedEpisodeRanges) : null;
+        if (ranges !== null) return watchedEpisodeAnchorsFromRanges(ranges, WATCHED_EPISODE_ANCHOR_LIMIT);
 
         const rows = await ctx.db
           .query("watchedEpisodes")
@@ -1699,7 +1714,7 @@ export const exportTrackedLibrary = query({
     return {
       ...page,
       page: page.page.map((projection, index) => {
-        const show = shows[index];
+        const show = showsById.get(projection.showId);
         const projectionNeedsRepair = Boolean(
           show &&
             (projection.title !== show.title ||
@@ -2229,11 +2244,26 @@ export const applyReleaseDeltas = mutation({
     generatedAt: v.number(),
     deltas: v.array(releaseDeltaValidator),
   },
+  returns: v.object({
+    runId: v.string(), generatedAt: v.number(), scanned: v.number(),
+    matchedShows: v.number(), missingShows: v.number(), patchedShows: v.number(),
+    patchedUserShows: v.number(), patchedFeedProjections: v.number(),
+    resumedCompletedShows: v.number(), resumedAutoPausedShows: v.number(),
+    completedCaughtUpTerminalShows: v.number(), clearedStaleEpisodeSignals: v.number(),
+    repairedStaleProjections: v.number(), repairedTrackingAggregates: v.number(),
+    scheduleCacheRowsUpdated: v.number(), scheduleCacheRowsSkipped: v.number(),
+    skippedTitleFallback: v.number(), skippedUnchangedShows: v.number(),
+    skippedUnchangedUserShows: v.number(), skippedUnchangedFeedProjections: v.number(),
+    scheduleCacheBucketsRead: v.number(), scheduleCacheBytesRead: v.number(),
+    scheduleCacheBucketsWritten: v.number(), scheduleCacheBytesWritten: v.number(),
+  }),
   handler: async (ctx, args) => {
     requireImportToken(args.importToken);
     if (args.deltas.length > APPLY_DELTA_LIMIT) {
       throw new Error(`Apply at most ${APPLY_DELTA_LIMIT} release deltas per call.`);
     }
+
+    const cache = new ScheduleCacheWriter(ctx, args.deltas.length > 1 ? 6 * 1024 * 1024 : Infinity);
 
     const result = {
       runId: args.runId,
@@ -2270,7 +2300,7 @@ export const applyReleaseDeltas = mutation({
         delta.scheduleCacheProviderPrunes.length > 0
       ) {
         const prunedRows = await pruneStaleScheduleCacheProviderEntries(
-          ctx,
+          cache,
           delta,
           delta.scheduleCacheProviderPrunes,
           args.generatedAt
@@ -2280,7 +2310,7 @@ export const applyReleaseDeltas = mutation({
       }
       if (delta.scheduleCachePruneOnly === true) continue;
       if (delta.scheduleCacheMaintenance === true) {
-        const scheduleCacheResult = await upsertScheduleCacheEntry(ctx, delta);
+        const scheduleCacheResult = await upsertScheduleCacheEntry(cache, delta);
         result.scheduleCacheRowsUpdated += scheduleCacheResult.updated;
         result.scheduleCacheRowsSkipped += scheduleCacheResult.skippedUnchanged;
         scheduleCacheAlreadyMaintained = true;
@@ -2336,7 +2366,7 @@ export const applyReleaseDeltas = mutation({
         delta.trackingAggregateRepair === true;
 
       if (!scheduleCacheAlreadyMaintained) {
-        const scheduleCacheResult = await upsertScheduleCacheEntry(ctx, delta);
+        const scheduleCacheResult = await upsertScheduleCacheEntry(cache, delta);
         result.scheduleCacheRowsUpdated += scheduleCacheResult.updated;
         result.scheduleCacheRowsSkipped += scheduleCacheResult.skippedUnchanged;
       }
@@ -2479,7 +2509,9 @@ export const applyReleaseDeltas = mutation({
       }
     }
 
-    return result;
+    const cacheMetrics = await cache.flush();
+    return { ...result, scheduleCacheBucketsRead: cacheMetrics.bucketsRead, scheduleCacheBytesRead: cacheMetrics.bytesRead,
+      scheduleCacheBucketsWritten: cacheMetrics.bucketsWritten, scheduleCacheBytesWritten: cacheMetrics.bytesWritten };
   },
 });
 
