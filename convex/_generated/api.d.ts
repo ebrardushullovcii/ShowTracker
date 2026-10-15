@@ -13,9 +13,11 @@ import type * as confirmedReleaseValidator from "../confirmedReleaseValidator.js
 import type * as crons from "../crons.js";
 import type * as http from "../http.js";
 import type * as lib_homeScheduleSignalPolicy from "../lib/homeScheduleSignalPolicy.js";
+import type * as lib_scheduleCacheIndex from "../lib/scheduleCacheIndex.js";
 import type * as lib_scheduleCacheWriter from "../lib/scheduleCacheWriter.js";
 import type * as lists from "../lists.js";
 import type * as schedule from "../schedule.js";
+import type * as scheduleCacheIndex from "../scheduleCacheIndex.js";
 import type * as scheduleConfidence from "../scheduleConfidence.js";
 import type * as shareValidators from "../shareValidators.js";
 import type * as sharedGameActions from "../sharedGameActions.js";
@@ -36,9 +38,11 @@ declare const fullApi: ApiFromModules<{
   crons: typeof crons;
   http: typeof http;
   "lib/homeScheduleSignalPolicy": typeof lib_homeScheduleSignalPolicy;
+  "lib/scheduleCacheIndex": typeof lib_scheduleCacheIndex;
   "lib/scheduleCacheWriter": typeof lib_scheduleCacheWriter;
   lists: typeof lists;
   schedule: typeof schedule;
+  scheduleCacheIndex: typeof scheduleCacheIndex;
   scheduleConfidence: typeof scheduleConfidence;
   shareValidators: typeof shareValidators;
   sharedGameActions: typeof sharedGameActions;

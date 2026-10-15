@@ -10,14 +10,15 @@ test("dated cache-only prunes preserve other providers, moved dates, and all tra
     { _id: "moved", date: "2026-10-02", mediaType: "tv", episodes: JSON.stringify([make("tvmaze:69046")]) },
   ];
   const bucketReads = [];
+  const headers = [];
   let writes = 0;
   const db = {
     query(table) {
-      assert.equal(table, "scheduleCache", "Cache-only delta must not read shows or user history");
+      assert.ok(["scheduleCache", "scheduleCacheIndex"].includes(table), "Cache-only delta must not read shows or user history");
       const conditions = [];
       return {
         withIndex(name, callback) {
-          assert.equal(name, "by_type_date");
+          assert.equal(name, table === "scheduleCache" ? "by_type_date" : "by_bucket");
           const q = { eq(key, value) { conditions.push([key, value]); return q; } };
           callback(q); return this;
         },
@@ -26,9 +27,11 @@ test("dated cache-only prunes preserve other providers, moved dates, and all tra
           bucketReads.push(conditions.find(([key]) => key === "date")[1]);
           return rows.filter((row) => conditions.every(([key, value]) => row[key] === value)).slice(0, limit);
         },
+        async collect() { return headers.filter(row => conditions.every(([key, value]) => row[key] === value)); },
       };
     },
-    async patch(id, patch) { writes++; Object.assign(rows.find((row) => row._id === id), patch); },
+    async patch(id, patch) { const row = rows.find(row => row._id === id) ?? headers.find(row => row._id === id); assert.ok(row); if (rows.includes(row)) writes++; Object.assign(row, patch); },
+    async insert(table, fields) { assert.equal(table, "scheduleCacheIndex"); const id = `header${headers.length}`; headers.push({ ...fields, _id: id }); return id; },
   };
   const args = { importToken: "test-only-token", runId: "catalogue-test", generatedAt: Date.UTC(2026, 9, 1, 14), deltas: [{
     canonicalKey: "schedule-cache:catalogue:tvmaze:69046", title: "Delicious in Dungeon", mediaType: "tv",
@@ -46,4 +49,6 @@ test("dated cache-only prunes preserve other providers, moved dates, and all tra
   const repeat = await applyReleaseDeltas._handler({ db }, args);
   assert.equal(repeat.scheduleCacheRowsUpdated, 0);
   assert.equal(writes, 1);
+  assert.equal(headers.length, 1);
+  assert.equal(headers[0].bucketId, "stale");
 });

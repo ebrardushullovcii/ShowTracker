@@ -112,6 +112,15 @@ Resource-limited batches split automatically. The apply totals include
 estimates exclude index/OCC costs. Use production Convex execution-log usage
 statistics to verify the actual database I/O reduction.
 
+Moved-date pruning also uses compact bucket identity rows. All cache writers
+maintain these atomically. After deploying the index schema, run the internal
+`scheduleCacheIndex:backfillPage` with
+`{ "paginationOpts": { "cursor": null, "numItems": 20 } }` and resume with
+`continueCursor` until `isDone`. The last page enables indexed pruning; earlier
+pages keep the original scan active. This does not change pruning windows or
+provider/title matching. `scheduleCacheIndexRowsRead` and
+`scheduleCacheIndexBytesRead` report index reads separately from episode buckets.
+
 ## Bounded intraday release timing
 
 ADR-0065 adds a separate `showtracker-release-timing.timer` every 15 minutes.

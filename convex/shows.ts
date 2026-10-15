@@ -15,6 +15,7 @@ import { resolveManualTrackingStatus } from "../lib/tracking/initial-status";
 import { confirmedReleaseFloor } from "../lib/tracking/confirmed-release";
 import { isEpisodeAtOrAfter } from "../lib/tracking/episode-order";
 import { buildWatchedEpisodeRanges } from "../lib/tracking/watched-episode-ranges";
+import { deleteScheduleCacheBucket } from "./lib/scheduleCacheIndex";
 import { paginationOptsValidator } from "convex/server";
 import { api, internal } from "./_generated/api";
 import {
@@ -8061,7 +8062,7 @@ export const resetGlobalMediaDataBatch = internalMutation({
     const scheduleCache =
       remaining > 0 ? await ctx.db.query("scheduleCache").take(remaining) : [];
     for (const entry of scheduleCache) {
-      await ctx.db.delete(entry._id);
+      await deleteScheduleCacheBucket(ctx, entry._id);
     }
 
     const deletedTotal =

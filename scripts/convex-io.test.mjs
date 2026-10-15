@@ -7,12 +7,15 @@ import { toggleEpisodeWatched, unmarkEpisodesWatchedFrom, resetUserTrackingDataB
 import { buildWatchedEpisodeRanges } from "../lib/tracking/watched-episode-ranges.ts";
 import { applyReleaseDeltaBatches } from "./schedule-confidence.mjs";
 import { ScheduleCacheWriter } from "../convex/lib/scheduleCacheWriter.ts";
+import { encodeCacheIdentities, writeScheduleCacheBucket, deleteScheduleCacheBucket } from "../convex/lib/scheduleCacheIndex.ts";
+import { backfillPage as backfillCacheIndexPage } from "../convex/scheduleCacheIndex.ts";
+import { upsertScheduleBucketInternal } from "../convex/schedule.ts";
 
 // Counts the documents/JSON bytes the real handlers read, including nested reads.
 // These are fixture document costs, not Convex billing/index/OCC measurements.
 function database(seed) {
   const tables = structuredClone(seed);
-  const reads = {}, bytes = {};
+  const reads = {}, bytes = {}, writesByTable = {};
   let writes = 0;
   const record = (table, rows) => {
     reads[table] = (reads[table] ?? 0) + rows.length;
@@ -61,22 +64,26 @@ function database(seed) {
       return null;
     },
     async patch(id, patch) {
-      const row = Object.values(tables).flat().find(row => row._id === id);
+      const table = Object.keys(tables).find(table => tables[table].some(row => row._id === id));
+      const row = tables[table]?.find(row => row._id === id);
       assert.ok(row, `Missing ${id}`); Object.assign(row, patch); writes++;
+      writesByTable[table] = (writesByTable[table] ?? 0) + 1;
     },
     async delete(id) {
-      for (const rows of Object.values(tables)) {
+      for (const [table, rows] of Object.entries(tables)) {
         const index = rows.findIndex(row => row._id === id);
-        if (index >= 0) { rows.splice(index, 1); writes++; return; }
+        if (index >= 0) { rows.splice(index, 1); writes++; writesByTable[table] = (writesByTable[table] ?? 0) + 1; return; }
       }
       assert.fail(`Missing ${id}`);
     },
     async insert(table, payload) {
       const row = { ...payload, _id: `${table}-${writes}`, _creationTime: Date.now() };
-      (tables[table] ??= []).push(row); writes++; return row._id;
+      (tables[table] ??= []).push(row); writes++;
+      writesByTable[table] = (writesByTable[table] ?? 0) + 1;
+      return row._id;
     },
   };
-  return { db, tables, reads, bytes, get writes() { return writes; } };
+  return { db, tables, reads, bytes, writesByTable, get writes() { return writes; } };
 }
 
 const token = "test-only-token";
@@ -105,6 +112,91 @@ test("production-redacted budget errors split batches and mark only committed de
     onApplied: () => assert.fail("Failed deltas must not be marked applied"),
   }), /Invalid provider evidence/);
   assert.equal(attempts, 1);
+});
+
+function withCacheIndex(seed) {
+  return { ...structuredClone(seed), scheduleCacheIndexState: [{ _id: "coverage", version: 1, complete: true }],
+    scheduleCacheIndex: seed.scheduleCache.map((row, i) => ({ _id: `header${i}`, bucketId: row._id, date: row.date,
+      mediaType: row.mediaType, identities: encodeCacheIdentities(row.episodes) })) };
+}
+
+test("identity index preserves moved dates, cross-media aliases, season titles, duplicates and unrelated entries", async () => {
+  process.env.SCHEDULE_CONFIDENCE_IMPORT_TOKEN = token;
+  const oldDate = "2026-10-14", date = "2026-10-15";
+  const entry = (showId, normalizedTitle, seasonNumber, episodeNumber, airDate, name = "Moved") =>
+    ({ showId, normalizedTitle, episode: { seasonNumber, episodeNumber, airDate, name } });
+  const bucket = (id, date, mediaType, entries) => ({ _id: id, date, mediaType, episodes: JSON.stringify(entries), lastUpdated: 1 });
+  const unrelated = entry("tvmaze:999", "unrelated", 2, 1, oldDate);
+  const seed = { scheduleCache: [
+    bucket("old", oldDate, "tv", [entry("tvmaze:1", "example", 2, 2, oldDate), unrelated]),
+    bucket("alias", oldDate, "anime", [entry("anilist:456", "examplefinalseason", 2, 2, oldDate)]),
+    bucket("new", date, "tv", [unrelated]), bucket("duplicate", date, "tv", [entry("tvmaze:1", "example", 2, 2, date)]),
+    ...Array.from({ length: 100 }, (_, i) => bucket(`unrelated${i}`, `2025-${String(Math.floor(i / 28) + 1).padStart(2,"0")}-${String(i % 28 + 1).padStart(2,"0")}`, "tv",
+      [entry(`tvmaze:${1000+i}`, `unrelated${i}`, 1, 1, "2025-01-01", "x".repeat(2048))])),
+  ] };
+  const args = { importToken: token, runId: "index-parity", generatedAt: Date.parse(date), deltas: [{
+    canonicalKey: "tvmaze:1", title: "Example", mediaType: "tv", providerIds: { tvmazeId: 1 }, matchConfidence: "direct_id",
+    releaseState: "unknown", reconciledAt: Date.parse(date), scheduleCacheMaintenance: true,
+    latestReleased: { seasonNumber: 1, episodeNumber: 1, airDate: "2023-10-05", name: "Old" },
+    nextScheduled: { seasonNumber: 2, episodeNumber: 2, airDate: date, name: "Moved" },
+  }] };
+  const before = database(seed), after = database(withCacheIndex(seed));
+  await applyReleaseDeltas._handler(before, args);
+  const result = await applyReleaseDeltas._handler(after, args);
+  const cache = instance => instance.tables.scheduleCache.map(({ date, mediaType, episodes }) => ({ date, mediaType, episodes }));
+  assert.deepEqual(cache(after), cache(before));
+  assert.deepEqual(JSON.parse(after.tables.scheduleCache.find(row => row._id === "old").episodes), [unrelated]);
+  assert.equal(JSON.parse(after.tables.scheduleCache.find(row => row._id === "alias").episodes).length, 0);
+  assert.ok(!after.tables.scheduleCacheIndex.some(row => row.bucketId === "duplicate"));
+  assert.ok(after.reads.scheduleCache < 10);
+  assert.ok(after.bytes.scheduleCache + after.bytes.scheduleCacheIndex < before.bytes.scheduleCache * 0.15);
+  for (const row of after.tables.scheduleCache) {
+    const header = after.tables.scheduleCacheIndex.find(header => header.bucketId === row._id);
+    assert.equal(header.identities, encodeCacheIdentities(row.episodes));
+  }
+  const replay = await applyReleaseDeltas._handler(after, args);
+  assert.equal(replay.scheduleCacheBucketsWritten, 0);
+  assert.ok(result.scheduleCacheIndexRowsRead > 100);
+});
+
+test("cache index sees earlier staged edits/inserts and never reloads deleted buckets", async () => {
+  const date = "2026-10-15";
+  const episodes = showId => JSON.stringify([{ showId, normalizedTitle: showId, episode: { seasonNumber: 1, episodeNumber: 1 } }]);
+  const instance = database(withCacheIndex({ scheduleCache: [{ _id: "bucket", mediaType: "tv", date, episodes: episodes("a"), lastUpdated: 1 }] }));
+  const cache = new ScheduleCacheWriter(instance);
+  const [row] = await cache.readRange("tv", date, date, identity => identity.showId === "a");
+  cache.write(row, { episodes: episodes("b") });
+  assert.equal((await cache.readRange("tv", date, date, identity => identity.showId === "b")).length, 1);
+  assert.equal((await cache.readRange("tv", date, date, identity => identity.showId === "a")).length, 0);
+  cache.delete(row);
+  assert.equal((await cache.readRange("tv", date, date, identity => identity.showId === "a")).length, 0);
+  cache.insert({ date, mediaType: "tv", episodes: episodes("c"), lastUpdated: 2 });
+  assert.equal((await cache.readRange("tv", date, date, identity => identity.showId === "c")).length, 1);
+  await cache.flush();
+  assert.equal(instance.tables.scheduleCache.length, 1);
+  assert.equal(instance.tables.scheduleCacheIndex.length, 1);
+  assert.equal(instance.tables.scheduleCacheIndex[0].identities, encodeCacheIdentities(episodes("c")));
+});
+
+test("cache index backfill activates only after full coverage and hydration maintains it atomically", async () => {
+  const rows = Array.from({ length: 21 }, (_, i) => ({ _id: `bucket${i}`, _creationTime: i,
+    mediaType: "tv", date: `2026-10-${String(i+1).padStart(2,"0")}`, episodes: "[]", lastUpdated: 1 }));
+  const instance = database({ scheduleCache: rows });
+  const first = await backfillCacheIndexPage._handler(instance, { paginationOpts: { cursor: null, numItems: 20 } });
+  assert.equal(first.isDone, false);
+  assert.equal(instance.tables.scheduleCacheIndexState, undefined);
+  const fallback = new ScheduleCacheWriter(instance);
+  assert.equal((await fallback.readRange("tv", "2026-10-01", "2026-10-21", () => false)).length, 21);
+  await backfillCacheIndexPage._handler(instance, { paginationOpts: { cursor: first.continueCursor, numItems: 20 } });
+  assert.equal(instance.tables.scheduleCacheIndexState[0].complete, true);
+  assert.deepEqual(instance.tables.scheduleCache, rows);
+  const entries = [{ showId: "tvmaze:1", normalizedTitle: "example", episode: { seasonNumber: 1, episodeNumber: 1 } }];
+  await upsertScheduleBucketInternal._handler(instance, { date: "2026-10-01", mediaType: "tv", episodes: JSON.stringify(entries), lastUpdated: 2 });
+  assert.equal(instance.tables.scheduleCacheIndex.find(row => row.bucketId === "bucket0").identities, encodeCacheIdentities(JSON.stringify(entries)));
+  const id = await writeScheduleCacheBucket(instance, null, { date: "2026-11-01", mediaType: "anime", episodes: JSON.stringify(entries), lastUpdated: 3 });
+  assert.ok(instance.tables.scheduleCacheIndex.some(row => row.bucketId === id));
+  await deleteScheduleCacheBucket(instance, id);
+  assert.ok(!instance.tables.scheduleCacheIndex.some(row => row.bucketId === id));
 });
 
 test("cache budget is a structured Convex error and stops before any cache writes", async () => {
@@ -240,10 +332,10 @@ test("25 release deltas share bucket reads and writes with identical final cache
   assert.equal(after.reads.scheduleCache, 2);
   assert.equal(result.scheduleCacheBucketsWritten, 2);
   assert.equal(before.reads.scheduleCache, 50);
-  assert.equal(before.writes, 50);
+  assert.equal(before.writesByTable.scheduleCache, 50);
   assert.ok(after.bytes.scheduleCache < before.bytes.scheduleCache * 0.06);
   const repeated = await applyReleaseDeltas._handler(after, { ...base, deltas });
   assert.equal(repeated.scheduleCacheBucketsWritten, 0);
   assert.deepEqual(JSON.parse(after.tables.scheduleCache[0].episodes), [unrelated]);
-  console.log(JSON.stringify({ cacheFixtureBytesBefore: before.bytes.scheduleCache, cacheFixtureBytesAfter: result.scheduleCacheBytesRead, writesBefore: before.writes, writesAfter: result.scheduleCacheBucketsWritten }));
+  console.log(JSON.stringify({ cacheFixtureBytesBefore: before.bytes.scheduleCache, cacheFixtureBytesAfter: result.scheduleCacheBytesRead, writesBefore: before.writesByTable.scheduleCache, writesAfter: result.scheduleCacheBucketsWritten }));
 });

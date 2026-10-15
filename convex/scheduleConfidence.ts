@@ -7,6 +7,7 @@ import { confirmedReleaseFields } from "./confirmedReleaseValidator";
 import { confirmedReleaseFloor, isConfirmedReleaseValid } from "../lib/tracking/confirmed-release";
 import { readWatchedEpisodeRanges, watchedEpisodeAnchorsFromRanges } from "../lib/tracking/watched-episode-ranges";
 import { ScheduleCacheWriter } from "./lib/scheduleCacheWriter";
+import { writeScheduleCacheBucket, deleteScheduleCacheBucket } from "./lib/scheduleCacheIndex";
 
 const IMPORT_BATCH_LIMIT = 200;
 const APPLY_DELTA_LIMIT = 50;
@@ -1056,7 +1057,7 @@ async function deleteSyntheticRows(ctx: MutationCtx) {
       (entry) => !entry.normalizedTitle.startsWith(normalizedPrefix)
     );
     if (filtered.length !== entries.length) {
-      await ctx.db.patch(row._id, {
+      await writeScheduleCacheBucket(ctx, row._id, { ...row,
         episodes: JSON.stringify(filtered),
         lastUpdated: Date.now(),
       });
@@ -1124,13 +1125,13 @@ async function upsertSyntheticScheduleCacheEntry(
   };
 
   if (row) {
-    await ctx.db.patch(row._id, payload);
+    await writeScheduleCacheBucket(ctx, row._id, payload);
   } else {
-    await ctx.db.insert("scheduleCache", payload);
+    await writeScheduleCacheBucket(ctx, null, payload);
   }
 
   for (const duplicate of duplicates) {
-    await ctx.db.delete(duplicate._id);
+    await deleteScheduleCacheBucket(ctx, duplicate._id);
   }
 }
 
@@ -1240,7 +1241,10 @@ async function pruneMovedScheduleCacheEntries(
   const rows = (
     await Promise.all(
       mediaTypes.map((mediaType) =>
-        cache.readRange(mediaType, startDate, endDate)
+        cache.readRange(mediaType, startDate, endDate, identity =>
+          args.durableRouteProviderShowIds.has(identity.showId) ||
+          (args.normalizedTitle.length > 0 && (identity.normalizedTitle === args.normalizedTitle ||
+            isAnimeSeasonTitleVariant(identity.normalizedTitle, args.normalizedTitle))))
       )
     )
   ).flat();
@@ -1376,7 +1380,8 @@ async function pruneStaleScheduleCacheProviderEntries(
   const rows: Awaited<ReturnType<ScheduleCacheWriter["readRange"]>> = [];
   if (staleEpisodeKeys.size > 0) {
     const limit = STALE_PROVIDER_PRUNE_PAST_DAYS + STALE_PROVIDER_PRUNE_FUTURE_DAYS + 2;
-    const legacyRows = await cache.readRange(mediaType, startDate, endDate);
+    const legacyRows = await cache.readRange(mediaType, startDate, endDate,
+      identity => routeProviderShowIds.has(identity.showId));
     if (legacyRows.length >= limit) throw new Error("Too many schedule buckets for provider prune");
     rows.push(...legacyRows);
   } else {
@@ -2185,9 +2190,9 @@ export const applyConfirmedReleasePage = mutation({
         });
         const episodes = JSON.stringify(kept);
         if (bucket && episodes !== bucket.episodes) {
-          await ctx.db.patch(bucket._id, { episodes, lastUpdated: now }); writes++;
+          await writeScheduleCacheBucket(ctx, bucket._id, { date, mediaType: "tv", episodes, lastUpdated: now }); writes++;
         } else if (!bucket && kept.length) {
-          await ctx.db.insert("scheduleCache", { date, mediaType: "tv", episodes, lastUpdated: now }); writes++;
+          await writeScheduleCacheBucket(ctx, null, { date, mediaType: "tv", episodes, lastUpdated: now }); writes++;
         }
       }
     }
@@ -2256,6 +2261,7 @@ export const applyReleaseDeltas = mutation({
     skippedUnchangedUserShows: v.number(), skippedUnchangedFeedProjections: v.number(),
     scheduleCacheBucketsRead: v.number(), scheduleCacheBytesRead: v.number(),
     scheduleCacheBucketsWritten: v.number(), scheduleCacheBytesWritten: v.number(),
+    scheduleCacheIndexRowsRead: v.number(), scheduleCacheIndexBytesRead: v.number(),
   }),
   handler: async (ctx, args) => {
     requireImportToken(args.importToken);
@@ -2511,6 +2517,7 @@ export const applyReleaseDeltas = mutation({
 
     const cacheMetrics = await cache.flush();
     return { ...result, scheduleCacheBucketsRead: cacheMetrics.bucketsRead, scheduleCacheBytesRead: cacheMetrics.bytesRead,
+      scheduleCacheIndexRowsRead: cacheMetrics.indexRowsRead, scheduleCacheIndexBytesRead: cacheMetrics.indexBytesRead,
       scheduleCacheBucketsWritten: cacheMetrics.bucketsWritten, scheduleCacheBytesWritten: cacheMetrics.bytesWritten };
   },
 });
