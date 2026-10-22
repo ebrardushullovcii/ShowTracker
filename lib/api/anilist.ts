@@ -1,4 +1,10 @@
 import { getCached, setCached } from "./cache";
+import {
+  EMPTY_SHOW_CREDITS,
+  normalizeAniListCredits,
+  type AniListCreditsMedia,
+  type ShowCredits,
+} from "./credits";
 import { normalizeAniListMedia } from "./normalize";
 import { getJikanAnime } from "./jikan";
 import type { NormalizedShow } from "./types";
@@ -523,6 +529,39 @@ export async function getAniListMediaById(
   const normalized = await normalizeAniListMediaWithFallback(media);
   setCached(cacheKey, normalized, cacheTtlMs);
   return normalized;
+}
+
+const anilistCreditPersonSelection = `id name { full } image { large }`;
+
+export async function getAniListCredits(id: number): Promise<ShowCredits> {
+  const cacheKey = `anilist-credits:${id}`;
+  const cached = getCached<ShowCredits>(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
+  const data = await request<{ data: { Media: AniListCreditsMedia | null } }>(
+    `query ($id: Int) {
+      Media(id: $id, type: ANIME) {
+        characters(sort: [ROLE, RELEVANCE, ID], perPage: 20) {
+          edges {
+            role
+            node { ${anilistCreditPersonSelection} }
+            japaneseVoiceActors: voiceActors(language: JAPANESE, sort: [RELEVANCE, ID]) { ${anilistCreditPersonSelection} }
+            voiceActors(sort: [RELEVANCE, ID]) { ${anilistCreditPersonSelection} languageV2 }
+          }
+        }
+        staff(sort: [RELEVANCE, ID], perPage: 25) {
+          edges { role node { ${anilistCreditPersonSelection} } }
+        }
+      }
+    }`,
+    { id }
+  );
+
+  const credits = data.data.Media ? normalizeAniListCredits(data.data.Media) : EMPTY_SHOW_CREDITS;
+  setCached(cacheKey, credits, cacheTtlMs);
+  return credits;
 }
 
 export async function getAniListMediaByMalId(
