@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Image, Pressable, Text, View, type LayoutChangeEvent } from "react-native";
+import { Image, Pressable, Text, useWindowDimensions, View, type LayoutChangeEvent } from "react-native";
 import { BrandLoader } from "@/components/BrandLoader";
 import type { ShowCastMember, ShowCredits, ShowCrewMember } from "@/lib/api/credits";
 
@@ -29,6 +29,12 @@ function columnsForWidth(width: number) {
   if (width >= 740) return 3;
   if (width >= 500) return 2;
   return 1;
+}
+
+// Before the grid measures itself, guess its width from the window so the
+// first paint already has cards (desktop adds the sidebar and page padding).
+function estimateGridWidth(windowWidth: number) {
+  return windowWidth >= 1024 ? Math.min(windowWidth - 180, 860) : windowWidth - 40;
 }
 
 function isCharacterCredit(member: ShowCastMember) {
@@ -108,7 +114,6 @@ function CreditCard({
   imageUri,
   badgeUri,
   tags,
-  width,
   isSingleColumn,
 }: {
   title: string;
@@ -116,17 +121,13 @@ function CreditCard({
   imageUri?: string;
   badgeUri?: string;
   tags: CreditTag[];
-  width: number;
   isSingleColumn: boolean;
 }) {
   const photoWidth = isSingleColumn ? 52 : 60;
   const photoHeight = isSingleColumn ? 70 : 80;
 
   return (
-    <View
-      className="flex-row items-start gap-3 rounded-[10px] border border-border-default bg-bg-base p-2"
-      style={{ width }}
-    >
+    <View className="flex-1 flex-row items-start gap-3 rounded-[10px] border border-border-default bg-bg-base p-2">
       <View style={{ width: photoWidth, height: photoHeight }}>
         <CreditPhoto
           uri={imageUri}
@@ -183,30 +184,35 @@ function CreditGrid<T>({
 }: {
   items: T[];
   keyOf: (item: T) => string;
-  renderItem: (item: T, width: number, isSingleColumn: boolean) => ReactNode;
+  renderItem: (item: T, isSingleColumn: boolean) => ReactNode;
 }) {
-  const [width, setWidth] = useState(0);
+  const { width: windowWidth } = useWindowDimensions();
+  const [measuredWidth, setMeasuredWidth] = useState(0);
   const [showAll, setShowAll] = useState(false);
-  const columns = columnsForWidth(width);
-  const itemWidth = width > 0 ? (width - GRID_GAP * (columns - 1)) / columns : 0;
-  const collapsedCount = columns === 1 ? SINGLE_COLUMN_BEFORE_SHOW_ALL : columns * ROWS_BEFORE_SHOW_ALL;
+  const columns = columnsForWidth(measuredWidth || estimateGridWidth(windowWidth));
+  const isSingleColumn = columns === 1;
+  const collapsedCount = isSingleColumn ? SINGLE_COLUMN_BEFORE_SHOW_ALL : columns * ROWS_BEFORE_SHOW_ALL;
   const canCollapse = items.length > collapsedCount;
   const visibleItems = showAll || !canCollapse ? items : items.slice(0, collapsedCount);
 
   const handleLayout = (event: LayoutChangeEvent) => {
     const nextWidth = Math.floor(event.nativeEvent.layout.width);
-    if (nextWidth !== width) setWidth(nextWidth);
+    if (nextWidth !== measuredWidth) setMeasuredWidth(nextWidth);
   };
 
   return (
     <View onLayout={handleLayout}>
-      {itemWidth > 0 ? (
-        <View className="flex-row flex-wrap" style={{ gap: GRID_GAP }}>
-          {visibleItems.map((item) => (
-            <View key={keyOf(item)}>{renderItem(item, itemWidth, columns === 1)}</View>
-          ))}
-        </View>
-      ) : null}
+      <View className="flex-row flex-wrap" style={{ margin: -GRID_GAP / 2 }}>
+        {visibleItems.map((item) => (
+          <View
+            key={keyOf(item)}
+            className="flex-row"
+            style={{ width: `${100 / columns}%`, padding: GRID_GAP / 2 }}
+          >
+            {renderItem(item, isSingleColumn)}
+          </View>
+        ))}
+      </View>
       {canCollapse ? (
         <Pressable
           onPress={() => setShowAll((current) => !current)}
@@ -302,7 +308,7 @@ export function ShowDetailsTabs({ renderOverview, credits, isLoadingCredits }: S
             <CreditGrid
               items={cast}
               keyOf={(member) => member.id}
-              renderItem={(member, width, isSingleColumn) => {
+              renderItem={(member, isSingleColumn) => {
                 const isCharacter = isCharacterCredit(member);
                 return (
                   <CreditCard
@@ -311,7 +317,6 @@ export function ShowDetailsTabs({ renderOverview, credits, isLoadingCredits }: S
                     imageUri={isCharacter ? member.characterImageUrl : member.photoUrl}
                     badgeUri={isCharacter ? member.photoUrl : undefined}
                     tags={castTags(member)}
-                    width={width}
                     isSingleColumn={isSingleColumn}
                   />
                 );
@@ -328,13 +333,12 @@ export function ShowDetailsTabs({ renderOverview, credits, isLoadingCredits }: S
           <CreditGrid
             items={crew}
             keyOf={(member) => member.id}
-            renderItem={(member, width, isSingleColumn) => (
+            renderItem={(member, isSingleColumn) => (
               <CreditCard
                 title={member.name}
                 subtitle={member.job}
                 imageUri={member.photoUrl}
                 tags={[]}
-                width={width}
                 isSingleColumn={isSingleColumn}
               />
             )}
