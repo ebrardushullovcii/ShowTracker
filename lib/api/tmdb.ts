@@ -1,4 +1,5 @@
 import { getCached, setCached } from "./cache";
+import type { TmdbCreditsPayload } from "./credits";
 import { normalizeTmdbEpisode, normalizeTmdbMedia } from "./normalize";
 import type { NormalizedEpisode, NormalizedShow } from "./types";
 import {
@@ -96,7 +97,7 @@ export type TmdbMedia = {
   release_date?: string;
 };
 
-export type TmdbShowDetails = {
+export type TmdbShowDetails = TmdbCreditsPayload & {
   id: number;
   name?: string;
   title?: string;
@@ -521,14 +522,18 @@ export async function getTmdbShowDetails(
   id: number,
   options: {
     includeAlternativeTitles?: boolean;
+    includeCredits?: boolean;
     resolveRuntimeFallback?: boolean;
   } = {}
 ) {
+  const appended = [
+    options.includeAlternativeTitles ? "alternative_titles" : null,
+    // TV aggregate credits cover every season, not just the latest one.
+    options.includeCredits ? (mediaType === "tv" ? "aggregate_credits" : "credits") : null,
+  ].filter(Boolean);
   const details = await request<TmdbShowDetails>(
     `/${mediaType}/${id}`,
-    options.includeAlternativeTitles
-      ? { append_to_response: "alternative_titles" }
-      : undefined
+    appended.length > 0 ? { append_to_response: appended.join(",") } : undefined
   );
 
   if (mediaType === "tv" && options.resolveRuntimeFallback !== false) {

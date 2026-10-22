@@ -40,12 +40,19 @@ import {
   type ContinueTrackingRailItem,
 } from "@/components/ContinueTrackingRail";
 import { AddToListModal } from "@/components/AddToListModal";
+import { ShowDetailsTabs } from "@/components/ShowDetailsTabs";
 import {
   getAniListAnimeRelations,
+  getAniListCredits,
   getAniListMediaById,
   getAniListMediaByMalId,
   type AniListRelatedShow,
 } from "@/lib/api/anilist";
+import {
+  EMPTY_SHOW_CREDITS,
+  normalizeTmdbCredits,
+  type ShowCredits,
+} from "@/lib/api/credits";
 import {
   getJikanAnime,
   getJikanAnimeEpisodes,
@@ -63,6 +70,7 @@ import {
   getTmdbShowDetails,
 } from "@/lib/api/tmdb";
 import {
+  getTvMazeCredits,
   getTvMazeShow,
   getTvMazeShowEpisodes,
   lookupTvMazeShowByImdb,
@@ -898,6 +906,8 @@ export function ShowDetailScreen() {
   const [isStatusMenuVisible, setIsStatusMenuVisible] = useState(false);
   const [watchingWithNamesDraft, setWatchingWithNamesDraft] = useState<string[]>([]);
   const [watchingWithNameInput, setWatchingWithNameInput] = useState("");
+  const [credits, setCredits] = useState<ShowCredits | null>(null);
+  const [isLoadingCredits, setIsLoadingCredits] = useState(false);
   const watchingWithNameInputRef = useRef<TextInput>(null);
   const [isMarkingShow, setIsMarkingShow] = useState(false);
   const [trackingError, setTrackingError] = useState<string | null>(null);
@@ -1852,11 +1862,31 @@ export function ShowDetailScreen() {
 
     let isCancelled = false;
 
+    // Credits are secondary content, so they never block or fail the page.
+    const loadCreditsInBackground = (loadCredits: () => Promise<ShowCredits>) => {
+      setIsLoadingCredits(true);
+      void loadCredits()
+        .then((nextCredits) => {
+          if (!isCancelled) setCredits(nextCredits);
+        })
+        .catch((creditsError) => {
+          if (!isCancelled) {
+            console.warn("Could not load show credits", creditsError);
+            setCredits(EMPTY_SHOW_CREDITS);
+          }
+        })
+        .finally(() => {
+          if (!isCancelled) setIsLoadingCredits(false);
+        });
+    };
+
     const loadShow = async () => {
       setIsLoading(true);
       setError(null);
       setTrackingError(null);
       setShow(null);
+      setCredits(null);
+      setIsLoadingCredits(false);
       setSeasons([]);
       setExpandedSeasons({});
       setExpandedSeasonsInitialized(false);
@@ -1879,17 +1909,15 @@ export function ShowDetailScreen() {
 
       try {
         if (parsedId.source === "tmdb") {
-          const details = await getTmdbShowDetails(
-            parsedId.mediaType === "movie" ? "movie" : "tv",
-            parsedId.externalId
-          );
+          const tmdbMediaType = parsedId.mediaType === "movie" ? "movie" : "tv";
+          const details = await getTmdbShowDetails(tmdbMediaType, parsedId.externalId, {
+            includeCredits: true,
+          });
           if (isCancelled) return;
 
-          const normalized = normalizeTmdbShowDetails(
-            parsedId.mediaType === "movie" ? "movie" : "tv",
-            details
-          );
+          const normalized = normalizeTmdbShowDetails(tmdbMediaType, details);
           setShow(normalized);
+          setCredits(normalizeTmdbCredits(tmdbMediaType, details));
 
           if (parsedId.mediaType === "tv") {
             setSeasons(
@@ -1911,6 +1939,7 @@ export function ShowDetailScreen() {
 
           const normalized = normalizeTvMazeShow(tvMazeShow, tvMazeEpisodes);
           setShow(normalized);
+          loadCreditsInBackground(() => getTvMazeCredits(parsedId.externalId));
           const normalizedSeasons = normalizeTvMazeSeasons(
             tvMazeEpisodes,
             normalized.posterUrl
@@ -1930,17 +1959,15 @@ export function ShowDetailScreen() {
           );
 
           if (tmdbMatch?.tmdbId) {
-            const details = await getTmdbShowDetails(
-              tmdbMatch.mediaType === "movie" ? "movie" : "tv",
-              tmdbMatch.tmdbId
-            );
+            const tmdbMediaType = tmdbMatch.mediaType === "movie" ? "movie" : "tv";
+            const details = await getTmdbShowDetails(tmdbMediaType, tmdbMatch.tmdbId, {
+              includeCredits: true,
+            });
             if (isCancelled) return;
 
-            const normalized = normalizeTmdbShowDetails(
-              tmdbMatch.mediaType === "movie" ? "movie" : "tv",
-              details
-            );
+            const normalized = normalizeTmdbShowDetails(tmdbMediaType, details);
             setShow(normalized);
+            setCredits(normalizeTmdbCredits(tmdbMediaType, details));
 
             if (tmdbMatch.mediaType === "tv") {
               setSeasons(
@@ -1962,6 +1989,7 @@ export function ShowDetailScreen() {
 
             const normalized = normalizeTvMazeShow(tvMazeShow, tvMazeEpisodes);
             setShow(normalized);
+            loadCreditsInBackground(() => getTvMazeCredits(tvMazeShow.id));
             const normalizedSeasons = normalizeTvMazeSeasons(
               tvMazeEpisodes,
               normalized.posterUrl
@@ -2005,6 +2033,7 @@ export function ShowDetailScreen() {
           }
 
           setShow(normalized);
+          loadCreditsInBackground(() => getAniListCredits(parsedId.externalId));
           setSeasons(
             createAnimeSeason(
               normalized.totalEpisodes,
@@ -2082,6 +2111,10 @@ export function ShowDetailScreen() {
         }
 
         setShow(resolvedShow);
+        const mappedAnilistId = resolvedShow.anilistId;
+        if (typeof mappedAnilistId === "number") {
+          loadCreditsInBackground(() => getAniListCredits(mappedAnilistId));
+        }
         setSeasons(
           createAnimeSeason(
             resolvedShow.totalEpisodes,
@@ -4282,56 +4315,65 @@ export function ShowDetailScreen() {
         {/* Main Content */}
         <View className={`${isDesktop ? "px-8" : "px-1"} pt-6 pb-8`}>
           <View className={`mx-auto w-full ${isDesktop ? "max-w-4xl" : ""}`}>
-          {/* Overview & Poster Row (Mobile Only) */}
-          {!isDesktop && (
-            <View className="mb-6 flex-row gap-4">
-              {showPosterUrl && (
-                <View
-                  className="overflow-hidden rounded-lg border-2 border-border-default shadow-lg"
-                  style={{ width: 100, height: 150 }}
-                >
-                  <Image
-                    source={{ uri: showPosterUrl }}
-                    className="h-full w-full"
-                    resizeMode="cover"
-                  />
+          <ShowDetailsTabs
+            key={show.id}
+            credits={credits}
+            isLoadingCredits={isLoadingCredits}
+            renderOverview={(inCard) => (
+              <>
+                {/* Overview & Poster Row (Mobile Only) */}
+                {!isDesktop && (
+                  <View className={`${inCard ? "mb-4" : "mb-6"} flex-row gap-4`}>
+                    {showPosterUrl && (
+                      <View
+                        className="overflow-hidden rounded-lg border-2 border-border-default shadow-lg"
+                        style={{ width: 100, height: 150 }}
+                      >
+                        <Image
+                          source={{ uri: showPosterUrl }}
+                          className="h-full w-full"
+                          resizeMode="cover"
+                        />
+                      </View>
+                    )}
+                    <View className="flex-1">
+                      <Text className="text-sm leading-relaxed text-text-secondary">
+                        {cleanedShowOverview}
+                      </Text>
+                    </View>
+                  </View>
+                )}
+
+                {/* Desktop Overview */}
+                {isDesktop && (
+                  <View className={inCard ? "mb-5" : "mb-8 max-w-3xl"}>
+                    <Text className="text-base leading-relaxed text-text-secondary">
+                      {cleanedShowOverview}
+                    </Text>
+                  </View>
+                )}
+
+                {/* Stats Row */}
+                <View className={`${inCard ? "" : "mb-6"} flex-row flex-wrap gap-2`}>
+                  {show.genres?.slice(0, 4).map((genre) => (
+                    <Badge key={genre} label={genre} variant="default" />
+                  ))}
+                  {show.mediaType !== "movie" && show.totalSeasons && (
+                    <Badge label={`${show.totalSeasons} Seasons`} variant="accent" />
+                  )}
+                  {show.mediaType !== "movie" && show.totalEpisodes && (
+                    <Badge label={`${show.totalEpisodes} Episodes`} variant="accent" />
+                  )}
+                  {show.mediaType === "movie" && show.episodeRuntime && (
+                    <Badge label={`${show.episodeRuntime} min`} variant="default" />
+                  )}
+                  {show.mediaType !== "movie" && show.episodeRuntime && (
+                    <Badge label={`${show.episodeRuntime}m avg`} variant="default" />
+                  )}
                 </View>
-              )}
-              <View className="flex-1">
-                <Text className="text-sm leading-relaxed text-text-secondary">
-                  {cleanedShowOverview}
-                </Text>
-              </View>
-            </View>
-          )}
-
-          {/* Desktop Overview */}
-          {isDesktop && (
-            <View className="mb-8 max-w-3xl">
-              <Text className="text-base leading-relaxed text-text-secondary">
-                {cleanedShowOverview}
-              </Text>
-            </View>
-          )}
-
-          {/* Stats Row */}
-          <View className="mb-6 flex-row flex-wrap gap-2">
-            {show.genres?.slice(0, 4).map((genre) => (
-              <Badge key={genre} label={genre} variant="default" />
-            ))}
-            {show.mediaType !== "movie" && show.totalSeasons && (
-              <Badge label={`${show.totalSeasons} Seasons`} variant="accent" />
+              </>
             )}
-            {show.mediaType !== "movie" && show.totalEpisodes && (
-              <Badge label={`${show.totalEpisodes} Episodes`} variant="accent" />
-            )}
-            {show.mediaType === "movie" && show.episodeRuntime && (
-              <Badge label={`${show.episodeRuntime} min`} variant="default" />
-            )}
-            {show.mediaType !== "movie" && show.episodeRuntime && (
-              <Badge label={`${show.episodeRuntime}m avg`} variant="default" />
-            )}
-          </View>
+          />
 
           {/* Progress Section - Hide for movies */}
           {canTrackShow && show.mediaType !== "movie" && (

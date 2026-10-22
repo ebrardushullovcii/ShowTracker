@@ -1,4 +1,10 @@
 import { getCached, setCached } from "./cache";
+import {
+  normalizeTvMazeCredits,
+  type ShowCredits,
+  type TvMazeCastEntry,
+  type TvMazeCrewEntry,
+} from "./credits";
 
 const tvmazeBaseUrl =
   process.env.EXPO_PUBLIC_TVMAZE_BASE_URL ?? "https://api.tvmaze.com";
@@ -178,6 +184,22 @@ export async function getTvMazeScheduleByDate(
 
 export async function getTvMazeShow(id: number) {
   return request<TvMazeShow>(`/shows/${id}`);
+}
+
+export async function getTvMazeCredits(id: number): Promise<ShowCredits> {
+  const cacheKey = `tvmaze-credits:${id}`;
+  const cached = getCached<ShowCredits>(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
+  const [cast, crew] = await Promise.all([
+    request<TvMazeCastEntry[]>(`/shows/${id}/cast`),
+    request<TvMazeCrewEntry[]>(`/shows/${id}/crew`).catch(() => [] as TvMazeCrewEntry[]),
+  ]);
+  const credits = normalizeTvMazeCredits(cast, crew);
+  setCached(cacheKey, credits, cacheTtlMs);
+  return credits;
 }
 
 export async function getTvMazeShowEpisodes(id: number, includeSpecials = false) {
