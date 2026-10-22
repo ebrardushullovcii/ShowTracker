@@ -898,6 +898,7 @@ export function ShowDetailScreen() {
   const [isStatusMenuVisible, setIsStatusMenuVisible] = useState(false);
   const [watchingWithNamesDraft, setWatchingWithNamesDraft] = useState<string[]>([]);
   const [watchingWithNameInput, setWatchingWithNameInput] = useState("");
+  const watchingWithNameInputRef = useRef<TextInput>(null);
   const [isMarkingShow, setIsMarkingShow] = useState(false);
   const [trackingError, setTrackingError] = useState<string | null>(null);
   const [trackingNotice, setTrackingNotice] = useState<string | null>(null);
@@ -2336,6 +2337,7 @@ export function ShowDetailScreen() {
       normalizeWatchingWithNames([...currentNames, watchingWithNameInput])
     );
     setWatchingWithNameInput("");
+    watchingWithNameInputRef.current?.focus();
   };
 
   const handleRemoveWatchingWithName = (nameToRemove: string) => {
@@ -5381,9 +5383,13 @@ export function ShowDetailScreen() {
                   ) : null}
                   <View className="mt-3 flex-row items-center gap-2">
                     <TextInput
+                      ref={watchingWithNameInputRef}
                       value={watchingWithNameInput}
                       onChangeText={setWatchingWithNameInput}
                       onSubmitEditing={handleAddWatchingWithName}
+                      // Native reads submitBehavior; react-native-web only reads blurOnSubmit.
+                      submitBehavior="submit"
+                      blurOnSubmit={false}
                       placeholder="Add a person's name"
                       placeholderTextColor="#71717a"
                       editable={
