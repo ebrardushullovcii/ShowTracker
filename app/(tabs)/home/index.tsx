@@ -2345,7 +2345,7 @@ export function HomeScreen() {
     [columns, getScheduleAttentionCountForItem, isCompactHomeLayout, isSmallPhone]
   );
 
-  // Picked once per visit so the line doesn't change while Home re-renders.
+  // Random per visit; memoized so it holds steady while Home re-renders.
   const caughtUpSaying = useMemo(() => pickCaughtUpSaying(), []);
   const hasNothingLeftInMainList =
     !isWatchlistVisualLoading && filteredWatchlist.length === 0 && !hasMoreWatchlist;
@@ -2402,29 +2402,19 @@ export function HomeScreen() {
           </Text>
         </View>
       ) : hasNothingLeftInMainList ? (
-        <View
-          className={`mt-4 items-center rounded-[28px] border border-emerald-400/20 bg-bg-surface ${
-            isCompactHomeLayout ? "px-5 py-8" : "px-8 py-10"
-          }`}
-        >
-          <View className="h-11 w-11 items-center justify-center rounded-full border border-emerald-400/30 bg-emerald-400/10">
-            <Ionicons name="checkmark-done" size={22} color="#34d399" />
-          </View>
-          <Text className="mt-4 text-[10px] font-black uppercase tracking-[1.8px] text-emerald-300/80">
+        <View className="mt-4 rounded-[28px] border border-border-default bg-bg-surface px-5 py-5">
+          <Text className="text-[10px] font-black uppercase tracking-[1.8px] text-zinc-500">
             {caughtUpEyebrow}
           </Text>
           <Text
-            className={`mt-2 max-w-xl text-center font-black text-white ${
-              isCompactHomeLayout ? "text-xl" : "text-2xl"
-            }`}
+            className={`mt-2 text-white ${isCompactHomeLayout ? "text-xl" : "text-2xl"}`}
+            style={{ fontFamily: "Courier New", fontWeight: "900" }}
           >
             {caughtUpSaying.line}
           </Text>
-          <Text className="mt-2 text-[11px] font-bold uppercase tracking-[1.2px] text-zinc-500">
-            {caughtUpSaying.source}
-          </Text>
-          <Text className="mt-4 max-w-md text-center text-sm text-zinc-400">
-            New episodes land here as they air.
+          <Text className="mt-2 text-sm text-zinc-400">
+            <Text className="font-bold text-primary">{caughtUpSaying.source}</Text>
+            {" · "}New episodes land here as they air.
           </Text>
         </View>
       ) : null}

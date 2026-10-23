@@ -29,11 +29,11 @@ export const CAUGHT_UP_SAYINGS: readonly CaughtUpSaying[] = [
   { line: "Previously on... everything. You've seen it all.", source: "Every recap ever" },
 ] as const;
 
-const DAY_MS = 24 * 60 * 60 * 1000;
-
-/** Picks one saying per local calendar day, so it stays put between renders. */
-export function pickCaughtUpSaying(now: Date = new Date()): CaughtUpSaying {
-  const localDay = Math.floor((now.getTime() - now.getTimezoneOffset() * 60 * 1000) / DAY_MS);
-  const index = ((localDay % CAUGHT_UP_SAYINGS.length) + CAUGHT_UP_SAYINGS.length) % CAUGHT_UP_SAYINGS.length;
+/** Picks a random saying; callers memoize it so it holds for the visit. */
+export function pickCaughtUpSaying(random: () => number = Math.random): CaughtUpSaying {
+  const index = Math.min(
+    CAUGHT_UP_SAYINGS.length - 1,
+    Math.floor(random() * CAUGHT_UP_SAYINGS.length)
+  );
   return CAUGHT_UP_SAYINGS[index];
 }
