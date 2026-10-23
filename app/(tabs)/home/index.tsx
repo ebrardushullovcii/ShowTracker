@@ -28,6 +28,7 @@ import {
   useStableDisplayValue,
 } from "@/hooks/use-stable-display-value";
 import type { MediaType } from "@/lib/api/types";
+import { pickCaughtUpSaying } from "@/lib/caught-up-sayings";
 import { toHttpsImageUrl } from "@/lib/image-url";
 import { parseShowRouteId } from "@/lib/show-route";
 import {
@@ -2344,6 +2345,24 @@ export function HomeScreen() {
     [columns, getScheduleAttentionCountForItem, isCompactHomeLayout, isSmallPhone]
   );
 
+  // Picked once per visit so the line doesn't change while Home re-renders.
+  const caughtUpSaying = useMemo(() => pickCaughtUpSaying(), []);
+  const hasNothingLeftInMainList =
+    !isWatchlistVisualLoading && filteredWatchlist.length === 0 && !hasMoreWatchlist;
+  const hasNothingOnHome =
+    hasNothingLeftInMainList &&
+    watchingWithOthersSectionWatchlist.length === 0 &&
+    pausedSectionWatchlist.length === 0 &&
+    notStartedSectionWatchlist.length === 0;
+  // Unfiltered feeds still hold caught-up shows, so an empty set means nothing is tracked yet.
+  const hasNoTrackedShows = watchlistItems.length === 0;
+  const caughtUpEyebrow =
+    mediaFilter === "anime"
+      ? "Caught up on anime"
+      : mediaFilter === "tv"
+        ? "Caught up on TV"
+        : "All caught up";
+
   const watchlistHeader = (
     <View className="pb-4">
       <PageIntro
@@ -2373,17 +2392,39 @@ export function HomeScreen() {
         compact={isCompactHomeLayout}
       />
 
-      {!isWatchlistVisualLoading &&
-      filteredWatchlist.length === 0 &&
-      watchingWithOthersSectionWatchlist.length === 0 &&
-      pausedSectionWatchlist.length === 0 &&
-      notStartedSectionWatchlist.length === 0 ? (
+      {hasNothingOnHome && hasNoTrackedShows ? (
         <View className="mt-6 items-center rounded-xl border-2 border-border-default bg-bg-surface px-6 py-12">
           <Text className="text-lg font-semibold text-text-primary">
             No active shows
           </Text>
           <Text className="mt-1 text-center text-sm text-text-secondary">
             Start tracking shows to see them here.
+          </Text>
+        </View>
+      ) : hasNothingLeftInMainList ? (
+        <View
+          className={`mt-4 items-center rounded-[28px] border border-emerald-400/20 bg-bg-surface ${
+            isCompactHomeLayout ? "px-5 py-8" : "px-8 py-10"
+          }`}
+        >
+          <View className="h-11 w-11 items-center justify-center rounded-full border border-emerald-400/30 bg-emerald-400/10">
+            <Ionicons name="checkmark-done" size={22} color="#34d399" />
+          </View>
+          <Text className="mt-4 text-[10px] font-black uppercase tracking-[1.8px] text-emerald-300/80">
+            {caughtUpEyebrow}
+          </Text>
+          <Text
+            className={`mt-2 max-w-xl text-center font-black text-white ${
+              isCompactHomeLayout ? "text-xl" : "text-2xl"
+            }`}
+          >
+            {caughtUpSaying.line}
+          </Text>
+          <Text className="mt-2 text-[11px] font-bold uppercase tracking-[1.2px] text-zinc-500">
+            {caughtUpSaying.source}
+          </Text>
+          <Text className="mt-4 max-w-md text-center text-sm text-zinc-400">
+            New episodes land here as they air.
           </Text>
         </View>
       ) : null}
