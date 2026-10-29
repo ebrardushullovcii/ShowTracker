@@ -2629,9 +2629,67 @@ function getWatchedAnchorBackedReleasedEpisodeFloor(item, releasedEvents) {
     : null;
 }
 
+// ADR-0078: when the tracked TMDB catalogue is dense from S1E1 through its
+// latest released row, other-provider rows that aired on or before that day are
+// alternate numbering of the same history, not extra releases. Only rows newer
+// than TMDB's latest released day can add to the count.
+function countReleasedEventsForFact(item, rows, releasedEvents, nowMs) {
+  const tmdbId = positiveIntegerOrNull(item.tmdb_id);
+  if (tmdbId === null) {
+    return releasedEvents.length;
+  }
+
+  const episodesBySeason = new Map();
+  let latestTmdbDateKey = null;
+  for (const row of rows) {
+    if (row.source_provider !== "tmdb" || row.air_timestamp > nowMs) {
+      continue;
+    }
+    if (positiveIntegerOrNull(row.tmdb_id) !== tmdbId) {
+      continue;
+    }
+    const seasonNumber = positiveIntegerOrNull(row.season_number);
+    const episodeNumber = positiveIntegerOrNull(row.episode_number);
+    if (seasonNumber === null || episodeNumber === null) {
+      continue;
+    }
+    const episodes = episodesBySeason.get(seasonNumber) ?? new Set();
+    episodes.add(episodeNumber);
+    episodesBySeason.set(seasonNumber, episodes);
+    const dateKey = dateKeyFromValue(row.air_date ?? row.air_timestamp);
+    if (dateKey && (!latestTmdbDateKey || dateKey > latestTmdbDateKey)) {
+      latestTmdbDateKey = dateKey;
+    }
+  }
+
+  if (episodesBySeason.size === 0 || !latestTmdbDateKey) {
+    return releasedEvents.length;
+  }
+  let tmdbReleasedCount = 0;
+  for (let seasonNumber = 1; seasonNumber <= episodesBySeason.size; seasonNumber += 1) {
+    const episodes = episodesBySeason.get(seasonNumber);
+    if (!episodes || Math.max(...episodes) !== episodes.size) {
+      return releasedEvents.length;
+    }
+    tmdbReleasedCount += episodes.size;
+  }
+
+  const newerRows = releasedEvents.filter((row) => {
+    const dateKey = dateKeyFromValue(row.air_date ?? row.air_timestamp);
+    return Boolean(dateKey && dateKey > latestTmdbDateKey);
+  }).length;
+  return Math.min(releasedEvents.length, tmdbReleasedCount + newerRows);
+}
+
 function buildReleaseFact(item, match, nowMs, reconciledAt) {
   const releaseRows = dedupeProviderEventsForReleaseFact(match.rows, nowMs, item);
   const releasedEvents = releaseRows.filter((row) => row.air_timestamp <= nowMs);
+  const releasedEventCount = countReleasedEventsForFact(
+    item,
+    match.rows,
+    releasedEvents,
+    nowMs
+  );
   const allFutureEvents = dedupeSingleShowEventsForSchedule(
     releaseRows.filter((row) => row.air_timestamp > nowMs)
   );
@@ -2777,18 +2835,18 @@ function buildReleaseFact(item, match, nowMs, reconciledAt) {
             item.released_episodes ?? 0,
             watchedEpisodesCount,
             currentProviderMetadataReleasedEpisodes ?? 0,
-            releasedEvents.length,
+            releasedEventCount,
             ...releasedEvents.map((row) => row.episode_number)
           )
         : hasKnownFutureEvents
-          ? Math.max(watchedEpisodesCount, releasedEvents.length)
+          ? Math.max(watchedEpisodesCount, releasedEventCount)
           : hasSparseOldReleaseHistory
-            ? Math.max(watchedEpisodesCount, releasedEvents.length)
+            ? Math.max(watchedEpisodesCount, releasedEventCount)
             : Math.max(
                 item.released_episodes ?? 0,
                 watchedEpisodesCount,
                 importedTotalReleaseCandidate,
-                releasedEvents.length,
+                releasedEventCount,
                 ...releasedEvents.map((row) => row.episode_number)
               );
   const timestampCappedReleasedEpisodes =
@@ -2799,13 +2857,13 @@ function buildReleaseFact(item, match, nowMs, reconciledAt) {
           typeof providerMetadataBacklogEpisodes !== "number" &&
           typeof watchedAnchorBackedReleasedEpisodes !== "number" &&
           latestReleaseIsAlreadyWatched &&
-          (releasedEvents.length <= watchedEpisodesCount ||
+          (releasedEventCount <= watchedEpisodesCount ||
             rawReleasedEpisodes - watchedEpisodesCount <= 1)
         ? watchedEpisodesCount
         : rawReleasedEpisodes;
   const providerReleasedCeilingForImportedRemaining = Math.max(
     rawReleasedEpisodes,
-    releasedEvents.length,
+    releasedEventCount,
     ...releasedEvents.map((row) => row.episode_number)
   );
   const importPreservedReleasedEpisodes =
@@ -7004,6 +7062,82 @@ async function validateFixtureResults(db, summary, deltaPath = defaultDeltaPath)
     },
     Date.UTC(2026, 6, 7, 12, 0, 0),
     fixtureNowMs
+  );
+  // Detective Conan shape (ADR-0078): TMDB numbers the run absolutely, TVMaze by
+  // year, and two old weeks pair up differently, so the raw row union is 14.
+  const weekMs = 7 * 24 * 60 * 60 * 1000;
+  const firstAirMs = Date.UTC(2026, 0, 3);
+  const weekDate = (week) => new Date(firstAirMs + (week - 1) * weekMs).toISOString().slice(0, 10);
+  const alignmentRow = (sourceProvider, season, episode, week, name) => ({
+    source_provider: sourceProvider,
+    air_timestamp: Date.parse(`${weekDate(week)}T${sourceProvider === "tmdb" ? "00" : "09"}:00:00Z`),
+    air_date: sourceProvider === "tmdb" ? weekDate(week) : `${weekDate(week)}T09:00:00+00:00`,
+    season_number: season,
+    episode_number: episode,
+    name,
+    tmdb_id: 30983,
+    tvmaze_id: sourceProvider === "tvmaze" ? 5429 : null,
+    anilist_id: null,
+    mal_id: null,
+    imdb_id: null,
+  });
+  const alignmentTmdbRows = Array.from({ length: 12 }, (_, index) =>
+    alignmentRow("tmdb", 1, index + 1, index + 1, `Case ${index + 1}`)
+  );
+  const alignmentTvMazeWeeks = [1, 2, 3, 4, 4, 4, 7, 8, 9, 10, 11, 12];
+  const alignmentTvMazeRows = alignmentTvMazeWeeks.map((week, index) =>
+    alignmentRow("tvmaze", 2026, index + 1, week, `Year Case ${index + 1}`)
+  );
+  const alignmentItem = {
+    show_id: "show-cross-provider-numbering-alignment",
+    title: "Cross Provider Numbering Alignment",
+    media_type: "tv",
+    status: "watching",
+    show_status: "returning",
+    watched_episodes_count: 12,
+    watched_episode_anchors_json: JSON.stringify(
+      [9, 10, 11, 12].map((episode) => ({ season: 1, episode }))
+    ),
+    total_episodes: 14,
+    remaining_episodes: 2,
+    last_watched_at: Date.parse(`${weekDate(12)}T20:00:00Z`),
+    tmdb_id: 30983,
+    tvmaze_id: 5429,
+  };
+  const alignmentNowMs = Date.parse(`${weekDate(13)}T12:00:00Z`);
+  const delayedNextRows = [
+    alignmentRow("tmdb", 1, 13, 14, "Delayed Case"),
+    alignmentRow("tvmaze", 2026, 13, 14, "Delayed Case"),
+  ];
+  const crossProviderAlignmentFact = buildReleaseFact(
+    alignmentItem,
+    {
+      confidence: "direct_id",
+      rows: [...alignmentTmdbRows, ...alignmentTvMazeRows, ...delayedNextRows],
+    },
+    alignmentNowMs,
+    fixtureNowMs
+  );
+  const crossProviderNewerReleaseFact = buildReleaseFact(
+    { ...alignmentItem, provider_released_episodes: 12, provider_total_episodes: 13 },
+    {
+      confidence: "direct_id",
+      rows: [
+        ...alignmentTmdbRows,
+        ...alignmentTvMazeRows,
+        alignmentRow("tvmaze", 2026, 13, 13, "Fresh Case"),
+      ],
+    },
+    alignmentNowMs,
+    fixtureNowMs
+  );
+  assertValidation(
+    crossProviderAlignmentFact.releasedEpisodes === 12 &&
+      crossProviderAlignmentFact.releaseState === "upcoming" &&
+      crossProviderNewerReleaseFact.releasedEpisodes === 13 &&
+      crossProviderNewerReleaseFact.releaseState === "available_now",
+    "Old cross-provider numbering drift should not add released episodes when the tracked TMDB catalogue is dense, while newer rows still count.",
+    { crossProviderAlignmentFact, crossProviderNewerReleaseFact }
   );
   assertValidation(
     staleDemonSlayerFact.releasedEpisodes === 63 &&
