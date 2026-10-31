@@ -1,0 +1,7 @@
+{
+  "framework": null,
+  "buildCommand": "npx expo export --platform web && node scripts/patch-web-export.mjs",
+  "outputDirectory": "dist",
+  "rewrites": [{ "source": "/((?!assets/|_expo/|manifest.json|favicon.ico).*)", "destination": "/index.html" }],
+  "headers": [{ "source": "/(.*)", "headers": [{ "key": "X-Robots-Tag", "value": "noindex, nofollow" }] }]
+}

@@ -50,6 +50,9 @@ artifacts/
 backup-export/
 backups
 .schedule-confidence/
+.comparison-private/
+.netlify/
+.vercel/
 
 # Local operations notes
 docs/OPERATIONS.md

@@ -1,7 +1,7 @@
 import "@/global.css";
 import { Stack, usePathname } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { LogBox, Platform, View, useWindowDimensions } from "react-native";
+import { LogBox, Platform, Text, View, useWindowDimensions } from "react-native";
 import { ConvexAuthProvider } from "@convex-dev/auth/react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
@@ -38,6 +38,11 @@ function RootLayoutContent() {
     <View className="flex-1 flex-row" style={{ backgroundColor: "#09090b" }}>
       {shouldShowDesktopSidebar ? <Sidebar /> : null}
       <View className="flex-1 min-w-0">
+        <View style={{ backgroundColor: "#1e293b", paddingHorizontal: 12, paddingVertical: 6 }}>
+          <Text style={{ color: "#f8fafc", textAlign: "center", fontSize: 12 }}>
+            EU comparison · Separate copy · Changes here stay in EU
+          </Text>
+        </View>
         <AppErrorBoundary resetKey={pathname}>
           <Stack
             screenOptions={{

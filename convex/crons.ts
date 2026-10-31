@@ -1,5 +1,4 @@
 import { cronJobs } from "convex/server";
-import { internal } from "./_generated/api";
 
 /**
  * Scheduled automation tasks for ShowTracker
@@ -11,11 +10,7 @@ const crons = cronJobs();
 
 // Cron syntax: minute hour day month dayOfWeek, evaluated in UTC.
 // Keep maintenance after the UTC schedule day has rolled over.
-crons.cron(
-  "autoPauseInactiveShows",
-  "45 0 * * *",
-  internal.shows.autoPauseInactiveShows
-);
+// EU comparison deployment: no duplicate background maintenance.
 
 // Manual fallback only. Release/schedule confidence is owned by the external
 // SQLite reconciler, which applies compact deltas through scheduleConfidence.

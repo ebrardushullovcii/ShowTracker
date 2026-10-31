@@ -1,7 +1,6 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { ConvexError, v } from "convex/values";
 import { internalMutation, mutation, query } from "./_generated/server";
-import { internal } from "./_generated/api";
 import { sharedGameFields } from "./shareValidators";
 import { normalizeSharedGame } from "../lib/sharing/share-link";
 
@@ -18,8 +17,8 @@ export const createSnapshot = internalMutation({
     catch (error) { throw new ConvexError(error instanceof Error ? error.message : "Invalid game."); }
     const expiresAt = Date.now() + 30 * 86400000;
     if (await ctx.db.query("sharedGames").withIndex("by_token", (q) => q.eq("token", args.token)).unique()) throw new ConvexError("Could not create the link. Try again.");
-    const id = await ctx.db.insert("sharedGames", { ...snapshot, ownerId, token: args.token, expiresAt });
-    await ctx.scheduler.runAt(expiresAt, internal.sharedGames.expire, { id });
+    await ctx.db.insert("sharedGames", { ...snapshot, ownerId, token: args.token, expiresAt });
+    // Comparison deployment: reads enforce expiresAt; no scheduled cleanup.
     return { token: args.token, expiresAt };
   },
 });

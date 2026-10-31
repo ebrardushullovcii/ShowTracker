@@ -432,11 +432,8 @@ async function scheduleUserStatsRebuild(
     }
   }
 
-  if (existing) {
-    await ctx.db.patch(existing._id, { rebuildScheduledAt: now });
-  }
-  await ctx.scheduler.runAfter(0, internal.stats.rebuildUserStatsInBackground, { userId });
-  return { scheduled: true };
+  // Comparison deployment: retain the copied stats without queuing workers.
+  return { scheduled: false };
 }
 
 export const getUserStats = query({
