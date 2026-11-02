@@ -2,6 +2,14 @@
 
 ShowTracker is a cross-platform show, anime, and movie tracker built with Expo, React Native Web, Convex, and NativeWind. It is meant to replace TVTime with a faster, cleaner, open source app for discovery, progress tracking, watchlists, schedules, custom lists, and watch statistics.
 
+**[Open ShowTracker](https://showtrackerapp.netlify.app)** in the browser. The same Expo codebase targets iOS and Android.
+
+<p>
+  <img src="public/landing/home.jpg" alt="Home watchlist with shows in progress and episodes left" width="240">
+  <img src="public/landing/show-check.jpg" alt="Season episode list with watched episodes checked off" width="240">
+  <img src="public/landing/profile.jpg" alt="Profile with total watch time and completion stats" width="240">
+</p>
+
 ## Features
 
 - Discover trending TV, anime, and movies.
