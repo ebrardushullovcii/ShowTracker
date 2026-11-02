@@ -1,14 +1,12 @@
 # ShowTracker
 
-ShowTracker is a cross-platform show, anime, and movie tracker built with Expo, React Native Web, Convex, and NativeWind. It is meant to replace TVTime with a faster, cleaner, open source app for discovery, progress tracking, watchlists, schedules, custom lists, and watch statistics.
+A TV, anime and movie tracker with episode progress, watchlists, release schedules, custom lists, TV Time import and watch statistics. Built with Expo, React Native and Convex.
 
 **[Open ShowTracker](https://showtrackerapp.netlify.app)** in the browser. The same Expo codebase targets iOS and Android.
 
-<p>
-  <img src="public/landing/home.jpg" alt="Home watchlist with shows in progress and episodes left" width="240">
-  <img src="public/landing/show-check.jpg" alt="Season episode list with watched episodes checked off" width="240">
-  <img src="public/landing/profile.jpg" alt="Profile with total watch time and completion stats" width="240">
-</p>
+<img src="public/landing/home.jpg" alt="ShowTracker home watchlist, showing progress and remaining episodes" width="300">
+
+_The home watchlist. More views: [episode tracking](public/landing/show-check.jpg) · [watch statistics](public/landing/profile.jpg)._
 
 ## Features
 
@@ -20,7 +18,11 @@ ShowTracker is a cross-platform show, anime, and movie tracker built with Expo, 
 - Create custom lists and inspect profile/watch statistics.
 - Import tracked data and repair stale tracking state with bounded tools.
 
-## Tech Stack
+## How it is built
+
+One Expo codebase targets web, iOS and Android. Convex stores and syncs user data; provider clients normalize TMDB, TVMaze, AniList and Jikan data before it reaches the screens. The [architecture overview](docs/ARCHITECTURE.md) explains provider identity, watch state and schedule projections.
+
+### Tech stack
 
 - **Runtime**: Expo SDK 54, React 19, React Native 0.81, React Native Web 0.21
 - **Routing**: Expo Router 6
@@ -30,26 +32,40 @@ ShowTracker is a cross-platform show, anime, and movie tracker built with Expo, 
 - **Client state**: Convex realtime data plus small Zustand stores for client/UI state
 - **Providers**: TMDB, TVMaze, AniList, and Jikan/MAL fallback
 
-## Getting Started
+## Building from source
+
+Install Node.js/npm and use your own Convex project and provider credentials. Use the variable names in [.env.example](.env.example); keep your values in local environment files.
 
 ```bash
 npm install
-npm run start:web
+```
+
+Run the backend in one terminal and complete Convex's setup prompts:
+
+```bash
 npx convex dev
 ```
 
-Useful validation commands:
+Once the deployment URL is configured, start Expo in a second terminal:
 
 ```bash
-npm run lint
-npx tsc --noEmit --pretty false
-npm run schedule-confidence:validate
+npm run start:web
 ```
+
+## Checks
+
+`npm run lint` and `npx tsc --noEmit --pretty false` run static checks. `npm run schedule-confidence:validate` checks deterministic schedule fixtures. Focused behavioural suites cover schedule timing, Convex I/O and TV Time import; their commands are in [package.json](package.json). These are distinct from live-provider validation and browser inspection.
 
 ## Documentation
 
-Agents start with [AGENTS.md](AGENTS.md). The docs map is [docs/README.md](docs/README.md).
+- [Architecture](docs/ARCHITECTURE.md)
+- [Product goals](docs/GOALS.md)
+- [Documentation index](docs/README.md)
 
 ## Contributing
 
 Create a focused branch, open or update a PR, merge to `main` once checks pass, and verify the live Netlify deployment. Keep user-owned synced data in Convex, and add an ADR for any change that can affect watchlist, schedule, release availability, provider matching, or projection behavior.
+
+## License
+
+The source is public on GitHub. It has no open-source licence.
