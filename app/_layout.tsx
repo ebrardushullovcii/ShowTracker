@@ -75,6 +75,7 @@ export function RootLayout() {
       <ConvexAuthProvider
         client={convex}
         storage={tokenStorage}
+        storageNamespace={process.env.EXPO_PUBLIC_AUTH_STORAGE_NAMESPACE}
         // App currently uses password + anonymous auth only.
         // Disable auth code handling to avoid verifyCode runtime failures
         // when stale `code` params are present.

@@ -18,10 +18,17 @@ Convex is the source of truth for user-owned synced state. Provider APIs are sou
 ```text
 main branch
   -> Netlify auto-deploys the web app (https://showtrackerapp.netlify.app)
-  -> Convex production serves auth, user data, functions, projections, and crons
+  -> Convex production in Ireland serves auth, user data, functions, projections, and crons
   -> private VPS at /opt/showtracker runs schedule-confidence from origin/main
   -> Browser verification checks the live app against production data
 ```
+
+The production backend is `ceaseless-salmon-10` in the `showtrackereucompare`
+project. Netlify's cloud and HTTP-action URLs and the VPS environment must target
+that same deployment. Local development uses a separate development deployment
+in that project. The website keeps its original auth storage namespace through
+`EXPO_PUBLIC_AUTH_STORAGE_NAMESPACE` so imported sessions can refresh after a
+backend move (ADR-0079).
 
 Treat production bugs as cross-system until proven otherwise. A detail page can be correct because it reads provider/detail facts while Home or Schedule is wrong because projection, schedule cache, or VPS reconciliation state is stale. When diagnosing a mismatch between detail, Home, Watchlist, and Schedule, identify which layer produced each fact before changing behavior:
 

@@ -56,3 +56,28 @@ export const expire = internalMutation({
     return null;
   },
 });
+
+/** Backups omit scheduled functions. Run explicitly after a complete restore. */
+export const restoreExpirationSchedules = internalMutation({
+  args: { restoreId: v.string() },
+  returns: v.object({ scheduled: v.number(), isDone: v.boolean() }),
+  handler: async (ctx, { restoreId }) => {
+    const key = `sharedGameExpiryRestore:${restoreId}`;
+    const state = await ctx.db.query("maintenanceState")
+      .withIndex("by_key", (q) => q.eq("key", key)).unique();
+    if (state?.cursor === "done") return { scheduled: 0, isDone: true };
+
+    const page = await ctx.db.query("sharedGames").paginate({
+      cursor: state?.cursor ?? null,
+      numItems: 50,
+    });
+    const now = Date.now();
+    for (const game of page.page) {
+      await ctx.scheduler.runAt(Math.max(now, game.expiresAt), internal.sharedGames.expire, { id: game._id });
+    }
+    const progress = { cursor: page.isDone ? "done" : page.continueCursor, updatedAt: now };
+    if (state) await ctx.db.patch(state._id, progress);
+    else await ctx.db.insert("maintenanceState", { key, ...progress });
+    return { scheduled: page.page.length, isDone: page.isDone };
+  },
+});

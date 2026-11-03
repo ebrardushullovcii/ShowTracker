@@ -155,6 +155,7 @@ Most frequently relevant:
 - [ADR-0076](ADR-0076-link-only-game-creator.md): This or that is a link-only game creator; remove shortlist and image exports from game setup.
 
 - [ADR-0077](ADR-0077-schedule-database-io.md): lossless watched-coordinate summaries and shared schedule-bucket batching reduce recurring database I/O while preserving release matching.
+- [ADR-0079](ADR-0079-auth-sessions-across-deployment-moves.md): retain browser refresh-token access across backend moves and explicitly restore share-expiry schedules.
 
 ## Guidance policy
 
