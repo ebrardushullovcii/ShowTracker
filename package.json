@@ -37,7 +37,8 @@
     "ui:inspect:quick": "cross-env UI_INSPECT_PRESET=quick node scripts/ui-inspect.mjs",
     "ui:inspect:headed": "cross-env PW_HEADLESS=false node scripts/ui-inspect.mjs",
     "ui:inspect:quick:headed": "cross-env UI_INSPECT_PRESET=quick PW_HEADLESS=false node scripts/ui-inspect.mjs",
-    "ui:inspect:open": "npx playwright open http://localhost:8081"
+    "ui:inspect:open": "npx playwright open http://localhost:8081",
+    "ios:device": "node scripts/ios-device.mjs"
   },
   "dependencies": {
     "@convex-dev/auth": "^0.0.96",
