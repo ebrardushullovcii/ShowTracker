@@ -25,9 +25,15 @@
       "expo-font"
     ],
     "ios": {
+      "bundleIdentifier": "com.ebrardushullovci.showtracker",
+      "appleTeamId": "Q482PG5S54",
+      "buildNumber": "2",
       "supportsTablet": true,
       "icon": "./assets/icon.png",
-      "backgroundColor": "#0b0f1a"
+      "backgroundColor": "#0b0f1a",
+      "config": {
+        "usesNonExemptEncryption": false
+      }
     },
     "android": {
       "icon": "./assets/icon.png",
@@ -50,6 +56,13 @@
       "display": "standalone",
       "startUrl": "/home",
       "barStyle": "black"
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "8d74bf40-0314-4de1-96b3-4f45054eaf1a"
+      }
+    },
+    "owner": "ebrardushullovci"
   }
 }

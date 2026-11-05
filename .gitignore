@@ -38,6 +38,9 @@ Thumbs.db
 
 # EAS
 .eas/
+credentials.json
+/ios/
+/android/
 
 # Metro
 .metro-health-check*

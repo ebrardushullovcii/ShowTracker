@@ -1,5 +1,7 @@
 # Decision Map
 
+- [ADR-0080](ADR-0080-account-deletion.md): confirmed, caller-scoped account deletion uses bounded jobs and a final sweep after old access tokens expire.
+
 ADRs are the durable memory for architectural and behavior decisions. This map groups them so agents can find the relevant history quickly.
 
 For Home, Watchlist, Schedule, release availability, provider matching, duplicate collapse, route IDs, schedule cache, and user projections, ADRs are the long-term memory that prevents repeating old debugging loops. Do not delete, summarize away, or bypass them just because the implementation is now easier to inspect.
