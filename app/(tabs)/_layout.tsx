@@ -10,13 +10,12 @@ export default function TabsLayout() {
   const isDesktop = Platform.OS === "web" && width >= DESKTOP_SIDEBAR_BREAKPOINT;
   const isMobileWeb = Platform.OS === "web" && !isDesktop;
   const mobileWebBottomInset = isMobileWeb ? 16 : 0;
-  const iosBottomInset = Math.max(insets.bottom, 16);
   const mobileTabBarPaddingBottom =
-    Platform.OS === "ios" ? iosBottomInset + 10 : isMobileWeb ? mobileWebBottomInset : 8;
+    Platform.OS === "ios" ? insets.bottom : isMobileWeb ? mobileWebBottomInset : 8;
   const mobileTabBarPaddingTop = Platform.OS === "ios" ? 2 : isMobileWeb ? 0 : 6;
   const mobileTabBarHeight =
     Platform.OS === "ios"
-      ? Math.max(90, 50 + mobileTabBarPaddingTop + mobileTabBarPaddingBottom)
+      ? 50 + mobileTabBarPaddingTop + mobileTabBarPaddingBottom
       : isMobileWeb
         ? 58 + mobileWebBottomInset
         : 64;

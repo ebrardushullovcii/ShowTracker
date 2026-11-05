@@ -27,7 +27,7 @@
     "ios": {
       "bundleIdentifier": "com.ebrardushullovci.showtracker",
       "appleTeamId": "Q482PG5S54",
-      "buildNumber": "1",
+      "buildNumber": "2",
       "supportsTablet": true,
       "icon": "./assets/icon.png",
       "backgroundColor": "#0b0f1a",

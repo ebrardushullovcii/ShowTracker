@@ -6,6 +6,13 @@ import { sharedGameFields } from "./shareValidators";
 
 export default defineSchema({
   ...authTables,
+  authVerifiers: authTables.authVerifiers.index("by_sessionId", ["sessionId"]),
+  accountDeletions: defineTable({
+    userId: v.id("users"),
+    stage: v.number(),
+    finalPass: v.boolean(),
+    startedAt: v.number(),
+  }).index("by_user", ["userId"]),
   sharedGames: defineTable({
     ...sharedGameFields,
     ownerId: v.id("users"),

@@ -1,8 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  Linking,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
   Pressable,
   ScrollView,
   Text,
+  TextInput,
   View,
 } from "react-native";
 import { Link, useRouter } from "expo-router";
@@ -11,6 +16,7 @@ import { useAction, useConvexAuth, useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { ScreenWrapper } from "@/components/ScreenWrapper";
 import { BrandLoader } from "@/components/BrandLoader";
+import { useAuthActions } from "@convex-dev/auth/react";
 
 type AnimeHomeFranchiseMode = "core_only" | "all_relations";
 type AnimeCompletionBehavior =
@@ -132,12 +138,18 @@ function PreferenceControl({
 
 export default function ProfileSettingsScreen() {
   const router = useRouter();
+  const { signOut } = useAuthActions();
   const { isAuthenticated } = useConvexAuth();
   const animeHomeSettings = useQuery(api.shows.getUserAnimeHomeSettings);
   const rebuildUserStats = useMutation(api.stats.rebuildUserStats);
   const repairMyShowsTrackingBatch = useMutation(api.shows.repairMyShowsTrackingBatch);
   const setUserAnimeHomeSettings = useMutation(api.shows.setUserAnimeHomeSettings);
   const syncTrackedAnimeRelations = useAction(api.shows.syncTrackedAnimeRelations);
+  const requestAccountDeletion = useMutation(api.accountDeletion.request);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteConfirmation, setDeleteConfirmation] = useState("");
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const [isRefreshingStats, setIsRefreshingStats] = useState(false);
   const [isRepairingTracking, setIsRepairingTracking] = useState(false);
@@ -153,6 +165,20 @@ export default function ProfileSettingsScreen() {
 
   const animeHomeFranchiseMode =
     (animeHomeSettings?.relationMode as AnimeHomeFranchiseMode | undefined) ?? "core_only";
+
+  const deleteAccount = async () => {
+    if (deleteConfirmation !== "DELETE" || isDeletingAccount) return;
+    setIsDeletingAccount(true);
+    setDeleteError(null);
+    try {
+      await requestAccountDeletion({ confirmation: "DELETE" });
+      await signOut();
+      router.replace("/login");
+    } catch {
+      setDeleteError("Could not start account deletion. Please try again.");
+      setIsDeletingAccount(false);
+    }
+  };
   const animeCompletionBehavior =
     (animeHomeSettings?.completionBehavior as AnimeCompletionBehavior | undefined) ?? "ask_every_time";
   const homePausedSectionMode =
@@ -521,8 +547,39 @@ export default function ProfileSettingsScreen() {
               </View>
             </View>
 
+            <View className="gap-3 border-t border-border-default pt-5">
+              <Text className="text-xs font-black uppercase tracking-wide text-text-secondary">Account & Privacy</Text>
+              <Pressable accessibilityRole="link" onPress={() => Linking.openURL("https://showtrackerapp.netlify.app/privacy.html")} className="min-h-12 justify-center py-2">
+                <Text className="text-sm font-bold text-text-primary">Privacy policy</Text>
+              </Pressable>
+              <Pressable accessibilityRole="link" onPress={() => Linking.openURL("https://showtrackerapp.netlify.app/support.html")} className="min-h-12 justify-center py-2">
+                <Text className="text-sm font-bold text-text-primary">Support</Text>
+              </Pressable>
+              <Pressable accessibilityRole="button" disabled={!isAuthenticated} onPress={() => { setDeleteConfirmation(""); setDeleteError(null); setShowDeleteConfirm(true); }} className="rounded-lg border border-primary/40 bg-primary/10 px-4 py-3">
+                <Text className="text-center text-sm font-bold text-primary">Delete account</Text>
+              </Pressable>
+            </View>
           </View>
         </ScrollView>
+        <Modal visible={showDeleteConfirm} transparent animationType="fade" onRequestClose={() => { if (!isDeletingAccount) setShowDeleteConfirm(false); }}>
+          <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} className="flex-1 items-center justify-center bg-black/80 px-6">
+            <View className="w-full max-w-md gap-4 rounded-xl border border-border-default bg-bg-surface p-5">
+              <Text className="text-xl font-black text-text-primary">Delete your account?</Text>
+              <Text className="text-sm leading-5 text-text-secondary">This permanently removes your account, library, watched history, favorites, lists, preferences and shared links. It cannot be undone.</Text>
+              <Text className="text-sm leading-5 text-text-secondary">You will be signed out now. Data removal normally completes within 24 hours. Type DELETE to confirm.</Text>
+              <TextInput accessibilityLabel="Type DELETE to confirm account deletion" value={deleteConfirmation} onChangeText={setDeleteConfirmation} autoCapitalize="characters" autoCorrect={false} editable={!isDeletingAccount} placeholder="DELETE" placeholderTextColor="#71717a" className="min-h-12 rounded-lg border border-border-default bg-bg-base px-3 text-base text-text-primary" />
+              {deleteError ? <Text accessibilityRole="alert" className="text-sm text-primary">{deleteError}</Text> : null}
+              <View className="flex-row gap-3">
+                <Pressable accessibilityRole="button" disabled={isDeletingAccount} onPress={() => setShowDeleteConfirm(false)} className="min-h-12 flex-1 items-center justify-center rounded-lg border border-border-default">
+                  <Text className="font-bold text-text-primary">Cancel</Text>
+                </Pressable>
+                <Pressable accessibilityRole="button" disabled={deleteConfirmation !== "DELETE" || isDeletingAccount} onPress={deleteAccount} className="min-h-12 flex-1 items-center justify-center rounded-lg bg-primary" style={{ opacity: deleteConfirmation !== "DELETE" || isDeletingAccount ? 0.45 : 1 }}>
+                  <Text className="font-bold text-white">{isDeletingAccount ? "Deleting..." : "Delete account"}</Text>
+                </Pressable>
+              </View>
+            </View>
+          </KeyboardAvoidingView>
+        </Modal>
       </View>
     </ScreenWrapper>
   );
