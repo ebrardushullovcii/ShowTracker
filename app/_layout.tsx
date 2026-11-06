@@ -3,7 +3,7 @@ import { Stack, usePathname } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { LogBox, Platform, View, useWindowDimensions } from "react-native";
 import { ConvexAuthProvider, useAuthToken } from "@convex-dev/auth/react";
-import { useEffect } from "react";
+import { useEffect, type PropsWithChildren } from "react";
 import { useConvexAuth, useQuery } from "convex/react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
@@ -19,6 +19,10 @@ import { api } from "@/convex/_generated/api";
 LogBox.ignoreLogs([
   "SafeAreaView has been deprecated and will be removed in a future release.",
 ]);
+
+function renderGatedScreen({ children }: PropsWithChildren) {
+  return <AuthGate>{children}</AuthGate>;
+}
 
 function RootLayoutContent() {
   const { isAuthenticated } = useConvexAuth();
@@ -51,7 +55,7 @@ function RootLayoutContent() {
       <View className="flex-1 min-w-0">
         <AppErrorBoundary resetKey={pathname}>
           <Stack
-            screenLayout={AuthGate}
+            screenLayout={renderGatedScreen}
             screenOptions={{
               headerShown: false,
               gestureEnabled: true,
