@@ -53,6 +53,7 @@ export function RegisterScreen() {
     success,
     isPending,
     handleRegister,
+    requireApproval,
   } = useRegisterForm();
   const isDesktopAuth =
     Platform.OS === "web" && width >= DESKTOP_SIDEBAR_BREAKPOINT;
@@ -136,7 +137,7 @@ export function RegisterScreen() {
                     Join ShowTracker
                   </Text>
                   <Text className="mt-1 text-lg font-black text-text-primary">
-                    Start tracking in under a minute
+                    {requireApproval ? "Request access to ShowTracker" : "Start tracking in under a minute"}
                   </Text>
                 </View>
               ) : null}
@@ -173,7 +174,7 @@ export function RegisterScreen() {
                     Create your account
                   </Text>
                   <Text className="mt-1 text-sm text-text-secondary">
-                    Your watch history starts here.
+                    {requireApproval ? "New accounts require approval during our limited rollout." : "Your watch history starts here."}
                   </Text>
 
                   <View className="mt-5 gap-3">
@@ -266,7 +267,7 @@ export function RegisterScreen() {
                     {isPending ? (
                       <BrandLoader compact onPrimary />
                     ) : (
-                      <Text className="text-sm font-black uppercase tracking-wide text-white">Create Account</Text>
+                      <Text className="text-sm font-black uppercase tracking-wide text-white">{requireApproval ? "Request access" : "Create Account"}</Text>
                     )}
                   </Pressable>
 

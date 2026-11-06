@@ -2,7 +2,9 @@ import "@/global.css";
 import { Stack, usePathname } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { LogBox, Platform, View, useWindowDimensions } from "react-native";
-import { ConvexAuthProvider } from "@convex-dev/auth/react";
+import { ConvexAuthProvider, useAuthToken } from "@convex-dev/auth/react";
+import { useEffect } from "react";
+import { useConvexAuth, useQuery } from "convex/react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
 import { AuthGate } from "@/components/AuthGate";
@@ -11,12 +13,21 @@ import { Sidebar } from "@/components/Sidebar";
 import { DESKTOP_SIDEBAR_BREAKPOINT } from "@/constants/navigation";
 import { convex } from "@/lib/convex/client";
 import { tokenStorage } from "@/lib/auth/token-storage";
+import { setProviderAccessToken } from "@/lib/api/auth-token";
+import { api } from "@/convex/_generated/api";
 
 LogBox.ignoreLogs([
   "SafeAreaView has been deprecated and will be removed in a future release.",
 ]);
 
 function RootLayoutContent() {
+  const { isAuthenticated } = useConvexAuth();
+  const access = useQuery(api.access.current, isAuthenticated ? {} : "skip");
+  const token = useAuthToken();
+  useEffect(() => {
+    setProviderAccessToken(token);
+    return () => setProviderAccessToken(null);
+  }, [token]);
   const { width } = useWindowDimensions();
   const isDesktop = Platform.OS === "web" && width >= DESKTOP_SIDEBAR_BREAKPOINT;
   const pathname = usePathname();
@@ -32,7 +43,7 @@ function RootLayoutContent() {
     pathname.startsWith("/list/") ||
     pathname.startsWith("/show/");
   const shouldShowDesktopSidebar =
-    isDesktop && isShellPath;
+    isDesktop && isShellPath && access?.status === "approved";
 
   return (
     <View className="flex-1 flex-row" style={{ backgroundColor: "#09090b" }}>
@@ -40,6 +51,7 @@ function RootLayoutContent() {
       <View className="flex-1 min-w-0">
         <AppErrorBoundary resetKey={pathname}>
           <Stack
+            screenLayout={AuthGate}
             screenOptions={{
               headerShown: false,
               gestureEnabled: true,
@@ -82,10 +94,8 @@ export function RootLayout() {
         shouldHandleCode={false}
       >
         <ThemeProvider>
-          <AuthGate>
-            <StatusBar style="light" />
-            <RootLayoutContent />
-          </AuthGate>
+          <StatusBar style="light" />
+          <RootLayoutContent />
         </ThemeProvider>
       </ConvexAuthProvider>
     </GestureHandlerRootView>

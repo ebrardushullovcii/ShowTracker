@@ -2,6 +2,12 @@
   command = "npx expo export --platform web && node scripts/patch-web-export.mjs"
   publish = "dist"
 
+# Keep this staged release isolated from production, including saved login tokens.
+[context."feat/account-approval".environment]
+  EXPO_PUBLIC_CONVEX_URL = "https://uncommon-chickadee-760.eu-west-1.convex.cloud"
+  EXPO_PUBLIC_CONVEX_SITE_URL = "https://uncommon-chickadee-760.eu-west-1.convex.site"
+  EXPO_PUBLIC_AUTH_STORAGE_NAMESPACE = "showtracker-account-approval-preview"
+
 [[redirects]]
   from = "/*"
   to = "/index.html"
