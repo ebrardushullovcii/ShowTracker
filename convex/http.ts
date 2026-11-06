@@ -1,6 +1,7 @@
 import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
 import { auth } from "./auth";
+import { requireApproved } from "./lib/accessPolicy";
 
 const http = httpRouter();
 
@@ -20,7 +21,7 @@ const configuredWebOrigins = [
 
 const corsBaseHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
   Vary: "Origin",
 };
 
@@ -117,7 +118,7 @@ http.route({
 http.route({
   path: "/anilist",
   method: "POST",
-  handler: httpAction(async (_ctx, request) => {
+  handler: httpAction(async (ctx, request) => {
     const corsHeaders = getCorsHeaders(request);
     if (!corsHeaders) {
       return Response.json(
@@ -127,6 +128,12 @@ http.route({
           headers: corsBaseHeaders,
         }
       );
+    }
+
+    try {
+      await requireApproved(ctx);
+    } catch {
+      return Response.json({ error: "Approved account required." }, { status: 403, headers: corsHeaders });
     }
 
     try {

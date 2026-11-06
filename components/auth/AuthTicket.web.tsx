@@ -136,6 +136,7 @@ function SignInForm() {
         <button type="submit" className="tk-btn tk-btn-ink" disabled={form.isPending}>
           {form.isPending ? "Signing in..." : "Sign in"}
         </button>
+        {form.guestAllowed && (
         <button
           type="button"
           className="tk-btn tk-btn-line"
@@ -146,6 +147,7 @@ function SignInForm() {
         >
           Continue as guest
         </button>
+        )}
       </div>
     </form>
   );
@@ -161,8 +163,8 @@ function RegisterForm() {
   return (
     <form className="tk-t-main" onSubmit={onSubmit} noValidate>
       <span className="tk-t-k">New account</span>
-      <h1>Get in free</h1>
-      <p>Start with what you're watching now. Your queue builds itself from there.</p>
+      <h1>{form.requireApproval ? "Request access" : "Get in free"}</h1>
+      <p>{form.requireApproval ? "New accounts require approval during our limited rollout. Create an account to request access." : "Start with what you're watching now. Your queue builds itself from there."}</p>
       <div className="tk-fields">
         <EmailField value={form.email} onChange={form.setEmail} disabled={form.isPending} />
         <PasswordField
@@ -189,7 +191,7 @@ function RegisterForm() {
       <FormMessages error={form.error} success={form.success} />
       <div className="tk-auth-actions">
         <button type="submit" className="tk-btn tk-btn-ink" disabled={form.isPending}>
-          {form.isPending ? "Creating account..." : "Create account"}
+          {form.isPending ? "Creating account..." : form.requireApproval ? "Request access" : "Create account"}
         </button>
       </div>
     </form>

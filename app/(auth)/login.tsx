@@ -53,6 +53,7 @@ export function LoginScreen() {
     isPending,
     handleSignIn,
     handleAnonymousSignIn,
+    guestAllowed,
   } = useSignInForm();
 
   const isDesktopAuth = Platform.OS === "web" && width >= DESKTOP_SIDEBAR_BREAKPOINT;
@@ -232,6 +233,7 @@ export function LoginScreen() {
                     )}
                   </Pressable>
 
+                  {guestAllowed && (
                   <Pressable
                     onPress={handleAnonymousSignIn}
                     disabled={isPending}
@@ -240,6 +242,7 @@ export function LoginScreen() {
                     <Ionicons name="person-outline" size={15} color="#a1a1aa" />
                     <Text className="text-sm font-semibold text-text-primary">Continue as guest</Text>
                   </Pressable>
+                  )}
 
                   <View className="mt-4 flex-row items-center justify-center gap-1">
                     <Text className="text-sm text-text-secondary">Need an account?</Text>

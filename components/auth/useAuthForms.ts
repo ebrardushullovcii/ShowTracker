@@ -1,14 +1,15 @@
 import { type Href, useRouter } from "expo-router";
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { Platform } from "react-native";
 import { useAuthActions } from "@convex-dev/auth/react";
-import { useMutation } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 
 // Form state and submit logic shared by the native auth screens and the web ticket pages.
 
 export function useSignInForm() {
   const { signIn } = useAuthActions();
+  const policy = useQuery(api.access.registrationPolicy);
   const checkPasswordAccount = useMutation(api.auth.checkPasswordAccount);
   const router = useRouter();
   const [email, setEmail] = useState("");
@@ -114,12 +115,13 @@ export function useSignInForm() {
     isPending,
     handleSignIn,
     handleAnonymousSignIn,
+    guestAllowed: policy?.requireApproval === false,
   };
 }
 
 export function useRegisterForm() {
   const { signIn } = useAuthActions();
-  const router = useRouter();
+  const policy = useQuery(api.access.registrationPolicy);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -128,17 +130,6 @@ export function useRegisterForm() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [isPending, setIsPending] = useState(false);
-  const redirectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    return () => {
-      if (redirectTimerRef.current) {
-        clearTimeout(redirectTimerRef.current);
-        redirectTimerRef.current = null;
-      }
-    };
-  }, []);
-
   const handleRegister = async () => {
     if (!email.trim()) {
       setError("Please enter your email address.");
@@ -173,14 +164,7 @@ export function useRegisterForm() {
       });
 
       if (didSignIn) {
-        setSuccess("Account ready. Taking you to your dashboard...");
-        if (redirectTimerRef.current) {
-          clearTimeout(redirectTimerRef.current);
-        }
-        redirectTimerRef.current = setTimeout(() => {
-          redirectTimerRef.current = null;
-          router.replace("/home");
-        }, 900);
+        setSuccess("Account created. Checking access...");
         return;
       }
 
@@ -220,5 +204,6 @@ export function useRegisterForm() {
     success,
     isPending,
     handleRegister,
+    requireApproval: policy?.requireApproval !== false,
   };
 }

@@ -6,6 +6,20 @@ import { sharedGameFields } from "./shareValidators";
 
 export default defineSchema({
   ...authTables,
+  users: defineTable({
+    ...authTables.users.validator.fields,
+    // Missing status belongs to an account created before approval was introduced.
+    approvalStatus: v.optional(v.union(v.literal("pending"), v.literal("approved"))),
+    approvedAt: v.optional(v.number()),
+    approvedBy: v.optional(v.id("users")),
+  }).index("email", ["email"]).index("phone", ["phone"])
+    .index("by_approvalStatus", ["approvalStatus"]),
+  registrationSettings: defineTable({
+    key: v.literal("registration"),
+    requireApproval: v.boolean(),
+    updatedAt: v.number(),
+    updatedBy: v.id("users"),
+  }).index("by_key", ["key"]),
   authVerifiers: authTables.authVerifiers.index("by_sessionId", ["sessionId"]),
   accountDeletions: defineTable({
     userId: v.id("users"),

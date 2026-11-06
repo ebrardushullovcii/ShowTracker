@@ -1,11 +1,6 @@
+import { action, query } from "./lib/approvedFunctions";
 import { getAuthUserId } from "@convex-dev/auth/server";
-import {
-  action,
-  internalAction,
-  internalMutation,
-  internalQuery,
-  query,
-} from "./_generated/server";
+import { internalAction, internalMutation, internalQuery } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { ActionCtx, MutationCtx, QueryCtx } from "./_generated/server";
 import { v } from "convex/values";
