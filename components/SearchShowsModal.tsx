@@ -1,3 +1,4 @@
+import { DialogBackdrop } from "@/components/DialogBackdrop";
 import { HeaderIconButton } from "@/components/HeaderIconButton";
 import { useMemo, useState, useCallback, useEffect, useRef } from "react";
 import {
@@ -246,7 +247,7 @@ export function SearchShowsModal({ visible, onClose, listId, existingShowIds }: 
       animationType="fade"
       onRequestClose={handleClose}
     >
-      <View className="dialog-backdrop">
+      <DialogBackdrop>
         <Pressable className="absolute inset-0" onPress={handleClose} />
 
         <View className="dialog-panel h-[80vh] max-w-dialog">
@@ -351,7 +352,7 @@ export function SearchShowsModal({ visible, onClose, listId, existingShowIds }: 
             </Pressable>
           </View>
         </View>
-      </View>
+      </DialogBackdrop>
     </Modal>
   );
 }

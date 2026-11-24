@@ -1,9 +1,8 @@
+import { DialogBackdrop, TallDialog, useDrawerBottomInset } from "@/components/DialogBackdrop";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Linking,
-  KeyboardAvoidingView,
   Modal,
-  Platform,
   Pressable,
   ScrollView,
   Text,
@@ -12,7 +11,6 @@ import {
 } from "react-native";
 import { Link, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { useAction, useConvexAuth, useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useSignOut } from "@/components/SignOutProvider";
@@ -142,6 +140,7 @@ function PreferenceControl({
 }
 
 export default function ProfileSettingsScreen() {
+  const drawerBottomInset = useDrawerBottomInset();
   const router = useRouter();
   const { signOut } = useAuthActions();
   const { isAuthenticated } = useConvexAuth();
@@ -459,8 +458,8 @@ export default function ProfileSettingsScreen() {
   );
 
   return (
-    <SafeAreaView className="flex-1 bg-bg-base">
-      <View className="flex-1">
+    <TallDialog onClose={close} maxWidth={512}>
+      <View className="min-h-0 flex-1">
         <OverlayHeader title="Profile Controls" onClose={close} closeAccessibilityLabel="Close settings" />
 
         {notice || error ? (
@@ -596,9 +595,10 @@ export default function ProfileSettingsScreen() {
               </Pressable>
             </View>
           </View>
+          {drawerBottomInset > 0 ? <View style={{ height: drawerBottomInset }} /> : null}
         </ScrollView>
         <Modal visible={showSignOutConfirm} transparent animationType="fade" onRequestClose={closeSignOut}>
-          <View className="dialog-backdrop">
+          <DialogBackdrop>
             <Pressable className="absolute inset-0" focusable={false} onPress={closeSignOut} />
             <View className="dialog-panel max-w-confirmation">
               <CardTopGlow />
@@ -631,29 +631,31 @@ export default function ProfileSettingsScreen() {
                 </View>
               </View>
             </View>
-          </View>
+          </DialogBackdrop>
         </Modal>
 
         <Modal visible={showDeleteConfirm} transparent animationType="fade" onRequestClose={() => { if (!isDeletingAccount) setShowDeleteConfirm(false); }}>
-          <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} className="dialog-backdrop">
-            <View className="dialog-panel max-w-confirmation gap-4 p-dialog-gutter">
-              <Text className="text-xl font-black text-text-primary">Delete your account?</Text>
-              <Text className="text-sm leading-5 text-text-secondary">This permanently removes your account, library, watched history, favorites, lists, preferences and shared links. It cannot be undone.</Text>
-              <Text className="text-sm leading-5 text-text-secondary">You will be signed out now. Data removal normally completes within 24 hours. Type DELETE to confirm.</Text>
-              <TextInput accessibilityLabel="Type DELETE to confirm account deletion" value={deleteConfirmation} onChangeText={setDeleteConfirmation} autoCapitalize="characters" autoCorrect={false} editable={!isDeletingAccount} placeholder="DELETE" placeholderTextColor="#71717a" className="min-h-12 rounded-lg border border-border-default bg-bg-base px-3 text-[16px] text-text-primary" />
-              {deleteError ? <Text accessibilityRole="alert" className="text-sm text-primary">{deleteError}</Text> : null}
-              <View className="flex-row gap-3">
-                <Pressable accessibilityRole="button" disabled={isDeletingAccount} onPress={() => setShowDeleteConfirm(false)} className="min-h-12 flex-1 items-center justify-center rounded-lg border border-border-default">
-                  <Text className="font-bold text-text-primary">Cancel</Text>
-                </Pressable>
-                <Pressable accessibilityRole="button" disabled={deleteConfirmation !== "DELETE" || isDeletingAccount} onPress={deleteAccount} className="min-h-12 flex-1 items-center justify-center rounded-lg bg-primary" style={{ opacity: deleteConfirmation !== "DELETE" || isDeletingAccount ? 0.45 : 1 }}>
-                  <Text className="font-bold text-white">{isDeletingAccount ? "Deleting..." : "Delete account"}</Text>
-                </Pressable>
-              </View>
+          <DialogBackdrop avoidKeyboard>
+            <View className="dialog-panel max-w-confirmation">
+              <ScrollView className="shrink" contentContainerClassName="gap-4 p-dialog-gutter" keyboardShouldPersistTaps="handled">
+                <Text className="text-xl font-black text-text-primary">Delete your account?</Text>
+                <Text className="text-sm leading-5 text-text-secondary">This permanently removes your account, library, watched history, favorites, lists, preferences and shared links. It cannot be undone.</Text>
+                <Text className="text-sm leading-5 text-text-secondary">You will be signed out now. Data removal normally completes within 24 hours. Type DELETE to confirm.</Text>
+                <TextInput accessibilityLabel="Type DELETE to confirm account deletion" value={deleteConfirmation} onChangeText={setDeleteConfirmation} autoCapitalize="characters" autoCorrect={false} editable={!isDeletingAccount} placeholder="DELETE" placeholderTextColor="#71717a" className="min-h-12 rounded-lg border border-border-default bg-bg-base px-3 text-[16px] text-text-primary" />
+                {deleteError ? <Text accessibilityRole="alert" className="text-sm text-primary">{deleteError}</Text> : null}
+                <View className="flex-row gap-3">
+                  <Pressable accessibilityRole="button" disabled={isDeletingAccount} onPress={() => setShowDeleteConfirm(false)} className="min-h-12 flex-1 items-center justify-center rounded-lg border border-border-default">
+                    <Text className="font-bold text-text-primary">Cancel</Text>
+                  </Pressable>
+                  <Pressable accessibilityRole="button" disabled={deleteConfirmation !== "DELETE" || isDeletingAccount} onPress={deleteAccount} className="min-h-12 flex-1 items-center justify-center rounded-lg bg-primary" style={{ opacity: deleteConfirmation !== "DELETE" || isDeletingAccount ? 0.45 : 1 }}>
+                    <Text className="font-bold text-white">{isDeletingAccount ? "Deleting..." : "Delete account"}</Text>
+                  </Pressable>
+                </View>
+              </ScrollView>
             </View>
-          </KeyboardAvoidingView>
+          </DialogBackdrop>
         </Modal>
       </View>
-    </SafeAreaView>
+    </TallDialog>
   );
 }

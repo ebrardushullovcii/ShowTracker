@@ -1,3 +1,4 @@
+import { useDelayedLoading } from "@/hooks/use-delayed-loading";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Feather } from "@expo/vector-icons";
 import {
@@ -789,8 +790,10 @@ export function DiscoverScreen() {
     );
   }, [activeState.isLoadingMore]);
 
+  const showDiscoverLoading = useDelayedLoading(activeState.isLoading);
   const renderEmpty = useCallback(() => {
     if (activeState.isLoading) {
+      if (!showDiscoverLoading) return null;
       return (
         <View className="items-center gap-2 rounded-xl border-2 border-border-default bg-bg-surface py-8">
           <BrandLoader compact />
@@ -814,7 +817,7 @@ export function DiscoverScreen() {
         </Text>
       </View>
     );
-  }, [activeState.isLoading, activeState.error]);
+  }, [activeState.isLoading, activeState.error, showDiscoverLoading]);
 
   const ListHeader = useCallback(
     () => (

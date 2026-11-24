@@ -1,3 +1,4 @@
+import { DialogBackdrop } from "@/components/DialogBackdrop";
 import { HeaderIconButton } from "@/components/HeaderIconButton";
 import { useState } from "react";
 import {
@@ -112,7 +113,7 @@ export function AddToListModal({ visible, onClose, show }: AddToListModalProps) 
       animationType="fade"
       onRequestClose={onClose}
     >
-      <View className="dialog-backdrop">
+      <DialogBackdrop>
         <Pressable className="absolute inset-0" onPress={onClose} />
 
         <View className="dialog-panel max-w-dialog">
@@ -212,7 +213,7 @@ export function AddToListModal({ visible, onClose, show }: AddToListModalProps) 
             </Pressable>
           </View>
         </View>
-      </View>
+      </DialogBackdrop>
     </Modal>
   );
 }

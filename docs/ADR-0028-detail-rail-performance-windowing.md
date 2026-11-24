@@ -26,6 +26,8 @@ The detail quick rail now uses fixed-width windowing inside the existing horizon
 
 Rail images are only mounted for the rendered window. On web, rail images also request lazy/asynchronous image decoding.
 
+Pagination keeps its loading indicator in the rail header so it cannot change the scroll width. A season that returns an empty episode list counts as loaded. Failed requests remain available for retry from the season list.
+
 Expanded seasons now render all episodes through a 125-episode buffer. Above that, they render 100-episode pages. The initial page is anchored to the same next-relevant episode used by the quick rail when that episode belongs to the season. First, previous, range-picker, next, and last controls move through the loaded season without mounting every card at once. Smaller seasons, including just-over-100 totals such as 110 or 120 episodes, keep rendering all loaded episodes.
 
 Status selection now closes the menu and updates the top action label optimistically while the Convex mutation runs. The underlying progress, watched keys, Home/watchlist projections, and persisted status still come from Convex. If the mutation fails, the optimistic label rolls back and the existing error message path is used.

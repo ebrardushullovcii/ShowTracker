@@ -5,12 +5,14 @@ import {
   Platform,
   Pressable,
   ScrollView,
+  StyleSheet,
   Text,
   View,
   useWindowDimensions,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { BrandLoader } from "@/components/BrandLoader";
+import { useDelayedLoading } from "@/hooks/use-delayed-loading";
 import type { NativeScrollEvent, NativeSyntheticEvent } from "react-native";
 import { DESKTOP_SIDEBAR_BREAKPOINT } from "@/constants/navigation";
 import type { NormalizedEpisode } from "@/lib/api/types";
@@ -56,7 +58,6 @@ const LOAD_MORE_THRESHOLD_PX = 180;
 const RAIL_CARD_WIDTH = 192;
 const RAIL_CARD_GAP = 12;
 const RAIL_CAUGHT_UP_CARD_WIDTH = 256;
-const RAIL_LOADING_CARD_WIDTH = 96;
 const RAIL_SIDE_PADDING = 16;
 // Reserve room for two title lines, three summary lines and the action row.
 // The windowed cards must not set the height as they mount and unmount.
@@ -65,6 +66,20 @@ const RAIL_CARD_TEXT_HEIGHT = 120;
 const RAIL_MIN_RENDERED_ITEMS = 10;
 const RAIL_OVERSCAN_PX = (RAIL_CARD_WIDTH + RAIL_CARD_GAP) * 4;
 const DRAG_CLICK_SUPPRESSION_MS = 120;
+
+function RailBadge({ loading }: { loading: boolean }) {
+  const loadingVisible = useDelayedLoading(loading);
+  const labelClass = "text-[10px] font-black uppercase tracking-wide text-primary";
+
+  return (
+    <View className="items-center justify-center rounded-full border border-primary/30 bg-primary/10 px-2.5 py-1">
+      <Text aria-hidden={loadingVisible} className={`${labelClass} ${loadingVisible ? "opacity-0" : ""}`}>
+        Quick Rail
+      </Text>
+      {loadingVisible ? <Text className={`absolute ${labelClass}`}>Loading</Text> : null}
+    </View>
+  );
+}
 
 function getRailItemKey(item: ContinueTrackingRailItem) {
   if (item.kind === "caught-up") {
@@ -212,39 +227,15 @@ export function ContinueTrackingRail({
     getInitialVirtualRange(initialScrollIndex)
   );
 
-  const railEntries = useMemo(() => {
-    const entries: {
-      key: string;
-      kind: "item" | "loading";
-      item?: ContinueTrackingRailItem;
-      width: number;
-    }[] = items.map((item) => ({
-      key: getRailItemKey(item),
-      kind: "item" as const,
-      item,
-      width: getRailItemWidth(item),
-    }));
-
-    if (isLoadingMore) {
-      entries.push({
-        key: "loading-more",
-        kind: "loading",
-        width: RAIL_LOADING_CARD_WIDTH,
-      });
-    }
-
-    return entries;
-  }, [isLoadingMore, items]);
-
   const railMetrics = useMemo(() => {
     const offsets: number[] = [];
-    const widths = railEntries.map((entry) => entry.width);
+    const widths = items.map(getRailItemWidth);
     let cursor = RAIL_SIDE_PADDING;
 
-    for (let index = 0; index < railEntries.length; index += 1) {
+    for (let index = 0; index < widths.length; index += 1) {
       offsets.push(cursor);
-      cursor += railEntries[index].width;
-      if (index < railEntries.length - 1) {
+      cursor += widths[index];
+      if (index < widths.length - 1) {
         cursor += RAIL_CARD_GAP;
       }
     }
@@ -254,7 +245,7 @@ export function ContinueTrackingRail({
       widths,
       totalWidth: cursor + RAIL_SIDE_PADDING,
     };
-  }, [railEntries]);
+  }, [items]);
 
   const effectiveViewportWidth = railViewportWidth || Math.min(width, 960);
 
@@ -398,10 +389,10 @@ export function ContinueTrackingRail({
     updateVisibleRangeForOffset(targetX);
   };
 
-  const virtualRange = clampVirtualRange(visibleRange, railEntries.length);
+  const virtualRange = clampVirtualRange(visibleRange, items.length);
   const renderedEntries =
     virtualRange.end >= virtualRange.start
-      ? railEntries.slice(virtualRange.start, virtualRange.end + 1)
+      ? items.slice(virtualRange.start, virtualRange.end + 1)
       : [];
   const leftSpacerWidth =
     renderedEntries.length > 0
@@ -435,11 +426,7 @@ export function ContinueTrackingRail({
             Your last stop, next watch, and what follows.
           </Text>
         </View>
-        <View className="rounded-full border border-primary/30 bg-primary/10 px-2.5 py-1">
-          <Text className="text-[10px] font-black uppercase tracking-wide text-primary">
-            Quick Rail
-          </Text>
-        </View>
+        <RailBadge loading={isLoadingMore} />
       </View>
 
       <ScrollView
@@ -462,37 +449,17 @@ export function ContinueTrackingRail({
       >
         <View pointerEvents="none" style={{ width: leftSpacerWidth }} />
 
-        {renderedEntries.map((entry, renderedIndex) => {
+        {renderedEntries.map((item, renderedIndex) => {
           const realIndex = virtualRange.start + renderedIndex;
           const marginRight =
-            realIndex < virtualRange.end && realIndex < railEntries.length - 1
-              ? RAIL_CARD_GAP
-              : 0;
-
-          if (entry.kind === "loading") {
-            return (
-              <View
-                key={entry.key}
-                className="items-center justify-center rounded-2xl border border-border-default bg-bg-base"
-                style={{ width: entry.width, marginRight }}
-              >
-                <BrandLoader compact />
-                <Text className="mt-2 text-[11px] text-text-secondary">Loading</Text>
-              </View>
-            );
-          }
-
-          const item = entry.item;
-          if (!item) {
-            return null;
-          }
+            realIndex < virtualRange.end ? RAIL_CARD_GAP : 0;
 
           if (item.kind === "caught-up") {
             return (
               <View
                 key="caught-up"
-                className="w-64 justify-between overflow-hidden rounded-2xl border border-emerald-400/30 bg-emerald-500/10 p-4"
-                style={{ marginRight }}
+                className="justify-between overflow-hidden rounded-2xl border border-emerald-400/30 bg-emerald-500/10 p-4"
+                style={{ width: RAIL_CAUGHT_UP_CARD_WIDTH, flexShrink: 0, marginRight }}
               >
                 <View className="flex-row items-center gap-2">
                   <View className="h-9 w-9 items-center justify-center rounded-full bg-emerald-500/20">
@@ -542,20 +509,17 @@ export function ContinueTrackingRail({
               }}
               disabled={isUpdating || !canToggle}
               accessibilityRole="button"
-              className="w-48 overflow-hidden rounded-2xl border-2 border-border-default bg-bg-base active:bg-bg-elevated/70 disabled:opacity-45"
-              style={({ pressed }) => ({
-                marginRight,
-                transform: [{ scale: pressed ? 0.985 : 1 }],
-              })}
+              className="overflow-hidden rounded-2xl border-2 border-border-default bg-bg-base active:scale-[0.985] active:bg-bg-elevated/70 disabled:opacity-45"
+              style={{ width: RAIL_CARD_WIDTH, flexShrink: 0, marginRight }}
             >
               <View
-                className="relative justify-between overflow-hidden bg-bg-elevated p-3"
+                className="relative overflow-hidden bg-bg-elevated"
                 style={{ height: 112 + 16 * extraFontScale }}
               >
                 {imageUrl ? (
                   <Image
                     source={{ uri: imageUrl }}
-                    className="absolute inset-0 h-full w-full"
+                    style={StyleSheet.absoluteFill}
                     resizeMode="cover"
                     {...(Platform.OS === "web"
                       ? { loading: "lazy", decoding: "async" }
@@ -563,34 +527,36 @@ export function ContinueTrackingRail({
                   />
                 ) : null}
                 <View className="absolute inset-0 bg-black/45" />
-                <View className="flex-row items-center justify-between gap-2">
-                  <View className="rounded-md border border-white/10 bg-black/40 px-2 py-1">
-                    <Text className="text-[10px] font-black uppercase tracking-wide text-white">
-                      S{String(episode.seasonNumber).padStart(2, "0")}E
-                      {String(episode.episodeNumber).padStart(2, "0")}
-                    </Text>
+                <View className="flex-1 justify-between p-3">
+                  <View className="flex-row items-center justify-between gap-2">
+                    <View className="rounded-md border border-white/10 bg-black/40 px-2 py-1">
+                      <Text className="text-[10px] font-black uppercase tracking-wide text-white">
+                        S{String(episode.seasonNumber).padStart(2, "0")}E
+                        {String(episode.episodeNumber).padStart(2, "0")}
+                      </Text>
+                    </View>
+                    <View
+                      className={`h-7 w-7 items-center justify-center rounded-full border-2 ${
+                        watched
+                          ? "border-success bg-success"
+                          : availability.isReleased
+                            ? "border-border-bright"
+                            : "border-warning/70"
+                      }`}
+                    >
+                      {isUpdating ? (
+                        <BrandLoader micro />
+                      ) : watched ? (
+                        <Ionicons name="checkmark" size={14} color="#ffffff" />
+                      ) : !availability.isReleased ? (
+                        <Ionicons name="time-outline" size={13} color="#fbbf24" />
+                      ) : null}
+                    </View>
                   </View>
-                  <View
-                    className={`h-7 w-7 items-center justify-center rounded-full border-2 ${
-                      watched
-                        ? "border-success bg-success"
-                        : availability.isReleased
-                          ? "border-border-bright"
-                          : "border-warning/70"
-                    }`}
-                  >
-                    {isUpdating ? (
-                      <BrandLoader micro />
-                    ) : watched ? (
-                      <Ionicons name="checkmark" size={14} color="#ffffff" />
-                    ) : !availability.isReleased ? (
-                      <Ionicons name="time-outline" size={13} color="#fbbf24" />
-                    ) : null}
-                  </View>
+                  <Text className="text-[11px] font-semibold uppercase tracking-wide text-white/80">
+                    {watched ? "Previous" : availability.isReleased ? "Next up" : "Upcoming"}
+                  </Text>
                 </View>
-                <Text className="text-[11px] font-semibold uppercase tracking-wide text-white/80">
-                  {watched ? "Previous" : availability.isReleased ? "Next up" : "Upcoming"}
-                </Text>
               </View>
 
               <View className="flex-1 p-3">

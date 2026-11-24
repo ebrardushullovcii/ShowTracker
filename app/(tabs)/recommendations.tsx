@@ -1,3 +1,4 @@
+import { useDelayedLoading } from "@/hooks/use-delayed-loading";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Platform,
@@ -401,6 +402,7 @@ export function RecommendationsScreen() {
   const [animeRecommendations, setAnimeRecommendations] = useState<NormalizedShow[]>([]);
   const [movieRecommendations, setMovieRecommendations] = useState<NormalizedShow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const showRecommendationsLoading = useDelayedLoading(isLoading);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
@@ -972,7 +974,7 @@ export function RecommendationsScreen() {
                 compact={isCompactLayout}
               />
 
-              {isLoading && (
+              {showRecommendationsLoading && (
                 <View className="mb-4 items-center gap-2 rounded-xl border-2 border-border-default bg-bg-surface py-8">
                   <BrandLoader compact />
                   <Text className="text-sm text-text-secondary">

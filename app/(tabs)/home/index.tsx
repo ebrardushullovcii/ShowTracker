@@ -1,3 +1,5 @@
+import { DialogBackdrop } from "@/components/DialogBackdrop";
+import { useDelayedLoading } from "@/hooks/use-delayed-loading";
 import { HeaderIconButton } from "@/components/HeaderIconButton";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -633,6 +635,7 @@ function UpcomingAgendaPanel({
 }) {
   const date = parseLocalDate(dateKey) ?? new Date();
   const isToday = dateKey === todayKey;
+  const showLoading = useDelayedLoading(Boolean(isLoading));
   // Server daysUntil counts from the UTC day; count from the viewer's local day instead.
   const localDaysUntil = getScheduleDayDistance(todayKey, dateKey);
 
@@ -672,7 +675,7 @@ function UpcomingAgendaPanel({
                 isToday ? "text-[#ffb0a4]" : "text-zinc-200"
               }`}
             >
-              {isLoading ? "Loading" : isToday ? "Current" : `${episodes.length} releases`}
+              {isLoading ? (showLoading ? "Loading" : "Schedule") : isToday ? "Current" : `${episodes.length} releases`}
             </Text>
           </View>
         </View>
@@ -684,7 +687,7 @@ function UpcomingAgendaPanel({
           contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 16 }}
           showsVerticalScrollIndicator
         >
-          {isLoading ? (
+          {isLoading ? showLoading && (
             <View className="gap-3">
               {Array.from({ length: 4 }, (_, index) => (
                 <View
@@ -728,7 +731,7 @@ function UpcomingAgendaPanel({
         </ScrollView>
       ) : (
         <>
-          {isLoading ? (
+          {isLoading ? showLoading && (
             <View className="gap-3 px-4 py-4">
               {Array.from({ length: 3 }, (_, index) => (
                 <View
@@ -801,7 +804,7 @@ function MonthPickerModal({
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View className="dialog-backdrop">
+      <DialogBackdrop>
         <Pressable className="absolute inset-0" onPress={onClose} />
 
         <View className="dialog-panel max-w-dialog">
@@ -933,7 +936,7 @@ function MonthPickerModal({
             </View>
           </View>
         </View>
-      </View>
+      </DialogBackdrop>
     </Modal>
   );
 }
@@ -1054,6 +1057,7 @@ function WebUpcomingCalendar({
   isLoading?: boolean;
 }) {
   const selectedEpisodes = episodesByDate.get(selectedDateKey) ?? [];
+  const showCalendarLoading = useDelayedLoading(Boolean(isLoading));
   const calendarWeeks = useMemo(
     () =>
       Array.from({ length: Math.ceil(calendarDays.length / 7) }, (_, index) =>
@@ -1137,7 +1141,7 @@ function WebUpcomingCalendar({
           </View>
 
           <View className="gap-0.5">
-            {isLoading
+            {showCalendarLoading
               ? Array.from({ length: 6 }, (_, weekIndex) => (
                   <View key={`week-loading-${weekIndex}`} className="flex-row items-stretch">
                     {Array.from({ length: 7 }, (_, dayIndex) => (
@@ -1220,6 +1224,7 @@ function MobileUpcomingCalendar({
   isLoading?: boolean;
 }) {
   const selectedEpisodes = episodesByDate.get(selectedDateKey) ?? [];
+  const showCalendarLoading = useDelayedLoading(Boolean(isLoading));
   const weekDates = useMemo(
     () => Array.from({ length: 7 }, (_, index) => addDaysToDate(weekStart, index)),
     [weekStart]
@@ -1276,7 +1281,7 @@ function MobileUpcomingCalendar({
         </View>
 
         <View className="flex-row gap-1">
-          {isLoading
+          {showCalendarLoading
             ? Array.from({ length: 7 }, (_, index) => (
                 <View
                   key={`mobile-day-loading-${index}`}
@@ -1844,7 +1849,11 @@ export function HomeScreen() {
       .sort((a, b) => (b.lastWatchedAt ?? 0) - (a.lastWatchedAt ?? 0));
   }, [mediaFilter, notStartedFeedItems]);
 
-  const upcomingGroups = useMemo(() => ((upcoming ?? []) as UpcomingGroup[]), [upcoming]);
+  const stableUpcoming = useStableDisplayValue(upcoming as UpcomingGroup[] | undefined, {
+    contextKey: `${upcomingRange.startDate}:${upcomingRange.endDate}:${mediaFilter}`,
+    isLoading: upcoming === undefined,
+  });
+  const upcomingGroups = useMemo(() => stableUpcoming ?? [], [stableUpcoming]);
   const episodesByDate = useMemo(() => {
     const nextMap = new Map<string, UpcomingEpisode[]>();
     for (const group of upcomingGroups) {
@@ -1900,8 +1909,9 @@ export function HomeScreen() {
     activeFeed !== undefined &&
     isWatchlistFutureCountsLoading;
   const isWatchlistVisualLoading = isWatchlistLoading || isWatchlistFilterSettling;
+  const showWatchlistPlaceholders = useDelayedLoading(isWatchlistVisualLoading);
   const isUpcomingContentLoading =
-    activeTab === "upcoming" && upcoming === undefined;
+    activeTab === "upcoming" && stableUpcoming === undefined;
   const watchlistSettleContextKey = useMemo(() => {
     if (
       stableActiveFeed === undefined ||
@@ -2663,7 +2673,7 @@ export function HomeScreen() {
       </View>
     ) : null;
   const watchlistSettlingFooter =
-    !isWatchlistLoading && isWatchlistFilterSettling ? (
+    !isWatchlistLoading && isWatchlistFilterSettling && showWatchlistPlaceholders ? (
       <View className="gap-3 pt-3">
         <View key="watchlist-skeleton-row-0" className="flex-row gap-3">
           {watchlistTailSkeletonItems.map((item) => (
@@ -2703,25 +2713,27 @@ export function HomeScreen() {
               >
                 {watchlistHeader}
 
-                <View className="gap-3">
-                  {watchlistSkeletonRows.map((row, rowIndex) => (
-                    <View key={`watchlist-skeleton-row-${rowIndex}`} className="flex-row gap-3">
-                      {row.map((item) => (
-                        <View key={`watchlist-skeleton-${item}`} style={{ flex: 1 / columns }}>
-                          <WatchlistCardSkeleton isCompact={isCompactHomeLayout} />
-                        </View>
-                      ))}
-                      {row.length < columns
-                        ? Array.from({ length: columns - row.length }, (_, fillerIndex) => (
-                            <View
-                              key={`watchlist-skeleton-row-${rowIndex}-filler-${fillerIndex}`}
-                              style={{ flex: 1 / columns }}
-                            />
-                          ))
-                        : null}
-                    </View>
-                  ))}
-                </View>
+                {showWatchlistPlaceholders ? (
+                  <View className="gap-3">
+                    {watchlistSkeletonRows.map((row, rowIndex) => (
+                      <View key={`watchlist-skeleton-row-${rowIndex}`} className="flex-row gap-3">
+                        {row.map((item) => (
+                          <View key={`watchlist-skeleton-${item}`} style={{ flex: 1 / columns }}>
+                            <WatchlistCardSkeleton isCompact={isCompactHomeLayout} />
+                          </View>
+                        ))}
+                        {row.length < columns
+                          ? Array.from({ length: columns - row.length }, (_, fillerIndex) => (
+                              <View
+                                key={`watchlist-skeleton-row-${rowIndex}-filler-${fillerIndex}`}
+                                style={{ flex: 1 / columns }}
+                              />
+                            ))
+                          : null}
+                      </View>
+                    ))}
+                  </View>
+                ) : null}
               </ScrollView>
             ) : isWeb ? (
               <ScrollView
@@ -2752,7 +2764,7 @@ export function HomeScreen() {
                       ))}
                       {row.length < columns
                         ? Array.from({ length: columns - row.length }, (_, fillerIndex) => (
-                            isWatchlistFilterSettling &&
+                            isWatchlistFilterSettling && showWatchlistPlaceholders &&
                             rowIndex === displayWatchlistRows.length - 1 ? (
                               <View
                                 key={`watchlist-skeleton-${watchlistTailSkeletonItems[fillerIndex]}`}
@@ -2770,7 +2782,7 @@ export function HomeScreen() {
                         : null}
                     </View>
                   ))}
-                  {isWatchlistFilterSettling &&
+                  {isWatchlistFilterSettling && showWatchlistPlaceholders &&
                   (displayWatchlistRows.length === 0 ||
                     displayWatchlistRows[displayWatchlistRows.length - 1]?.length === columns) ? (
                     <View key="watchlist-skeleton-row-0" className="flex-row gap-3">
