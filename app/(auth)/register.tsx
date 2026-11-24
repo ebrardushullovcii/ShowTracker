@@ -1,5 +1,6 @@
 import { Link } from "expo-router";
 import {
+  KeyboardAvoidingView,
   Platform,
   Pressable,
   ScrollView,
@@ -59,7 +60,7 @@ export function RegisterScreen() {
     Platform.OS === "web" && width >= DESKTOP_SIDEBAR_BREAKPOINT;
 
   return (
-    <SafeAreaView className="flex-1 bg-bg-base" edges={["top", "bottom"]}>
+    <SafeAreaView className="flex-1 bg-bg-base" edges={["top", "bottom", "left", "right"]}>
       <View className="relative flex-1 overflow-hidden bg-bg-base">
         <LinearGradient
           colors={["#09090b", "#100c0a", "#09090b"]}
@@ -70,7 +71,10 @@ export function RegisterScreen() {
         <View className="absolute -right-20 -top-12 h-56 w-56 rounded-full bg-primary/20" />
         <View className="absolute -bottom-28 left-0 h-72 w-72 rounded-full bg-accent/10" />
 
-        <View className={`flex-1 ${isDesktopAuth ? "flex-row" : ""}`}>
+        <KeyboardAvoidingView
+          className={`flex-1 ${isDesktopAuth ? "flex-row" : ""}`}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+        >
           {isDesktopAuth ? (
             <View className="w-[44%] justify-between border-r border-border-default px-8 py-9">
               <View>
@@ -126,13 +130,9 @@ export function RegisterScreen() {
             showsVerticalScrollIndicator={false}
             contentContainerStyle={{ flexGrow: 1 }}
           >
-            <View
-              className={`flex-1 ${
-                isDesktopAuth ? "items-center justify-center px-8 py-8" : "px-0 pb-0 pt-0"
-              }`}
-            >
+            <View className="grow items-center justify-center px-5 py-6">
               {!isDesktopAuth ? (
-                <View className="mb-4 rounded-xl border-2 border-border-default bg-bg-surface/80 p-4">
+                <View className="mb-4 w-full max-w-md rounded-xl border-2 border-border-default bg-bg-surface/80 p-4">
                   <Text className="text-xs font-semibold uppercase tracking-wide text-text-secondary">
                     Join ShowTracker
                   </Text>
@@ -142,13 +142,7 @@ export function RegisterScreen() {
                 </View>
               ) : null}
 
-              <View
-                className={`w-full overflow-hidden bg-bg-surface/95 ${
-                  isDesktopAuth
-                    ? "max-w-md rounded-xl border-2 border-border-default"
-                    : "rounded-none"
-                }`}
-              >
+              <View className="w-full max-w-md overflow-hidden rounded-xl border-2 border-border-default bg-bg-surface/95">
                 <LinearGradient
                   colors={["rgba(239,68,68,0.2)", "rgba(249,115,22,0.12)", "transparent"]}
                   start={{ x: 0, y: 0 }}
@@ -189,7 +183,7 @@ export function RegisterScreen() {
                         keyboardType="email-address"
                         placeholder="Email"
                         placeholderTextColor="#52525b"
-                        className="flex-1 text-base text-text-primary"
+                        className="min-h-8 min-w-0 flex-1 p-0 text-[16px] text-text-primary"
                         editable={!isPending}
                       />
                     </View>
@@ -204,7 +198,7 @@ export function RegisterScreen() {
                         secureTextEntry={!showPassword}
                         placeholder="Password"
                         placeholderTextColor="#52525b"
-                        className="flex-1 text-base text-text-primary"
+                        className="min-h-8 min-w-0 flex-1 p-0 text-[16px] text-text-primary"
                         editable={!isPending}
                       />
                       <Pressable
@@ -229,7 +223,7 @@ export function RegisterScreen() {
                         secureTextEntry={!showConfirmPassword}
                         placeholder="Confirm password"
                         placeholderTextColor="#52525b"
-                        className="flex-1 text-base text-text-primary"
+                        className="min-h-8 min-w-0 flex-1 p-0 text-[16px] text-text-primary"
                         editable={!isPending}
                       />
                       <Pressable
@@ -283,7 +277,7 @@ export function RegisterScreen() {
               </View>
             </View>
           </ScrollView>
-        </View>
+        </KeyboardAvoidingView>
       </View>
     </SafeAreaView>
   );

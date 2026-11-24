@@ -58,6 +58,10 @@ const RAIL_CARD_GAP = 12;
 const RAIL_CAUGHT_UP_CARD_WIDTH = 256;
 const RAIL_LOADING_CARD_WIDTH = 96;
 const RAIL_SIDE_PADDING = 16;
+// Reserve room for two title lines, three summary lines and the action row.
+// The windowed cards must not set the height as they mount and unmount.
+const RAIL_CARD_HEIGHT = 272;
+const RAIL_CARD_TEXT_HEIGHT = 120;
 const RAIL_MIN_RENDERED_ITEMS = 10;
 const RAIL_OVERSCAN_PX = (RAIL_CARD_WIDTH + RAIL_CARD_GAP) * 4;
 const DRAG_CLICK_SUPPRESSION_MS = 120;
@@ -192,7 +196,8 @@ export function ContinueTrackingRail({
   initialScrollIndex = 0,
   resetScrollKey,
 }: ContinueTrackingRailProps) {
-  const { width } = useWindowDimensions();
+  const { width, fontScale } = useWindowDimensions();
+  const extraFontScale = Math.max(0, fontScale - 1);
   const isDesktopWeb = Platform.OS === "web" && width >= DESKTOP_SIDEBAR_BREAKPOINT;
   const scrollViewRef = useRef<ScrollView | null>(null);
   const scrollOffsetXRef = useRef(0);
@@ -450,7 +455,10 @@ export function ContinueTrackingRail({
         }}
         onScroll={handleScroll}
         onContentSizeChange={autoPositionToAnchor}
-        contentContainerStyle={{ paddingBottom: 4 }}
+        contentContainerStyle={{
+          height: RAIL_CARD_HEIGHT + RAIL_CARD_TEXT_HEIGHT * extraFontScale,
+          paddingBottom: 4,
+        }}
       >
         <View pointerEvents="none" style={{ width: leftSpacerWidth }} />
 
@@ -495,10 +503,10 @@ export function ContinueTrackingRail({
                   </Text>
                 </View>
                 <View className="mt-6">
-                  <Text className="text-base font-semibold leading-5 text-text-primary">
+                  <Text className="text-base font-semibold leading-5 text-text-primary" numberOfLines={4}>
                     "{item.text}"
                   </Text>
-                  <Text className="mt-2 text-xs text-text-secondary">- {item.credit}</Text>
+                  <Text className="mt-2 text-xs text-text-secondary" numberOfLines={1}>- {item.credit}</Text>
                   <Text className="mt-4 text-[11px] font-semibold uppercase tracking-wide text-emerald-500">
                     {item.progressLabel}
                   </Text>
@@ -540,7 +548,10 @@ export function ContinueTrackingRail({
                 transform: [{ scale: pressed ? 0.985 : 1 }],
               })}
             >
-              <View className="relative h-28 justify-between overflow-hidden bg-bg-elevated p-3">
+              <View
+                className="relative justify-between overflow-hidden bg-bg-elevated p-3"
+                style={{ height: 112 + 16 * extraFontScale }}
+              >
                 {imageUrl ? (
                   <Image
                     source={{ uri: imageUrl }}
@@ -582,7 +593,7 @@ export function ContinueTrackingRail({
                 </Text>
               </View>
 
-              <View className="min-h-32 p-3">
+              <View className="flex-1 p-3">
                 <Text className="text-sm font-semibold leading-5 text-text-primary" numberOfLines={2}>
                   {episode.name || `Episode ${episode.episodeNumber}`}
                 </Text>
@@ -595,7 +606,7 @@ export function ContinueTrackingRail({
                     No episode summary available yet.
                   </Text>
                 )}
-                <View className="mt-3 flex-row items-center justify-between gap-2">
+                <View className="mt-auto flex-row items-center justify-between gap-2 pt-3">
                   <Text className="flex-1 text-[11px] text-text-muted" numberOfLines={1}>
                     {availability.dateLabel}
                   </Text>

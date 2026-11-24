@@ -17,9 +17,6 @@ export function OverlayDetailFrame({
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const isDesktop = Platform.OS === "web" && width >= DESKTOP_SIDEBAR_BREAKPOINT;
-  // On phones the sheet starts below the status bar / Dynamic Island, where iOS
-  // turns taps into scroll-to-top and the close button could never be pressed.
-  const sheetTopInset = isDesktop ? 0 : insets.top;
 
   return (
     <View className="flex-1 bg-black/65">
@@ -36,19 +33,19 @@ export function OverlayDetailFrame({
         className={
           isDesktop
             ? "ml-auto h-full w-full max-w-5xl overflow-hidden border-l-2 border-border-bright bg-bg-base shadow-2xl"
-            : "flex-1 overflow-hidden rounded-t-[22px] border-t-2 border-border-bright bg-bg-base shadow-2xl"
+            : "flex-1 overflow-hidden bg-bg-base"
         }
         style={
           isDesktop
             ? { shadowColor: "#000", shadowOpacity: 0.45, shadowRadius: 36 }
-            : { marginTop: sheetTopInset, shadowColor: "#000", shadowOpacity: 0.35, shadowRadius: 28 }
+            : { paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }
         }
       >
         {isDesktop ? (
           children
         ) : (
           <>
-            <View className="z-30 h-14 justify-center border-b border-border-default bg-bg-base/95 px-3">
+            <View className="z-30 h-14 justify-center border-b border-border-default bg-bg-base px-5">
               <HeaderIconButton
                 icon="close"
                 accessibilityLabel={closeAccessibilityLabel}

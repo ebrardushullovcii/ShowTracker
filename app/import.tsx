@@ -1302,7 +1302,7 @@ export function ImportScreen() {
             testID="import-json-input"
             placeholder='Legacy option: paste a TV Time JSON export'
             placeholderTextColor="#52525b"
-            className="mt-3 min-h-[220px] rounded-lg border border-border-default bg-bg-base px-3 py-3 text-sm text-text-primary"
+            className="mt-3 min-h-[220px] rounded-lg border border-border-default bg-bg-base px-3 py-3 text-[14px] text-text-primary"
             textAlignVertical="top"
             autoCapitalize="none"
             autoCorrect={false}

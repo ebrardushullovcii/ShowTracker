@@ -12,6 +12,7 @@ import {
 import {
   Alert,
   Image,
+  KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
@@ -29,6 +30,7 @@ import { BrandLoader } from "@/components/BrandLoader";
 import { getProgressTone } from "@/lib/progress-tone";
 import { Badge } from "@/components/Badge";
 import { ProgressBar } from "@/components/ProgressBar";
+import { HeaderIconButton } from "@/components/HeaderIconButton";
 import { OverlayDetailFrame } from "@/components/OverlayDetailFrame";
 import { ShowHeader } from "@/components/ShowHeader";
 import { ShowActionBar } from "@/components/ShowActionBar";
@@ -5333,7 +5335,10 @@ export function ShowDetailScreen() {
           }
         }}
       >
-        <View className="flex-1 items-center justify-center bg-black/70 px-5 py-8">
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          className="flex-1 items-center justify-center bg-black/70 px-4 py-6"
+        >
           <Pressable
             className="absolute inset-0"
             focusable={false}
@@ -5345,31 +5350,39 @@ export function ShowDetailScreen() {
             }}
           />
 
-          <View className="w-full max-w-sm overflow-hidden rounded-xl border-2 border-border-bright bg-bg-surface">
-            <View className="border-b border-border-default px-4 pb-3 pt-4">
-              <Text className="text-xs font-semibold uppercase tracking-wide text-text-secondary">
-                {showMediaType === "movie" ? "Edit Movie Status" : "Edit Tracking"}
-              </Text>
-              <Text className="mt-1 text-lg font-black text-text-primary" numberOfLines={2}>
-                {cleanedShowTitle}
-              </Text>
-              <Text className="mt-2 text-sm text-text-secondary">
-                {!trackingLoaded
-                  ? "Loading your current tracking state."
-                  : isInWatchlist
-                  ? `Current status: ${activeTrackingOption.label}`
-                  : showMediaType === "movie"
-                      ? "Pick a status to add this movie to your queue."
-                      : "Pick a status to add this title to your watchlist."}
-              </Text>
-              {showMediaType === "anime" ? (
-                <Text className="mt-1 text-xs text-text-muted">
-                  Franchise titles may auto-follow as part of your timeline.
+          <View className="max-h-full w-full max-w-lg overflow-hidden rounded-xl border-2 border-border-bright bg-bg-surface">
+            <View className="flex-row items-start gap-3 border-b border-border-default px-4 pb-3 pt-4">
+              <HeaderIconButton
+                icon="close"
+                accessibilityLabel="Close tracking editor"
+                onPress={() => setIsStatusMenuVisible(false)}
+                disabled={isStatusMenuBusy}
+              />
+              <View className="min-w-0 flex-1">
+                <Text className="text-xs font-semibold uppercase tracking-wide text-text-secondary">
+                  {showMediaType === "movie" ? "Edit Movie Status" : "Edit Tracking"}
                 </Text>
-              ) : null}
+                <Text className="mt-1 text-lg font-black text-text-primary" numberOfLines={2}>
+                  {cleanedShowTitle}
+                </Text>
+                <Text className="mt-2 text-sm text-text-secondary">
+                  {!trackingLoaded
+                    ? "Loading your current tracking state."
+                    : isInWatchlist
+                      ? `Current status: ${activeTrackingOption.label}`
+                      : showMediaType === "movie"
+                        ? "Pick a status to add this movie to your queue."
+                        : "Pick a status to add this title to your watchlist."}
+                </Text>
+                {showMediaType === "anime" ? (
+                  <Text className="mt-1 text-xs text-text-muted">
+                    Franchise titles may auto-follow as part of your timeline.
+                  </Text>
+                ) : null}
+              </View>
             </View>
 
-            <View className="gap-2 p-4">
+            <ScrollView keyboardShouldPersistTaps="handled" contentContainerClassName="gap-2 p-4">
               {showMediaType !== "movie" ? (
                 <View
                   className={`rounded-xl border px-3 py-3 ${
@@ -5439,7 +5452,7 @@ export function ShowDetailScreen() {
                       }
                       accessibilityLabel="Name of person you are watching with"
                       returnKeyType="done"
-                      className="min-w-0 flex-1 rounded-lg border border-border-default bg-bg-base px-3 py-2.5 text-sm text-text-primary"
+                      className="min-w-0 flex-1 rounded-lg border border-border-default bg-bg-base px-3 py-2.5 text-[14px] text-text-primary"
                     />
                     <Pressable
                       disabled={
@@ -5575,17 +5588,9 @@ export function ShowDetailScreen() {
                   <Text className="text-xs text-text-secondary">Saving...</Text>
                 </View>
               ) : null}
-
-              <Pressable
-                disabled={isStatusMenuBusy}
-                onPress={() => setIsStatusMenuVisible(false)}
-                className="items-center justify-center rounded-xl py-2"
-              >
-                <Text className="text-sm text-text-muted">Cancel</Text>
-              </Pressable>
-            </View>
+            </ScrollView>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Add to List Modal */}

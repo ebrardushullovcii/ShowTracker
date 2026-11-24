@@ -200,7 +200,7 @@ function EditModeHeader({
         <TextInput
           value={editedName}
           onChangeText={setEditedName}
-          className="text-lg font-semibold text-text-primary bg-bg-base border border-border-default rounded-xl px-4 py-3"
+          className="text-[18px] font-semibold text-text-primary bg-bg-base border border-border-default rounded-xl px-4 py-3"
           placeholder="Enter list name"
           placeholderTextColor="#71717a"
         />
@@ -212,7 +212,7 @@ function EditModeHeader({
         <TextInput
           value={editedDescription}
           onChangeText={setEditedDescription}
-          className="text-sm text-text-primary bg-bg-base border border-border-default rounded-xl px-4 py-3 min-h-[80px]"
+          className="text-[14px] text-text-primary bg-bg-base border border-border-default rounded-xl px-4 py-3 min-h-[80px]"
           placeholder="Add a description (optional)"
           placeholderTextColor="#71717a"
           multiline
