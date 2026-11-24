@@ -5,6 +5,11 @@ import { DESKTOP_SIDEBAR_BREAKPOINT } from "@/constants/navigation";
 
 const DIALOG_MARGIN = 16;
 const DRAWER_TOP_GAP = 24;
+const DRAWER_CORNER_RADIUS = 32;
+const DRAWER_TOP_CORNERS = {
+  borderTopLeftRadius: DRAWER_CORNER_RADIUS,
+  borderTopRightRadius: DRAWER_CORNER_RADIUS,
+};
 
 export function useDrawerBottomInset(enabled = true) {
   const { width } = useWindowDimensions();
@@ -63,13 +68,19 @@ export function TallDialog({
         accessibilityViewIsModal
         onAccessibilityEscape={onClose}
         className={isDrawer
-          ? "w-full flex-1 overflow-hidden rounded-t-[32px] bg-bg-base"
+          ? "w-full flex-1 overflow-hidden bg-bg-base"
           : "overlay-outline w-full flex-1 bg-bg-base"}
         style={isDrawer
-          ? { paddingLeft: insets.left, paddingRight: insets.right }
+          ? { ...DRAWER_TOP_CORNERS, paddingLeft: insets.left, paddingRight: insets.right }
           : { maxWidth }}
       >
         {children}
+        {isDrawer ? (
+          <View pointerEvents="none" className="absolute inset-x-0 top-0 overflow-hidden" style={{ height: DRAWER_CORNER_RADIUS }}>
+            {/* A uniform border follows the corner arcs. Clip it where the straight sides begin. */}
+            <View className="absolute inset-x-0 top-0 border border-white/10" style={{ ...DRAWER_TOP_CORNERS, height: DRAWER_CORNER_RADIUS * 2 }} />
+          </View>
+        ) : null}
       </View>
     </View>
   );
