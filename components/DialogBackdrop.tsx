@@ -1,4 +1,5 @@
 import type { PropsWithChildren } from "react";
+import { LinearGradient } from "expo-linear-gradient";
 import { KeyboardAvoidingView, Platform, Pressable, View, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { DESKTOP_SIDEBAR_BREAKPOINT } from "@/constants/navigation";
@@ -6,6 +7,7 @@ import { DESKTOP_SIDEBAR_BREAKPOINT } from "@/constants/navigation";
 const DIALOG_MARGIN = 16;
 const DRAWER_TOP_GAP = 24;
 const DRAWER_CORNER_RADIUS = 32;
+const DRAWER_EDGE_FADE_HEIGHT = 16;
 const DRAWER_TOP_CORNERS = {
   borderTopLeftRadius: DRAWER_CORNER_RADIUS,
   borderTopRightRadius: DRAWER_CORNER_RADIUS,
@@ -77,8 +79,15 @@ export function TallDialog({
         {children}
         {isDrawer ? (
           <View pointerEvents="none" className="absolute inset-x-0 top-0 overflow-hidden" style={{ height: DRAWER_CORNER_RADIUS }}>
-            {/* A uniform border follows the corner arcs. Clip it where the straight sides begin. */}
+            {/* Keep the stroke continuous around each corner and fade it into the drawer surface. */}
             <View className="absolute inset-x-0 top-0 border border-white/10" style={{ ...DRAWER_TOP_CORNERS, height: DRAWER_CORNER_RADIUS * 2 }} />
+            {(["left", "right"] as const).map((side) => (
+              <LinearGradient
+                key={side}
+                colors={["rgba(9,9,11,0)", "#09090b"]}
+                style={{ position: "absolute", bottom: 0, [side]: 0, width: 8, height: DRAWER_EDGE_FADE_HEIGHT }}
+              />
+            ))}
           </View>
         ) : null}
       </View>
