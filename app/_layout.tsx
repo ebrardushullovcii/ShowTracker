@@ -10,6 +10,7 @@ import { AppErrorBoundary } from "@/components/AppErrorBoundary";
 import { AuthGate } from "@/components/AuthGate";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { Sidebar } from "@/components/Sidebar";
+import { WatchlistPushProvider } from "@/components/WatchlistPush";
 import { DESKTOP_SIDEBAR_BREAKPOINT } from "@/constants/navigation";
 import { convex } from "@/lib/convex/client";
 import { tokenStorage } from "@/lib/auth/token-storage";
@@ -53,33 +54,35 @@ function RootLayoutContent() {
     <View className="flex-1 flex-row" style={{ backgroundColor: "#09090b" }}>
       {shouldShowDesktopSidebar ? <Sidebar /> : null}
       <View className="flex-1 min-w-0">
-        <AppErrorBoundary resetKey={pathname}>
-          <Stack
-            screenLayout={renderGatedScreen}
-            screenOptions={{
-              headerShown: false,
-              gestureEnabled: true,
-              fullScreenGestureEnabled: false,
-              animationMatchesGesture: Platform.OS === "ios",
-            }}
-          >
-            <Stack.Screen name="(tabs)" />
-            <Stack.Screen
-              name="show/[id]"
-              options={{
-                presentation: "transparentModal",
-                contentStyle: { backgroundColor: "transparent" },
+        <WatchlistPushProvider canReceive={access?.status === "approved"}>
+          <AppErrorBoundary resetKey={pathname}>
+            <Stack
+              screenLayout={renderGatedScreen}
+              screenOptions={{
+                headerShown: false,
+                gestureEnabled: true,
+                fullScreenGestureEnabled: false,
+                animationMatchesGesture: Platform.OS === "ios",
               }}
-            />
-            <Stack.Screen
-              name="profile/settings"
-              options={{
-                presentation: "transparentModal",
-                contentStyle: { backgroundColor: "transparent" },
-              }}
-            />
-          </Stack>
-        </AppErrorBoundary>
+            >
+              <Stack.Screen name="(tabs)" />
+              <Stack.Screen
+                name="show/[id]"
+                options={{
+                  presentation: "transparentModal",
+                  contentStyle: { backgroundColor: "transparent" },
+                }}
+              />
+              <Stack.Screen
+                name="profile/settings"
+                options={{
+                  presentation: "transparentModal",
+                  contentStyle: { backgroundColor: "transparent" },
+                }}
+              />
+            </Stack>
+          </AppErrorBoundary>
+        </WatchlistPushProvider>
       </View>
     </View>
   );

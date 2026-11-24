@@ -4,6 +4,7 @@ import { approveUser, listUsers, setRegistrationPolicy } from "../convex/access.
 import { initializeAccountAccess, registrationRequiresApproval, requireApproved } from "../convex/lib/accessPolicy.ts";
 import * as shows from "../convex/shows.ts";
 import * as schedule from "../convex/schedule.ts";
+import * as watchlistPush from "../convex/watchlistPush.ts";
 import * as stats from "../convex/stats.ts";
 import * as lists from "../convex/lists.ts";
 import * as sharedGameActions from "../convex/sharedGameActions.ts";
@@ -59,7 +60,7 @@ test("legacy JWTs and approved JWTs avoid additional per-request user reads", as
 
 test("every app data query, mutation and action rejects pending users before entering its handler", async () => {
   const f = fixture(); let checked = 0;
-  for (const module of [shows, schedule, stats, lists, sharedGameActions, { revoke }]) {
+  for (const module of [shows, schedule, watchlistPush, stats, lists, sharedGameActions, { revoke }]) {
     for (const fn of Object.values(module)) {
       if (!fn?.isPublic || !fn._handler) continue;
       const ctx = fn.isAction

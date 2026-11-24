@@ -20,6 +20,7 @@ import type * as lib_authPolicy from "../lib/authPolicy.js";
 import type * as lib_homeScheduleSignalPolicy from "../lib/homeScheduleSignalPolicy.js";
 import type * as lib_scheduleCacheIndex from "../lib/scheduleCacheIndex.js";
 import type * as lib_scheduleCacheWriter from "../lib/scheduleCacheWriter.js";
+import type * as lib_watchlistPushSchedule from "../lib/watchlistPushSchedule.js";
 import type * as lists from "../lists.js";
 import type * as schedule from "../schedule.js";
 import type * as scheduleCacheIndex from "../scheduleCacheIndex.js";
@@ -30,6 +31,7 @@ import type * as sharedGames from "../sharedGames.js";
 import type * as shows from "../shows.js";
 import type * as stats from "../stats.js";
 import type * as watchedEpisodeRanges from "../watchedEpisodeRanges.js";
+import type * as watchlistPush from "../watchlistPush.js";
 
 import type {
   ApiFromModules,
@@ -50,6 +52,7 @@ declare const fullApi: ApiFromModules<{
   "lib/homeScheduleSignalPolicy": typeof lib_homeScheduleSignalPolicy;
   "lib/scheduleCacheIndex": typeof lib_scheduleCacheIndex;
   "lib/scheduleCacheWriter": typeof lib_scheduleCacheWriter;
+  "lib/watchlistPushSchedule": typeof lib_watchlistPushSchedule;
   lists: typeof lists;
   schedule: typeof schedule;
   scheduleCacheIndex: typeof scheduleCacheIndex;
@@ -60,6 +63,7 @@ declare const fullApi: ApiFromModules<{
   shows: typeof shows;
   stats: typeof stats;
   watchedEpisodeRanges: typeof watchedEpisodeRanges;
+  watchlistPush: typeof watchlistPush;
 }>;
 
 /**

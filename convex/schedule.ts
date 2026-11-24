@@ -15,6 +15,13 @@ import { getTvMazeScheduleByDate } from "../lib/api/tvmaze";
 import { internal } from "./_generated/api";
 import { readWatchedEpisodeRanges, watchedEpisodesFromRanges } from "../lib/tracking/watched-episode-ranges";
 import { writeScheduleCacheBucket, deleteScheduleCacheBucket } from "./lib/scheduleCacheIndex";
+import {
+  episodeAirtimeMs,
+  normalizeWatchlistTimeZone,
+  watchlistDayBuckets,
+  watchlistEpisodeTiming,
+  watchlistLocalDate,
+} from "../lib/tracking/watchlist-episode-timing";
 
 const HYDRATE_BATCH_SIZE = 3;
 const SCHEDULE_CACHE_FRESH_MS = 1000 * 60 * 60 * 6;
@@ -59,6 +66,21 @@ type WatchlistFutureCountRow = {
   availableCount: number;
   futureCount: number;
   unavailableCount: number;
+  nextAirtimeAt?: number;
+};
+
+type WatchlistEpisodeCandidate = {
+  routeId: string;
+  date: string;
+  episode: CompactScheduleEpisode;
+  projection: Doc<"feedProjections">;
+};
+
+type WatchlistEpisodeScope = {
+  userId: Id<"users">;
+  startDate: string;
+  endDate: string;
+  mediaFilter?: ScheduleMediaFilter;
 };
 
 type ScheduleEpisodeNumberLike = {
@@ -307,19 +329,7 @@ function getScheduleRangeKeys(startDate: string, endDate: string) {
   };
 }
 
-function getEpisodeAirtimeTimestamp(airDate?: string | null) {
-  const trimmed = airDate?.trim();
-  if (
-    !trimmed ||
-    /^\d{4}-\d{2}-\d{2}$/.test(trimmed) ||
-    !/(?:[zZ]|[+-]\d{2}:?\d{2})$/.test(trimmed)
-  ) {
-    return null;
-  }
-
-  const parsed = new Date(trimmed);
-  return Number.isFinite(parsed.getTime()) ? parsed.getTime() : null;
-}
+const getEpisodeAirtimeTimestamp = episodeAirtimeMs;
 
 function startOfDay(date: Date) {
   return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
@@ -1911,15 +1921,10 @@ async function getProjectedUpcomingSchedule(
   return serializeProjectedUpcomingSchedule(currentRows, startOfDay(new Date()));
 }
 
-async function getProjectedFutureUpcomingCountsForUser(
+async function getProjectedWatchlistEpisodeCandidates(
   ctx: QueryCtx,
-  args: {
-    userId: Id<"users">;
-    startDate: string;
-    endDate: string;
-    mediaFilter?: ScheduleMediaFilter;
-  }
-): Promise<WatchlistFutureCountRow[] | null> {
+  args: WatchlistEpisodeScope
+): Promise<WatchlistEpisodeCandidate[] | null> {
   const coveredWindow = await getFreshScheduleProjectionWindow(ctx, args);
   if (!coveredWindow) {
     return null;
@@ -2031,53 +2036,9 @@ async function getProjectedFutureUpcomingCountsForUser(
       },
     }
   );
-  const counts = new Map<
-    string,
-    { availableCount: number; futureCount: number; unavailableCount: number }
-  >();
-  const nowMs = Date.now();
-  const today = startOfDay(new Date());
-
-  for (const candidate of selectedCountCandidates) {
-    const { row, projection } = candidate;
-
-    const bucketDate = parseScheduleDateKey(row.date);
-    if (!bucketDate) {
-      continue;
-    }
-    const daysUntil = Math.floor(
-      (startOfDay(bucketDate).getTime() - today.getTime()) / DAY_MS
-    );
-    const airtimeMs = getEpisodeAirtimeTimestamp(row.airDate);
-    const isFutureDay = daysUntil > 0;
-    const isTodayBeforeAirtime = daysUntil === 0 && airtimeMs !== null && airtimeMs > nowMs;
-    const existing = counts.get(row.routeId) ?? {
-      availableCount: 0,
-      futureCount: 0,
-      unavailableCount: 0,
-    };
-
-    if (!isFutureDay && !isTodayBeforeAirtime) {
-      existing.availableCount += 1;
-      counts.set(row.routeId, existing);
-      continue;
-    }
-
-    if (isFutureDay) {
-      existing.futureCount += 1;
-    }
-    existing.unavailableCount += 1;
-    counts.set(row.routeId, existing);
-  }
-
-  return Array.from(counts.entries())
-    .sort(([routeIdA], [routeIdB]) => routeIdA.localeCompare(routeIdB))
-    .map(([routeId, count]) => ({
-      routeId,
-      availableCount: count.availableCount,
-      futureCount: count.futureCount,
-      unavailableCount: count.unavailableCount,
-    }));
+  return selectedCountCandidates.map(({ row, projection, entry }) => ({
+    routeId: row.routeId, date: row.date, episode: entry.episode, projection,
+  }));
 }
 
 async function getProjectedTodayScheduledWatchlistFeed(
@@ -2087,12 +2048,13 @@ async function getProjectedTodayScheduledWatchlistFeed(
     date: string;
     mediaFilter?: ScheduleMediaFilter;
     limit: number;
+    timeZone?: string;
   }
 ): Promise<ScheduledWatchlistItem[] | null> {
+  const buckets = watchlistDayBuckets(args.date, args.timeZone);
   const coveredWindow = await getFreshScheduleProjectionWindow(ctx, {
     userId: args.userId,
-    startDate: args.date,
-    endDate: args.date,
+    ...buckets,
     mediaFilter: args.mediaFilter,
   });
   if (!coveredWindow) {
@@ -2101,8 +2063,7 @@ async function getProjectedTodayScheduledWatchlistFeed(
 
   const rows = await getProjectedScheduleEvents(ctx, {
     userId: args.userId,
-    startDate: args.date,
-    endDate: args.date,
+    ...buckets,
     mediaFilter: args.mediaFilter,
   });
   if (rows.length === 0) {
@@ -2136,6 +2097,7 @@ async function getProjectedTodayScheduledWatchlistFeed(
   }> = [];
 
   for (const row of rows) {
+    if (watchlistEpisodeTiming(row.date, row.airDate, args.timeZone).day !== args.date) continue;
     const projection = projectionById.get(row.feedProjectionId);
     if (!projection) {
       continue;
@@ -2180,8 +2142,8 @@ async function getProjectedTodayScheduledWatchlistFeed(
     candidates.map((candidate) => candidate.tracked.showId)
   );
   const proofRows =
-    coveredWindow.scheduleStartDate === args.date &&
-    coveredWindow.scheduleEndDate === args.date
+    coveredWindow.scheduleStartDate === buckets.startDate &&
+    coveredWindow.scheduleEndDate === buckets.endDate
       ? rows
       : await getProjectedScheduleEvents(ctx, {
           userId: args.userId,
@@ -2199,7 +2161,7 @@ async function getProjectedTodayScheduledWatchlistFeed(
   const duplicateStartDate = formatDate(
     addUtcDays(
       parseRequiredScheduleDateKey(
-        args.date,
+        buckets.startDate,
         "projected scheduled watchlist duplicate date"
       ).date,
       -NEAR_DATE_DUPLICATE_WINDOW_DAYS
@@ -2208,7 +2170,7 @@ async function getProjectedTodayScheduledWatchlistFeed(
   const duplicateEndDate = formatDate(
     addUtcDays(
       parseRequiredScheduleDateKey(
-        args.date,
+        buckets.endDate,
         "projected scheduled watchlist duplicate date"
       ).date,
       NEAR_DATE_DUPLICATE_WINDOW_DAYS
@@ -2216,14 +2178,14 @@ async function getProjectedTodayScheduledWatchlistFeed(
   );
   const boundedDuplicateStartDate =
     duplicateStartDate < coveredWindow.scheduleStartDate
-      ? args.date
+      ? buckets.startDate
       : duplicateStartDate;
   const boundedDuplicateEndDate =
     duplicateEndDate > coveredWindow.scheduleEndDate
-      ? args.date
+      ? buckets.endDate
       : duplicateEndDate;
   const duplicateRows =
-    boundedDuplicateStartDate === args.date && boundedDuplicateEndDate === args.date
+    boundedDuplicateStartDate === buckets.startDate && boundedDuplicateEndDate === buckets.endDate
       ? rows
       : await getProjectedScheduleEvents(ctx, {
           userId: args.userId,
@@ -3545,6 +3507,7 @@ export const getTodayScheduledWatchlistFeed = query({
     date: v.string(),
     mediaFilter: v.optional(v.union(v.literal("tv"), v.literal("anime"))),
     limit: v.optional(v.number()),
+    timeZone: v.optional(v.string()),
   },
   handler: async (ctx, args): Promise<ScheduledWatchlistItem[]> => {
     const userId = await getAuthUserId(ctx);
@@ -3555,6 +3518,8 @@ export const getTodayScheduledWatchlistFeed = query({
     const dateKey = formatDate(
       getSafeClientTodayDate(args.date, Date.now())
     );
+    const timeZone = args.timeZone ? normalizeWatchlistTimeZone(args.timeZone) : undefined;
+    const buckets = watchlistDayBuckets(dateKey, timeZone);
     const safeLimit = Math.max(1, Math.min(args.limit ?? 64, 128));
     const mediaFilter = args.mediaFilter;
     const typedUserId = userId as Id<"users">;
@@ -3563,6 +3528,7 @@ export const getTodayScheduledWatchlistFeed = query({
       date: dateKey,
       mediaFilter,
       limit: safeLimit,
+      timeZone,
     });
 
     if (projectedFeed !== null) {
@@ -3646,7 +3612,7 @@ export const getTodayScheduledWatchlistFeed = query({
 
     const rows = await ctx.db
       .query("scheduleCache")
-      .withIndex("by_date", (q) => q.eq("date", dateKey))
+      .withIndex("by_date", (q) => q.gte("date", buckets.startDate).lte("date", buckets.endDate))
       .collect();
 
     const candidates: Array<{
@@ -3662,6 +3628,7 @@ export const getTodayScheduledWatchlistFeed = query({
       const entries = parseCachedScheduleEntries(row.episodes);
 
       for (const entry of entries) {
+        if (watchlistEpisodeTiming(row.date, entry.episode.airDate, timeZone).day !== dateKey) continue;
         const tracked = findTrackedScheduleMatch(
           entry,
           rowMediaType,
@@ -3697,7 +3664,7 @@ export const getTodayScheduledWatchlistFeed = query({
     const proofEndDate = formatDate(
       addUtcDays(
         parseRequiredScheduleDateKey(
-          dateKey,
+          buckets.endDate,
           "scheduled watchlist proof date"
         ).date,
         HOME_SIGNAL_LOOKAHEAD_DAYS
@@ -3705,7 +3672,7 @@ export const getTodayScheduledWatchlistFeed = query({
     );
     const proofRows = await ctx.db
       .query("scheduleCache")
-      .withIndex("by_date", (q) => q.gte("date", dateKey).lte("date", proofEndDate))
+      .withIndex("by_date", (q) => q.gte("date", buckets.startDate).lte("date", proofEndDate))
       .collect();
     const scheduleOffsetRows: ScheduleEpisodeNumberLike[] = [];
 
@@ -3744,7 +3711,7 @@ export const getTodayScheduledWatchlistFeed = query({
     const duplicateStartDate = formatDate(
       addUtcDays(
         parseRequiredScheduleDateKey(
-          dateKey,
+          buckets.startDate,
           "scheduled watchlist duplicate date"
         ).date,
         -NEAR_DATE_DUPLICATE_WINDOW_DAYS
@@ -3753,7 +3720,7 @@ export const getTodayScheduledWatchlistFeed = query({
     const duplicateEndDate = formatDate(
       addUtcDays(
         parseRequiredScheduleDateKey(
-          dateKey,
+          buckets.endDate,
           "scheduled watchlist duplicate date"
         ).date,
         NEAR_DATE_DUPLICATE_WINDOW_DAYS
@@ -4166,28 +4133,19 @@ export const getUpcomingSchedule = query({
   },
 });
 
-async function getFutureUpcomingCountsForUser(
+export async function getWatchlistEpisodeCandidates(
   ctx: QueryCtx,
-  args: {
-    userId: Id<"users">;
-    startDate: string;
-    endDate: string;
-    mediaFilter?: "tv" | "anime";
-  }
-): Promise<WatchlistFutureCountRow[]> {
+  args: WatchlistEpisodeScope
+): Promise<WatchlistEpisodeCandidate[]> {
     const range = getScheduleRangeKeys(args.startDate, args.endDate);
-    const today = startOfDay(new Date());
     const mediaFilter = args.mediaFilter;
-    const projectedCounts = await getProjectedFutureUpcomingCountsForUser(ctx, {
+    const projected = await getProjectedWatchlistEpisodeCandidates(ctx, {
       userId: args.userId,
       startDate: range.startDate,
       endDate: range.endDate,
       mediaFilter,
     });
-
-    if (projectedCounts !== null) {
-      return projectedCounts;
-    }
+    if (projected !== null) return projected;
 
     const nonMovieProjections = mediaFilter === "tv"
       ? await ctx.db
@@ -4214,10 +4172,11 @@ async function getFutureUpcomingCountsForUser(
         ).flat();
 
     if (nonMovieProjections.length === 0) {
-      return [] as WatchlistFutureCountRow[];
+      return [];
     }
 
     const trackedShows = nonMovieProjections.map((p) => ({
+      projection: p,
       showId: p.showId,
       normalizedTitle: normalizeTitle(p.title),
       mediaType: p.mediaType as "tv" | "anime",
@@ -4259,20 +4218,14 @@ async function getFutureUpcomingCountsForUser(
       )
       .collect();
 
-    const counts = new Map<
-      string,
-      { availableCount: number; futureCount: number; unavailableCount: number }
-    >();
     const countCandidates: Array<{
       dayKey: string;
-      daysUntil: number;
       entry: CompactScheduleEntry;
       sourceMatchesTracked: boolean;
       tracked: (typeof trackedShows)[number] & { watchlistId: string };
     }> = [];
     const duplicateCandidates: typeof countCandidates = [];
     const dedupe = new Set<string>();
-    const nowMs = Date.now();
 
     for (const row of rows) {
       const entries = parseCachedScheduleEntries(row.episodes);
@@ -4291,12 +4244,7 @@ async function getFutureUpcomingCountsForUser(
         if (args.mediaFilter && tracked.mediaType !== args.mediaFilter) continue;
 
         const dayKey = row.date;
-        const bucketDate = parseScheduleDateKey(dayKey);
-        if (!bucketDate) continue;
-
-        const daysUntil = Math.floor(
-          (startOfDay(bucketDate).getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
-        );
+        if (!parseScheduleDateKey(dayKey)) continue;
 
         const seriesKey = getScheduleSeriesDedupeTitle(
           tracked.normalizedTitle.length <= entry.normalizedTitle.length
@@ -4309,7 +4257,6 @@ async function getFutureUpcomingCountsForUser(
 
         const candidate = {
           dayKey,
-          daysUntil,
           entry,
           sourceMatchesTracked: rowMediaType === tracked.mediaType,
           tracked: tracked as (typeof trackedShows)[number] & {
@@ -4412,36 +4359,36 @@ async function getFutureUpcomingCountsForUser(
       }
     );
 
-    for (const candidate of selectedCountCandidates) {
-      const airtimeMs = getEpisodeAirtimeTimestamp(candidate.entry.episode.airDate);
-      const isFutureDay = candidate.daysUntil > 0;
-      const isTodayBeforeAirtime =
-        candidate.daysUntil === 0 && airtimeMs !== null && airtimeMs > nowMs;
-      const existing = counts.get(candidate.tracked.watchlistId) ?? {
-        availableCount: 0,
-        futureCount: 0,
-        unavailableCount: 0,
-      };
-      if (!isFutureDay && !isTodayBeforeAirtime) {
-        existing.availableCount += 1;
-        counts.set(candidate.tracked.watchlistId, existing);
-        continue;
-      }
-      if (isFutureDay) {
-        existing.futureCount += 1;
-      }
-      existing.unavailableCount += 1;
-      counts.set(candidate.tracked.watchlistId, existing);
-    }
+    return selectedCountCandidates.map(({ tracked, dayKey, entry }) => ({
+      routeId: tracked.watchlistId, date: dayKey, episode: entry.episode, projection: tracked.projection,
+    }));
+}
 
-    return Array.from(counts.entries())
-      .sort(([routeIdA], [routeIdB]) => routeIdA.localeCompare(routeIdB))
-      .map(([routeId, count]) => ({
-        routeId,
-        availableCount: count.availableCount,
-        futureCount: count.futureCount,
-        unavailableCount: count.unavailableCount,
-      }));
+async function getFutureUpcomingCountsForUser(
+  ctx: QueryCtx,
+  args: WatchlistEpisodeScope & { timeZone?: string; refreshAt?: number },
+): Promise<WatchlistFutureCountRow[]> {
+  const now = Date.now();
+  const timeZone = args.timeZone ? normalizeWatchlistTimeZone(args.timeZone) : undefined;
+  const today = timeZone ? watchlistLocalDate(now, timeZone) : formatDate(new Date(now));
+  const counts = new Map<string, WatchlistFutureCountRow>();
+
+  for (const candidate of await getWatchlistEpisodeCandidates(ctx, args)) {
+    const { day, airtime } = watchlistEpisodeTiming(candidate.date, candidate.episode.airDate, timeZone);
+    const count = counts.get(candidate.routeId) ?? {
+      routeId: candidate.routeId, availableCount: 0, futureCount: 0, unavailableCount: 0,
+    };
+    if (day < today || (day === today && (airtime === null || airtime <= now))) {
+      count.availableCount += 1;
+    } else {
+      count.unavailableCount += 1;
+      if (day > today) count.futureCount += 1;
+      else if (airtime !== null) count.nextAirtimeAt = Math.min(count.nextAirtimeAt ?? airtime, airtime);
+    }
+    counts.set(candidate.routeId, count);
+  }
+
+  return Array.from(counts.values()).sort((a, b) => a.routeId.localeCompare(b.routeId));
 }
 
 export const getFutureUpcomingCountsForWatchlistForUser = internalQuery({
@@ -4459,6 +4406,9 @@ export const getFutureUpcomingCountsForWatchlist = query({
     startDate: v.string(),
     endDate: v.string(),
     mediaFilter: v.optional(v.union(v.literal("tv"), v.literal("anime"))),
+    timeZone: v.optional(v.string()),
+    // A stable client query argument that advances only at the next known airtime.
+    refreshAt: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);

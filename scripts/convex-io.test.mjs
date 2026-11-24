@@ -1,7 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { applyReleaseDeltas, exportTrackedLibrary } from "../convex/scheduleConfidence.ts";
-import { getFutureUpcomingCountsForWatchlistForUser } from "../convex/schedule.ts";
+import { getFutureUpcomingCountsForWatchlist, getFutureUpcomingCountsForWatchlistForUser } from "../convex/schedule.ts";
+import { check as checkWatchlistPush, devicesForDelivery } from "../convex/watchlistPush.ts";
+import { getWatchlistScheduleAttentionCount } from "../lib/tracking/home-watchlist-visibility.ts";
+import { watchlistDayStart } from "../lib/tracking/watchlist-episode-timing.ts";
+import { getWatchlistNotificationBody } from "../lib/tracking/watchlist-notification-copy.ts";
 import { backfillPage } from "../convex/watchedEpisodeRanges.ts";
 import { toggleEpisodeWatched, unmarkEpisodesWatchedFrom, resetUserTrackingDataBatch } from "../convex/shows.ts";
 import { buildWatchedEpisodeRanges } from "../lib/tracking/watched-episode-ranges.ts";
@@ -39,7 +43,7 @@ function database(seed) {
           columns = name.includes("season_episode") ? ["season", "episode", "_creationTime"]
             : name.includes("date") ? ["date", "_creationTime"] : ["_creationTime"];
           const q = {};
-          for (const [op, compare] of Object.entries({ eq: (a,b) => a === b, gte: (a,b) => a >= b, lte: (a,b) => a <= b })) {
+          for (const [op, compare] of Object.entries({ eq: (a,b) => a === b, gte: (a,b) => a >= b, lte: (a,b) => a <= b, lt: (a,b) => a < b })) {
             q[op] = (key, value) => { conditions.push(row => compare(row[key], value)); return q; };
           }
           callback(q); return query;
@@ -251,6 +255,74 @@ test("future-count output stays identical with exact watched checks and no full-
   const sum = db => Object.values(db.bytes).reduce((a,b) => a+b,0);
   assert.ok(sum(after) < sum(before) * 0.02);
   console.log(JSON.stringify({ countsFixtureBytesBefore: sum(before), countsFixtureBytesAfter: sum(after) }));
+});
+
+test("Watchlist and alerts share local midnight and confirmed airtime, and suppress repeats, opt-outs and signed-out devices", async (t) => {
+  const timeZone = "Europe/Belgrade";
+  const day = "2026-11-24";
+  const midnight = Date.parse("2026-11-23T23:00:00Z");
+  const airtime = Date.parse("2026-11-24T20:00:00Z");
+  const clock = t.mock.method(Date, "now", () => midnight);
+  const seed = librarySeed();
+  seed.users = [{ _id: "u" }];
+  seed.authSessions = [{ _id: "session", userId: "u", expirationTime: airtime + 600_000 }];
+  seed.watchlistPushDevices = [{ _id: "phone", userId: "u", sessionId: "session", registeredAt: midnight - 1 }];
+  seed.watchlistPushSettings = [{ _id: "setting", userId: "u", enabled: true, enabledAt: midnight - 1, timeZone, checkAt: midnight }];
+  seed.userScheduleProjectionWindows = [{ userId: "u", scheduleStartDate: "2026-11-01", scheduleEndDate: "2027-03-01", projectionUpdatedAt: 2, updatedAt: 2 }];
+  seed.userScheduleEvents = [1200, 1201].map(episodeNumber => ({
+    _id: `e${episodeNumber}`, userId: "u", userShowId: "us", feedProjectionId: "p",
+    date: day, routeId: "tmdb:tv:1", mediaType: "tv", sourceMediaType: "tv",
+    sourceProvider: "tvmaze", showTitle: "Long running", seasonNumber: 1, episodeNumber,
+    episodeName: episodeNumber === 1201 ? "Who Is It?" : "The Previous Episode",
+    airDate: new Date(airtime).toISOString(), airtimeMs: airtime, sourceMatchesTracked: true,
+  }));
+  for (const mode of ["same_day", "after_airtime"]) {
+    clock.mock.mockImplementation(() => midnight);
+    const instance = database({ ...seed, userAnimeHomeSettings: [{ userId: "u", watchlistAirtimeMode: mode }] });
+    const delivered = [];
+    const ctx = { ...instance, auth: { getUserIdentity: async () => ({ subject: "u|session" }) }, scheduler: {
+      runAt: async () => "next-check",
+      runAfter: async (_delay, _ref, args) => delivered.push(args.notification),
+    } };
+    const countsArgs = { startDate: day, endDate: day, timeZone };
+    const [before] = await getFutureUpcomingCountsForWatchlist._handler(ctx, countsArgs);
+    assert.equal(before.nextAirtimeAt, airtime);
+    assert.equal(getWatchlistScheduleAttentionCount(before, mode), mode === "same_day" ? 1 : 0);
+    await checkWatchlistPush._handler(ctx, { settingsId: "setting", checkAt: midnight });
+    if (mode === "after_airtime") {
+      assert.equal(delivered.length, 0);
+      assert.equal(instance.tables.watchlistPushSettings[0].checkAt, airtime);
+      clock.mock.mockImplementation(() => airtime);
+      const [after] = await getFutureUpcomingCountsForWatchlist._handler(ctx, countsArgs);
+      assert.equal(getWatchlistScheduleAttentionCount(after, mode), 1);
+      await checkWatchlistPush._handler(ctx, { settingsId: "setting", checkAt: airtime });
+    }
+    assert.equal(delivered.length, 1);
+    assert.equal(delivered[0].routeId, "tmdb:tv:1");
+    assert.equal(delivered[0].passive, mode === "same_day");
+    assert.equal(delivered[0].body, mode === "same_day"
+      ? "Today at 9:00 PM: S1 E1201 · Who Is It?"
+      : "Out now: S1 E1201 · Who Is It?");
+    await instance.db.patch("setting", { checkAt: Date.now() });
+    await checkWatchlistPush._handler(ctx, { settingsId: "setting", checkAt: Date.now() });
+    assert.equal(delivered.length, 1);
+    const due = { userId: "u", dueAt: delivered[0].dueAt };
+    assert.equal((await devicesForDelivery._handler(ctx, due)).length, 1);
+    await instance.db.patch("setting", { enabled: false });
+    assert.deepEqual(await devicesForDelivery._handler(ctx, due), []);
+    await instance.db.patch("setting", { enabled: true });
+    await instance.db.delete("session");
+    assert.deepEqual(await devicesForDelivery._handler(ctx, due), []);
+  }
+});
+
+test("day boundaries follow daylight saving and the date-only copy avoids promising airtime", () => {
+  assert.equal(watchlistDayStart("2026-03-29", "Europe/Belgrade"), Date.parse("2026-03-28T23:00:00Z"));
+  assert.equal(watchlistDayStart("2026-03-30", "Europe/Belgrade"), Date.parse("2026-03-29T22:00:00Z"));
+  assert.equal(getWatchlistNotificationBody({
+    showTitle: "Show", episodes: [{ seasonNumber: 0, episodeNumber: 3, name: "Special" }],
+    timing: "date_only", airtime: null, timeZone: "Europe/Belgrade",
+  }), "Coming out today: Special 3");
 });
 
 test("bounded backfill changes only missing coordinate summaries and resumes safely", async () => {
