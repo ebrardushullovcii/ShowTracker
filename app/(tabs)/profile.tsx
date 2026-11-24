@@ -1,9 +1,10 @@
+import { DialogBackdrop } from "@/components/DialogBackdrop";
+import { useDelayedLoading } from "@/hooks/use-delayed-loading";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Image,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
-  KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
@@ -607,6 +608,7 @@ export default function ProfileScreen() {
   }, [requestUserStatsRebuild, stats]);
 
   const isInitialLoading = profileSummary === undefined;
+  const showInitialLoading = useDelayedLoading(isInitialLoading);
   const isHeavySectionsLoading =
     shouldLoadHeavySections &&
     (stats === undefined || favorites === undefined || lists === undefined || library === undefined);
@@ -965,7 +967,7 @@ export default function ProfileScreen() {
     return (
       <ScreenWrapper>
         <View className="flex-1 items-center justify-center">
-          <BrandLoader />
+          {showInitialLoading ? <BrandLoader /> : null}
         </View>
       </ScreenWrapper>
     );
@@ -1275,10 +1277,7 @@ export default function ProfileScreen() {
         animationType="fade"
         onRequestClose={closeProfileEditor}
       >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
-          className="dialog-backdrop"
-        >
+        <DialogBackdrop avoidKeyboard>
           <Pressable
             className="absolute inset-0"
             onPress={closeProfileEditor}
@@ -1403,7 +1402,7 @@ export default function ProfileScreen() {
               </View>
             </ScrollView>
           </View>
-        </KeyboardAvoidingView>
+        </DialogBackdrop>
       </Modal>
     </ScreenWrapper>
   );

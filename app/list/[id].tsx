@@ -1,3 +1,4 @@
+import { DialogBackdrop } from "@/components/DialogBackdrop";
 import { useMemo, useState, useCallback } from "react";
 import {
   Alert,
@@ -605,7 +606,7 @@ export function ListDetailScreen() {
           }
         }}
       >
-        <View className="dialog-backdrop">
+        <DialogBackdrop>
           <Pressable
             className="absolute inset-0"
             disabled={isConfirmingAction}
@@ -661,7 +662,7 @@ export function ListDetailScreen() {
               </View>
             </View>
           </View>
-        </View>
+        </DialogBackdrop>
       </Modal>
 
       {/* Search Shows Modal */}

@@ -1,3 +1,4 @@
+import { useDelayedLoading } from "@/hooks/use-delayed-loading";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Image,
@@ -381,6 +382,7 @@ export default function LibraryScreen() {
     selectedYear !== "" ||
     selectedRating !== "";
   const isLoading = libraryItems === undefined;
+  const showLibraryLoading = useDelayedLoading(isLoading);
 
   const rawStatusOptionsWithCounts = useMemo(() => {
     // Use backend counts when available to avoid iterating all items client-side.
@@ -786,7 +788,7 @@ export default function LibraryScreen() {
                   )}
                 </View>
 
-                {isLoading ? (
+                {showLibraryLoading ? (
                   <View className="items-center gap-2 rounded-xl border-2 border-border-default bg-bg-surface py-8">
                     <BrandLoader compact />
                     <Text className="text-sm text-text-secondary">

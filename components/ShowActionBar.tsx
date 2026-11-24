@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
-import { Modal, Pressable, Text, View } from "react-native";
+import { Modal, Pressable, ScrollView, Text, View, useWindowDimensions } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { Badge } from "@/components/Badge";
 import { BrandLoader } from "@/components/BrandLoader";
@@ -85,6 +86,14 @@ export function ShowActionBar({
   const [isMoreVisible, setIsMoreVisible] = useState(false);
   const [moreButtonFrame, setMoreButtonFrame] = useState({ x: 0, y: 0, width: 42, height: 42 });
   const moreButtonRef = useRef<View>(null);
+  const { width, height } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  const menuWidth = Math.min(208, width - insets.left - insets.right - 32);
+  const below = moreButtonFrame.y + moreButtonFrame.height + 4;
+  const above = moreButtonFrame.y - 4;
+  const availableBelow = height - insets.bottom - 16 - below;
+  const availableAbove = above - insets.top - 16;
+  const opensAbove = availableAbove > availableBelow && availableBelow < 256;
 
   const closeMore = () => setIsMoreVisible(false);
   const openMore = () => {
@@ -151,70 +160,77 @@ export function ShowActionBar({
         <View className="flex-1">
           <Pressable className="absolute inset-0" focusable={false} onPress={closeMore} />
           <View
-            className="absolute w-52 overflow-hidden rounded-lg border border-white/10 bg-bg-base shadow-2xl"
+            className="overlay-outline absolute bg-bg-base shadow-2xl"
             style={{
-              left: Math.max(16, moreButtonFrame.x + moreButtonFrame.width - 208),
-              top: moreButtonFrame.y + moreButtonFrame.height + 4,
+              left: Math.max(insets.left + 16, Math.min(
+                moreButtonFrame.x + moreButtonFrame.width - menuWidth,
+                width - insets.right - 16 - menuWidth,
+              )),
+              width: menuWidth,
+              maxHeight: Math.max(0, opensAbove ? availableAbove : availableBelow),
+              ...(opensAbove ? { bottom: height - above } : { top: below }),
             }}
           >
-            <View className="border-b border-border-default">
-              <MenuAction
-                label={isTracked ? "Remove from Library" : "Save to Library"}
-                icon={isTracked ? "remove-circle-outline" : "add-circle-outline"}
-                onPress={() => {
-                  closeMore();
-                  onToggleWatchlist();
-                }}
-                disabled={isBusy}
-                destructive={isTracked}
-              />
-            </View>
-
-            <View className="border-b border-border-default">
-              <MenuAction
-                label={isFavorite ? "Favorited" : "Add Favorite"}
-                icon={isFavorite ? "heart" : "heart-outline"}
-                onPress={() => {
-                  closeMore();
-                  onToggleFavorite();
-                }}
-                disabled={isBusy || isTogglingFavorite}
-                active={isFavorite}
-                loading={isTogglingFavorite}
-              />
-            </View>
-
-            {isTracked && onRepairTracking ? (
+            <ScrollView bounces={false}>
               <View className="border-b border-border-default">
                 <MenuAction
-                  label="Refresh Tracking"
-                  icon="refresh-outline"
+                  label={isTracked ? "Remove from Library" : "Save to Library"}
+                  icon={isTracked ? "remove-circle-outline" : "add-circle-outline"}
                   onPress={() => {
                     closeMore();
-                    onRepairTracking();
+                    onToggleWatchlist();
                   }}
-                  disabled={isBusy || isRepairingTracking}
-                  loading={isRepairingTracking}
+                  disabled={isBusy}
+                  destructive={isTracked}
                 />
               </View>
-            ) : null}
 
-            {onShare ? (
               <View className="border-b border-border-default">
-                <MenuAction label="Share this show" icon="share-outline" onPress={() => { closeMore(); onShare(); }} />
+                <MenuAction
+                  label={isFavorite ? "Favorited" : "Add Favorite"}
+                  icon={isFavorite ? "heart" : "heart-outline"}
+                  onPress={() => {
+                    closeMore();
+                    onToggleFavorite();
+                  }}
+                  disabled={isBusy || isTogglingFavorite}
+                  active={isFavorite}
+                  loading={isTogglingFavorite}
+                />
               </View>
-            ) : null}
-            {canAddToList ? (
-              <MenuAction
-                label="Add to List"
-                icon="bookmark-outline"
-                onPress={() => {
-                  closeMore();
-                  onAddToList();
-                }}
-                disabled={isBusy}
-              />
-            ) : null}
+
+              {isTracked && onRepairTracking ? (
+                <View className="border-b border-border-default">
+                  <MenuAction
+                    label="Refresh Tracking"
+                    icon="refresh-outline"
+                    onPress={() => {
+                      closeMore();
+                      onRepairTracking();
+                    }}
+                    disabled={isBusy || isRepairingTracking}
+                    loading={isRepairingTracking}
+                  />
+                </View>
+              ) : null}
+
+              {onShare ? (
+                <View className="border-b border-border-default">
+                  <MenuAction label="Share this show" icon="share-outline" onPress={() => { closeMore(); onShare(); }} />
+                </View>
+              ) : null}
+              {canAddToList ? (
+                <MenuAction
+                  label="Add to List"
+                  icon="bookmark-outline"
+                  onPress={() => {
+                    closeMore();
+                    onAddToList();
+                  }}
+                  disabled={isBusy}
+                />
+              ) : null}
+            </ScrollView>
           </View>
         </View>
       </Modal>

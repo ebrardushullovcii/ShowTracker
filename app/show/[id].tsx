@@ -1,3 +1,4 @@
+import { DialogBackdrop } from "@/components/DialogBackdrop";
 import { applyConfirmedRelease } from "@/lib/tracking/confirmed-release";
 import { isEpisodeAtOrAfter, parseEpisodeKey } from "@/lib/tracking/episode-order";
 import { findUnloadedRailSeason } from "@/lib/tracking/rail-season";
@@ -13,7 +14,6 @@ import {
 import {
   Alert,
   Image,
-  KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
@@ -4840,7 +4840,7 @@ export function ShowDetailScreen() {
           !isNavigatingToNextSeason && !isPausingRelatedEntries && setNextSeasonPrompt(null)
         }
       >
-        <View className="dialog-backdrop">
+        <DialogBackdrop>
           <Pressable
             className="absolute inset-0"
             focusable={false}
@@ -4910,7 +4910,7 @@ export function ShowDetailScreen() {
               </Pressable>
             </View>
           </View>
-        </View>
+        </DialogBackdrop>
       </Modal>
 
       <Modal
@@ -4923,7 +4923,7 @@ export function ShowDetailScreen() {
           }
         }}
       >
-        <View className="dialog-backdrop">
+        <DialogBackdrop>
           <Pressable
             className="absolute inset-0"
             focusable={false}
@@ -4995,7 +4995,7 @@ export function ShowDetailScreen() {
               </Pressable>
             </View>
           </View>
-        </View>
+        </DialogBackdrop>
       </Modal>
 
       <Modal
@@ -5004,7 +5004,7 @@ export function ShowDetailScreen() {
         animationType="fade"
         onRequestClose={() => setWatchActionTarget(null)}
       >
-        <View className="dialog-backdrop">
+        <DialogBackdrop>
           <Pressable
             className="absolute inset-0"
             focusable={false}
@@ -5100,7 +5100,7 @@ export function ShowDetailScreen() {
               </Pressable>
             </View>
           </View>
-        </View>
+        </DialogBackdrop>
       </Modal>
 
       <Modal
@@ -5113,7 +5113,7 @@ export function ShowDetailScreen() {
           }
         }}
       >
-        <View className="dialog-backdrop">
+        <DialogBackdrop>
           <Pressable
             className="absolute inset-0"
             focusable={false}
@@ -5286,7 +5286,7 @@ export function ShowDetailScreen() {
               </Pressable>
             </View>
           </View>
-        </View>
+        </DialogBackdrop>
       </Modal>
 
       <Modal
@@ -5295,7 +5295,7 @@ export function ShowDetailScreen() {
         animationType="fade"
         onRequestClose={() => handleResolveRemoveLibraryPrompt(false)}
       >
-        <View className="dialog-backdrop">
+        <DialogBackdrop>
           <Pressable
             className="absolute inset-0"
             focusable={false}
@@ -5337,7 +5337,7 @@ export function ShowDetailScreen() {
               </Pressable>
             </View>
           </View>
-        </View>
+        </DialogBackdrop>
       </Modal>
 
       <Modal
@@ -5350,10 +5350,7 @@ export function ShowDetailScreen() {
           }
         }}
       >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
-          className="dialog-backdrop"
-        >
+        <DialogBackdrop avoidKeyboard>
           <Pressable
             className="absolute inset-0"
             focusable={false}
@@ -5605,7 +5602,7 @@ export function ShowDetailScreen() {
               ) : null}
             </ScrollView>
           </View>
-        </KeyboardAvoidingView>
+        </DialogBackdrop>
       </Modal>
 
       {/* Add to List Modal */}

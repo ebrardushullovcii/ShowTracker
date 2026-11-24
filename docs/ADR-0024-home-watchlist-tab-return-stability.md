@@ -34,6 +34,11 @@ The settled Watchlist snapshot is no longer cleared while Schedule is active.
 It is cleared only when Watchlist is active and the current Watchlist context has
 no resolved data, such as a true first load or a media-filter context change.
 
+Schedule holds the last resolved results for the same date range and media
+filter while its query is skipped or reattaching. Tab and filter loading
+indicators appear only after a short delay. A pending selection stays pending
+during that delay, so a fast query does not flash a placeholder or an empty state.
+
 ## Reasoning
 
 Switching tabs should preserve the user's previous Watchlist view. The Schedule

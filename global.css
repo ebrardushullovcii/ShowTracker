@@ -3,10 +3,6 @@
 @tailwind utilities;
 
 @layer components {
-  .dialog-backdrop {
-    @apply flex-1 items-center justify-center bg-black/70 px-dialog-gutter py-6;
-  }
-
   .overlay-outline {
     @apply overflow-hidden rounded-2xl border border-white/10;
   }

@@ -1,3 +1,4 @@
+import { DialogBackdrop } from "@/components/DialogBackdrop";
 import { cloneElement, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -50,7 +51,7 @@ export function PosterQuickActions({ children, routeId, tracked }: PosterQuickAc
             if (menu === "tracking" || menu === "share") openAction(menu);
           }}
         >
-          <View className="dialog-backdrop">
+          <DialogBackdrop>
             <Pressable
               className="absolute inset-0"
               accessible={false}
@@ -77,7 +78,7 @@ export function PosterQuickActions({ children, routeId, tracked }: PosterQuickAc
                 <Text className="flex-1 text-base font-semibold text-text-primary">Share</Text>
               </Pressable>
             </View>
-          </View>
+          </DialogBackdrop>
         </Modal>
       ) : null}
     </>

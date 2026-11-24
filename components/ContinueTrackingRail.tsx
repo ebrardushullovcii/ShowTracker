@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { BrandLoader } from "@/components/BrandLoader";
+import { useDelayedLoading } from "@/hooks/use-delayed-loading";
 import type { NativeScrollEvent, NativeSyntheticEvent } from "react-native";
 import { DESKTOP_SIDEBAR_BREAKPOINT } from "@/constants/navigation";
 import type { NormalizedEpisode } from "@/lib/api/types";
@@ -67,19 +68,8 @@ const RAIL_OVERSCAN_PX = (RAIL_CARD_WIDTH + RAIL_CARD_GAP) * 4;
 const DRAG_CLICK_SUPPRESSION_MS = 120;
 
 function RailBadge({ loading }: { loading: boolean }) {
-  const [showLoading, setShowLoading] = useState(false);
+  const loadingVisible = useDelayedLoading(loading);
   const labelClass = "text-[10px] font-black uppercase tracking-wide text-primary";
-  const loadingVisible = loading && showLoading;
-
-  useEffect(() => {
-    if (!loading) return;
-
-    const timer = setTimeout(() => setShowLoading(true), 300);
-    return () => {
-      clearTimeout(timer);
-      setShowLoading(false);
-    };
-  }, [loading]);
 
   return (
     <View className="items-center justify-center rounded-full border border-primary/30 bg-primary/10 px-2.5 py-1">
