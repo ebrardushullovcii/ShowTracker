@@ -57,7 +57,7 @@ export function TallDialog({
         accessibilityViewIsModal
         onAccessibilityEscape={onClose}
         className={isDrawer
-          ? "w-full flex-1 overflow-hidden rounded-t-2xl border-t border-white/10 bg-bg-base"
+          ? "w-full flex-1 overflow-hidden rounded-t-[32px] border border-b-0 border-white/10 bg-bg-base"
           : "overlay-outline w-full flex-1 bg-bg-base"}
         style={isDrawer
           ? { paddingLeft: insets.left, paddingRight: insets.right, paddingBottom: insets.bottom }
