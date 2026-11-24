@@ -3,6 +3,7 @@ import {
   Platform,
   Pressable,
   ScrollView,
+  StyleSheet,
   Text,
   TextInput,
   View,
@@ -15,9 +16,6 @@ import { DESKTOP_SIDEBAR_BREAKPOINT } from "@/constants/navigation";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { AuthTicket } from "@/components/auth/AuthTicket";
 import { useSignInForm } from "@/components/auth/useAuthForms";
-
-const gradientBase = "absolute inset-0";
-const gradientDivider = "h-1 w-full";
 
 const fieldBase =
   "flex-row items-center gap-2 rounded-lg border-2 border-border-default bg-bg-base/70 px-3 py-2.5";
@@ -65,7 +63,7 @@ export function LoginScreen() {
           colors={["#09090b", "#120d0d", "#09090b"]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
-          className={gradientBase}
+          style={StyleSheet.absoluteFill}
         />
         <View className="absolute -left-20 -top-12 h-56 w-56 rounded-full bg-primary/20" />
         <View className="absolute -bottom-28 right-0 h-72 w-72 rounded-full bg-accent/10" />
@@ -143,7 +141,7 @@ export function LoginScreen() {
                   colors={["rgba(239,68,68,0.2)", "rgba(56,189,248,0.06)", "transparent"]}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
-                  className={gradientDivider}
+                  style={{ height: 4, width: "100%" }}
                 />
 
                 <View className="px-5 pb-5 pt-4">

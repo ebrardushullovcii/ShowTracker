@@ -594,7 +594,7 @@ export default function LibraryScreen() {
       <View className="flex-1" onLayout={onGridLayout}>
         {gridWidth > 0 ? (
           <FlashList
-            key={`${activeTab}-${statusFilter}-${selectedGenres.join(",")}`}
+            key={activeTab}
             data={visibleItems}
             keyExtractor={getItemKey}
             renderItem={renderLibraryItem}

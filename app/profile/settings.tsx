@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import { Link, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAction, useConvexAuth, useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { ScreenWrapper } from "@/components/ScreenWrapper";
@@ -139,6 +140,7 @@ function PreferenceControl({
 
 export default function ProfileSettingsScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { signOut } = useAuthActions();
   const { isAuthenticated } = useConvexAuth();
   const animeHomeSettings = useQuery(api.shows.getUserAnimeHomeSettings);
@@ -449,8 +451,17 @@ export default function ProfileSettingsScreen() {
   );
 
   return (
-    <ScreenWrapper contentClassName="px-0 py-0" edges={["top"]}>
-      <View className="flex-1 bg-bg-base">
+    <ScreenWrapper contentClassName="px-0 py-0" edges={[]}>
+      <View
+        className="flex-1 bg-bg-base"
+        style={{
+          // A transparent stack screen can extend into the system bars on iOS.
+          paddingTop: insets.top,
+          paddingBottom: insets.bottom,
+          paddingLeft: insets.left,
+          paddingRight: insets.right,
+        }}
+      >
         <View className="border-b border-border-default bg-bg-base px-5 py-5">
           <View className="flex-row items-start gap-4">
             <View className="min-w-0 flex-1">
@@ -464,7 +475,7 @@ export default function ProfileSettingsScreen() {
               accessibilityRole="button"
               accessibilityLabel="Close settings"
               onPress={close}
-              className="mt-0.5 h-10 w-10 items-center justify-center rounded-md border border-border-default bg-bg-surface"
+              className="h-11 w-11 items-center justify-center rounded-md border border-border-default bg-bg-surface"
             >
               <Ionicons name="close" size={18} color="#e4e4e7" />
             </Pressable>
