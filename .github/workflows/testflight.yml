@@ -82,6 +82,8 @@ jobs:
             echo '::error::The archive does not contain the ShowTracker bundle.'
             exit 1
           fi
+          # altool requires an issuer argument even with an individual key.
           xcrun altool --upload-app -f "$upload_dir/ShowTracker.ipa" --type ios \
-            --api-key "$ASC_KEY_ID" --api-key-subject user --p8-file-path "$upload_dir/apple.p8"
+            --api-key "$ASC_KEY_ID" --api-issuer user --api-key-subject user \
+            --p8-file-path "$upload_dir/apple.p8"
           echo 'Uploaded to App Store Connect for TestFlight processing.' >> "$GITHUB_STEP_SUMMARY"
