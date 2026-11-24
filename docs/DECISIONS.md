@@ -85,6 +85,7 @@ Most frequently relevant:
 | ADR | Decision |
 | --- | --- |
 | [ADR-0002](ADR-0002-watchlist-schedule-cache-bridge.md) | Home can use same-day schedule-cache facts as watchlist attention while provider matching stays conservative. |
+| [ADR-0082](ADR-0082-watchlist-episode-alerts.md) | iOS episode alerts use the Home Watchlist's episode availability timing and existing schedule facts. |
 | [ADR-0005](ADR-0005-server-owned-schedule-refresh.md) | Server-owned schedule refresh owns freshness and prunes moved cache rows. |
 | [ADR-0006](ADR-0006-clear-stale-release-signals.md) | Server reconciliation clears stale release signals when trusted facts say the user is caught up. |
 | [ADR-0007](ADR-0007-prune-stale-title-schedule-rows.md) | Provider-backed break-week moves prune stale same-title schedule rows. |

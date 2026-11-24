@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  AppState,
   Image,
   Modal,
   Platform,
@@ -75,6 +76,7 @@ type WatchlistItem = {
 
 type WatchlistFutureUpcomingCount = WatchlistScheduleCounts & {
   routeId: string;
+  nextAirtimeAt?: number;
 };
 
 type UpcomingEpisode = {
@@ -1393,6 +1395,8 @@ export function HomeScreen() {
   const isWeb = Platform.OS === "web";
 
   const [todayDate, setTodayDate] = useState(() => new Date());
+  const [watchlistRefreshAt, setWatchlistRefreshAt] = useState<number>();
+  const watchlistTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
   useEffect(() => {
     let timeout: ReturnType<typeof setTimeout> | null = null;
 
@@ -1407,8 +1411,15 @@ export function HomeScreen() {
     };
 
     scheduleNextDayTick();
+    const appState = AppState.addEventListener("change", (state) => {
+      if (state !== "active") return;
+      setTodayDate(new Date());
+      if (timeout) clearTimeout(timeout);
+      scheduleNextDayTick();
+    });
 
     return () => {
+      appState.remove();
       if (timeout) {
         clearTimeout(timeout);
       }
@@ -1541,6 +1552,7 @@ export function HomeScreen() {
           date: todayKey,
           limit: watchlistQueryLimit,
           mediaFilter: homeFeedMediaFilter,
+          timeZone: watchlistTimeZone,
         }
       : "skip"
   );
@@ -1588,6 +1600,8 @@ export function HomeScreen() {
           startDate: watchlistScheduleCountStartDate,
           endDate: watchlistScheduleCountEndDate,
           mediaFilter: mediaFilter === "all" ? undefined : mediaFilter,
+          timeZone: watchlistTimeZone,
+          refreshAt: watchlistRefreshAt,
         }
       : "skip"
   );
@@ -1598,6 +1612,14 @@ export function HomeScreen() {
   const watchlistAirtimeMode =
     (homeSettings?.watchlistAirtimeMode as WatchlistAirtimeMode | undefined) ??
     "same_day";
+  useEffect(() => {
+    if (activeTab !== "watchlist" || watchlistAirtimeMode !== "after_airtime") return;
+    const next = watchlistFutureUpcomingCounts?.reduce((earliest, row) =>
+      Math.min(earliest, row.nextAirtimeAt ?? Infinity), Infinity);
+    if (!next || !Number.isFinite(next) || next <= (watchlistRefreshAt ?? 0)) return;
+    const timeout = setTimeout(() => setWatchlistRefreshAt(next), Math.max(0, next - Date.now() + 1000));
+    return () => clearTimeout(timeout);
+  }, [activeTab, watchlistAirtimeMode, watchlistFutureUpcomingCounts, watchlistRefreshAt]);
   const watchlistFeedContextKey = `watchlist:${mediaFilter}`;
   const stableActiveFeed = useStableDisplayValue(
     activeFeed as WatchlistItem[] | undefined,

@@ -27,6 +27,26 @@ export default defineSchema({
     finalPass: v.boolean(),
     startedAt: v.number(),
   }).index("by_user", ["userId"]),
+  watchlistPushSettings: defineTable({
+    userId: v.id("users"),
+    enabled: v.boolean(),
+    timeZone: v.optional(v.string()),
+    enabledAt: v.number(),
+    checkAt: v.optional(v.number()),
+    checkId: v.optional(v.id("_scheduled_functions")),
+  }).index("by_user", ["userId"]),
+  watchlistPushDevices: defineTable({
+    userId: v.id("users"),
+    sessionId: v.id("authSessions"),
+    token: v.string(),
+    registeredAt: v.number(),
+  }).index("by_user", ["userId"]).index("by_token", ["token"]),
+  watchlistPushDeliveries: defineTable({
+    userId: v.id("users"),
+    episodeKey: v.string(),
+    createdAt: v.number(),
+  }).index("by_user_episode", ["userId", "episodeKey"])
+    .index("by_user_created", ["userId", "createdAt"]),
   sharedGames: defineTable({
     ...sharedGameFields,
     ownerId: v.id("users"),

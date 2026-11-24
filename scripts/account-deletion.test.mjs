@@ -85,7 +85,7 @@ test("bounded deletion removes owned data and auth descendants without touching 
   const f = fixture();
   const owner = f.insert("users", { email: "owner@example.com" });
   const other = f.insert("users", { email: "other@example.com" });
-  const ownedTables = ["watchedEpisodes", "userShows", "userFavorites", "customLists", "feedProjections", "userScheduleEvents", "watchlistFutureCountProjections", "userScheduleProjectionWindows", "userAnimeHomeSettings", "userAnimeFranchiseSettings", "userProfiles", "userSocial", "userStats"];
+  const ownedTables = ["watchedEpisodes", "userShows", "userFavorites", "customLists", "feedProjections", "userScheduleEvents", "watchlistFutureCountProjections", "userScheduleProjectionWindows", "watchlistPushSettings", "watchlistPushDevices", "watchlistPushDeliveries", "userAnimeHomeSettings", "userAnimeFranchiseSettings", "userProfiles", "userSocial", "userStats"];
   for (const table of ownedTables) {
     for (let i = 0; i < (table === "watchedEpisodes" ? 251 : 3); i++) f.insert(table, { userId: owner });
     f.insert(table, { userId: other });

@@ -16,6 +16,7 @@ import { useAction, useConvexAuth, useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { ScreenWrapper } from "@/components/ScreenWrapper";
 import { BrandLoader } from "@/components/BrandLoader";
+import { WatchlistPushPreference } from "@/components/WatchlistPush";
 import { useAuthActions } from "@convex-dev/auth/react";
 
 type AnimeHomeFranchiseMode = "core_only" | "all_relations";
@@ -547,6 +548,7 @@ export default function ProfileSettingsScreen() {
               </View>
             </View>
 
+            <WatchlistPushPreference mode={watchlistAirtimeMode} />
             <View className="gap-3 border-t border-border-default pt-5">
               <Text className="text-xs font-black uppercase tracking-wide text-text-secondary">Account & Privacy</Text>
               <Pressable accessibilityRole="link" onPress={() => Linking.openURL("https://showtrackerapp.netlify.app/privacy.html")} className="min-h-12 justify-center py-2">

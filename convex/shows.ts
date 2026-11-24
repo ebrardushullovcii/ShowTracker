@@ -10,6 +10,7 @@ import { confirmedReleaseFloor } from "../lib/tracking/confirmed-release";
 import { isEpisodeAtOrAfter } from "../lib/tracking/episode-order";
 import { buildWatchedEpisodeRanges } from "../lib/tracking/watched-episode-ranges";
 import { deleteScheduleCacheBucket } from "./lib/scheduleCacheIndex";
+import { refreshWatchlistPush } from "./lib/watchlistPushSchedule";
 import { paginationOptsValidator } from "convex/server";
 import { api, internal } from "./_generated/api";
 import {
@@ -372,10 +373,19 @@ async function upsertFeedProjectionForUserShowDoc(
       return false;
     }
     await ctx.db.patch(existing._id, fields);
+    if (fields.mediaType !== "movie" && (
+      existing.status !== fields.status ||
+      existing.watchingWithOthers !== fields.watchingWithOthers ||
+      existing.autoPausedAt !== fields.autoPausedAt ||
+      (existing.watchedEpisodesCount === 0 && fields.watchedEpisodesCount > 0)
+    )) {
+      await refreshWatchlistPush(ctx, userShow.userId);
+    }
     return true;
   }
 
   await ctx.db.insert("feedProjections", fields);
+  if (fields.mediaType !== "movie") await refreshWatchlistPush(ctx, userShow.userId);
   return true;
 }
 
@@ -3977,6 +3987,9 @@ export const setUserAnimeHomeSettings = mutation({
         userId,
         ...next,
       });
+    }
+    if (next.watchlistAirtimeMode !== current.watchlistAirtimeMode) {
+      await refreshWatchlistPush(ctx, userId);
     }
 
     return {

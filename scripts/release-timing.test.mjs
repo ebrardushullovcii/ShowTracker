@@ -27,7 +27,7 @@ test("fresh confirmation requires exact identity, non-generic name, first future
 function makeDb(users = 55) {
   const show = { _id: "show", mediaType: "tv", tmdbId: 94664, tvmazeId: 52279, title: "Mushoku Tensei", releasedEpisodes: 59, totalEpisodes: 61, lastUpdated: now };
   const other = { showId: "tmdb:tv:999", normalizedTitle: "unrelated", episode: { seasonNumber: 1, episodeNumber: 1 } };
-  const tables = { shows: [show], userShows: [], feedProjections: [], userScheduleEvents: [], scheduleCacheIndex: [], scheduleCache: [
+  const tables = { shows: [show], userShows: [], feedProjections: [], userScheduleEvents: [], watchlistPushSettings: [], scheduleCacheIndex: [], scheduleCache: [
     { _id: "old", date: tomorrow, mediaType: "tv", episodes: JSON.stringify([other, { showId: "tvmaze:52279", episode: { seasonNumber: 3, episodeNumber: 13 } }]) },
   ] };
   for (let i = 0; i < users; i++) {

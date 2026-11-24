@@ -8,6 +8,7 @@ import { confirmedReleaseFloor, isConfirmedReleaseValid } from "../lib/tracking/
 import { readWatchedEpisodeRanges, watchedEpisodeAnchorsFromRanges } from "../lib/tracking/watched-episode-ranges";
 import { ScheduleCacheWriter } from "./lib/scheduleCacheWriter";
 import { writeScheduleCacheBucket, deleteScheduleCacheBucket } from "./lib/scheduleCacheIndex";
+import { refreshWatchlistPush } from "./lib/watchlistPushSchedule";
 
 const IMPORT_BATCH_LIMIT = 200;
 const APPLY_DELTA_LIMIT = 50;
@@ -2112,6 +2113,7 @@ export const replaceUserScheduleProjectionWindow = mutation({
       countRowCount: args.counts.length,
       updatedAt: Date.now(),
     });
+    await refreshWatchlistPush(ctx, args.userId);
 
     return {
       runId: args.runId,
@@ -2232,6 +2234,7 @@ export const applyConfirmedReleasePage = mutation({
             airtimeMs: correction.airTimestamp, sameTrackedShowDayKey: `${routeId}:${newDate}`,
             sourceProvider: "tvmaze", reconciledAt: correction.verifiedAt, updatedAt: now }); writes++;
       }
+      if (changed || matchingEvents.length > 0) await refreshWatchlistPush(ctx, row.userId);
     }
     await ctx.db.patch(show._id, { releasedEpisodes, confirmedRelease: replay ? previous : correction,
       releaseCorrectionCursor: page.isDone ? null : page.continueCursor,
