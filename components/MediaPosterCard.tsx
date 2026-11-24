@@ -2,7 +2,6 @@ import type { Href } from "expo-router";
 import { Link } from "expo-router";
 import {
   Image,
-  Platform,
   Pressable,
   Text,
   View,
@@ -11,9 +10,12 @@ import {
   type ViewStyle,
 } from "react-native";
 import type { NormalizedShow } from "@/lib/api/types";
+import { PosterCardTitle, POSTER_TITLE_LINE_HEIGHT, POSTER_TITLE_LINES } from "@/components/PosterCardTitle";
+import { PosterQuickActions } from "@/components/PosterQuickActions";
 import { Badge } from "@/components/Badge";
 import { PROGRESS_TONE_COLORS } from "@/lib/progress-tone";
 import { toHttpsImageUrl } from "@/lib/image-url";
+import { createShowRouteId } from "@/lib/show-route";
 
 interface MediaPosterCardProps {
   show: NormalizedShow;
@@ -46,28 +48,21 @@ export function MediaPosterCard({
   unwatchedCount,
   stateLabel,
 }: MediaPosterCardProps) {
-  const { width } = useWindowDimensions();
-  const isCompact = Platform.OS !== "web" || width < 640;
-  const isSmallPhone = width < 390;
-  const isFabricEnabled =
-    "NativeFabricUIManager" in globalThis || "__turboModuleProxy" in globalThis;
-  const missingPosterTitleFitProps = isFabricEnabled
-    ? {}
-    : {
-        adjustsFontSizeToFit: true,
-        minimumFontScale: 0.72,
-      };
-  const titleFitProps = isFabricEnabled
-    ? {}
-    : {
-        adjustsFontSizeToFit: true,
-        minimumFontScale: 0.64,
-      };
+  const { fontScale } = useWindowDimensions();
+  const year = show.firstAired?.slice(0, 4) ?? "TBA";
 
-  return (
+  const card = (
     <Link href={href} asChild>
       <Pressable
         accessibilityRole="link"
+        accessibilityLabel={[
+          show.title,
+          mediaTypeLabel[show.mediaType],
+          year,
+          typeof rank === "number" ? `Rank ${rank}` : null,
+          stateLabel,
+          unwatchedCount ? `${unwatchedCount} unwatched` : null,
+        ].filter(Boolean).join(", ")}
         className={`w-36 ${className ?? ""}`.trim()}
         style={({ pressed }) => [
           containerStyle,
@@ -87,15 +82,7 @@ export function MediaPosterCard({
             />
           ) : (
             <View className="h-full w-full items-center justify-center bg-bg-surface px-3">
-              <Text
-                className="text-center text-sm font-semibold text-text-primary"
-                numberOfLines={3}
-                ellipsizeMode="tail"
-                style={isFabricEnabled ? { fontSize: 14, lineHeight: 18 } : undefined}
-                {...missingPosterTitleFitProps}
-              >
-                {show.title}
-              </Text>
+              <PosterCardTitle title={show.title} className="text-center font-semibold text-text-primary" />
             </View>
           )}
 
@@ -144,20 +131,12 @@ export function MediaPosterCard({
           ) : null}
         </View>
 
-        <View
-          className={`${showOverview ? "h-[86px]" : isCompact ? "h-[40px]" : "h-[42px]"} mt-2 gap-0.5 px-0.5`}
-        >
-          <Text
-            className={`${isSmallPhone ? "text-[12px]" : "text-sm"} font-semibold leading-4 text-text-primary`}
-            numberOfLines={1}
-            ellipsizeMode="tail"
-            style={isFabricEnabled ? { fontSize: isSmallPhone ? 12 : 14, lineHeight: 16 } : undefined}
-            {...titleFitProps}
-          >
-            {show.title}
-          </Text>
+        <View className="mt-2 gap-0.5 px-0.5">
+          <View style={{ minHeight: POSTER_TITLE_LINE_HEIGHT * POSTER_TITLE_LINES * fontScale }}>
+            <PosterCardTitle title={show.title} className="font-semibold text-text-primary" />
+          </View>
           <Text className="text-xs leading-4 text-text-secondary" numberOfLines={1}>
-            {show.firstAired?.slice(0, 4) ?? "TBA"}
+            {year}
           </Text>
           {showOverview && show.overview ? (
             <Text className="text-xs leading-relaxed text-text-secondary" numberOfLines={2}>
@@ -167,5 +146,14 @@ export function MediaPosterCard({
         </View>
       </Pressable>
     </Link>
+  );
+
+  return (
+    <PosterQuickActions
+      routeId={createShowRouteId(show)}
+      tracked={stateLabel === undefined ? undefined : Boolean(stateLabel)}
+    >
+      {card}
+    </PosterQuickActions>
   );
 }

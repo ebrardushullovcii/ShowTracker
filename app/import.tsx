@@ -14,6 +14,7 @@ import { useAction, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { AppBackButton } from "@/components/AppBackButton";
 import { PageIntro } from "@/components/PageIntro";
+import { PAGE_SCROLL_CONTENT_STYLE } from "@/constants/layout";
 import { ScreenWrapper } from "@/components/ScreenWrapper";
 import { BrandLoader } from "@/components/BrandLoader";
 import { getAniListMediaById, getAniListMediaByMalId, searchAniList } from "@/lib/api/anilist";
@@ -1179,7 +1180,7 @@ export function ImportScreen() {
       <ScrollView
         showsVerticalScrollIndicator={false}
         className="flex-1"
-        contentContainerStyle={{ paddingBottom: 24 }}
+        contentContainerStyle={PAGE_SCROLL_CONTENT_STYLE}
       >
         <PageIntro
           title="Import"
@@ -1302,7 +1303,7 @@ export function ImportScreen() {
             testID="import-json-input"
             placeholder='Legacy option: paste a TV Time JSON export'
             placeholderTextColor="#52525b"
-            className="mt-3 min-h-[220px] rounded-lg border border-border-default bg-bg-base px-3 py-3 text-sm text-text-primary"
+            className="mt-3 min-h-[220px] rounded-lg border border-border-default bg-bg-base px-3 py-3 text-[14px] text-text-primary"
             textAlignVertical="top"
             autoCapitalize="none"
             autoCorrect={false}

@@ -20,7 +20,7 @@ function getInteractiveStyle({ pressed, hovered, focused }: WebPressableState) {
   return {
     opacity: pressed ? 0.82 : 1,
     transform: [{ scale: pressed ? 0.97 : 1 }],
-    borderColor: hovered || focused ? "rgba(239,68,68,0.72)" : "rgba(255,255,255,0.16)",
+    ...(hovered || focused ? { borderColor: "rgba(239,68,68,0.72)" } : {}),
   };
 }
 
@@ -33,13 +33,15 @@ export function HeaderIconButton({
   iconSize = 21,
   disabled,
 }: HeaderIconButtonProps) {
+  const background = icon === "close" ? "bg-transparent" : "bg-bg-base/80";
+
   return (
     <Pressable
       onPress={onPress}
       disabled={disabled}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
-      className={`h-11 w-11 items-center justify-center rounded-xl border bg-bg-base/80 shadow-lg ${className ?? ""}`.trim()}
+      className={`h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-white/10 ${background} ${className ?? ""}`.trim()}
       style={getInteractiveStyle}
     >
       <Ionicons name={icon} size={iconSize} color={iconColor} />

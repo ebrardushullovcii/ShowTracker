@@ -32,6 +32,7 @@ import type * as shows from "../shows.js";
 import type * as stats from "../stats.js";
 import type * as watchedEpisodeRanges from "../watchedEpisodeRanges.js";
 import type * as watchlistPush from "../watchlistPush.js";
+import type * as watchlistWidget from "../watchlistWidget.js";
 
 import type {
   ApiFromModules,
@@ -64,6 +65,7 @@ declare const fullApi: ApiFromModules<{
   stats: typeof stats;
   watchedEpisodeRanges: typeof watchedEpisodeRanges;
   watchlistPush: typeof watchlistPush;
+  watchlistWidget: typeof watchlistWidget;
 }>;
 
 /**

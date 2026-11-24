@@ -17,8 +17,11 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { Link } from "expo-router";
 import { useConvexAuth, useMutation, useQuery } from "convex/react";
-import { useAuthActions } from "@convex-dev/auth/react";
 import { api } from "@/convex/_generated/api";
+import { PosterCardTitle } from "@/components/PosterCardTitle";
+import { PosterQuickActions } from "@/components/PosterQuickActions";
+import { HeaderIconButton } from "@/components/HeaderIconButton";
+import { PAGE_SCROLL_CONTENT_STYLE } from "@/constants/layout";
 import { ScreenWrapper } from "@/components/ScreenWrapper";
 import { BrandLoader } from "@/components/BrandLoader";
 import { useStableCount } from "@/hooks/use-stable-display-value";
@@ -526,9 +529,7 @@ function PosterRail({
               />
 
               <View className="absolute bottom-0 left-0 right-0 px-2 pb-2">
-                <Text className="text-xs font-semibold text-white" numberOfLines={1}>
-                  {item.title}
-                </Text>
+                <PosterCardTitle title={item.title} className="font-semibold text-white" />
                 {item.meta ? (
                   <Text className="text-[11px] text-text-secondary" numberOfLines={1}>
                     {item.meta}
@@ -550,13 +551,11 @@ function PosterRail({
         }
 
         return (
-          <Link
-            key={item.key}
-            href={{ pathname: "/show/[id]", params: { id: item.routeId } }}
-            asChild
-          >
-            {card}
-          </Link>
+          <PosterQuickActions key={item.key} routeId={item.routeId} tracked>
+            <Link href={{ pathname: "/show/[id]", params: { id: item.routeId } }} asChild>
+              {card}
+            </Link>
+          </PosterQuickActions>
         );
       })}
     </ScrollView>
@@ -564,13 +563,10 @@ function PosterRail({
 }
 
 export default function ProfileScreen() {
-  const { signOut } = useAuthActions();
   const { isAuthenticated } = useConvexAuth();
   const { width } = useWindowDimensions();
   const isDesktop = Platform.OS === "web" && width >= 1024;
 
-  const [isSigningOut, setIsSigningOut] = useState(false);
-  const [signOutError, setSignOutError] = useState<string | null>(null);
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [draftUsername, setDraftUsername] = useState("");
   const [draftBio, setDraftBio] = useState("");
@@ -965,21 +961,6 @@ export default function ProfileScreen() {
     }
   };
 
-  const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
-
-  const handleSignOut = async () => {
-    setSignOutError(null);
-    setIsSigningOut(true);
-    try {
-      await signOut();
-    } catch (error) {
-      console.error("Sign out failed", error);
-      setSignOutError("Could not sign out. Please try again.");
-    } finally {
-      setIsSigningOut(false);
-    }
-  };
-
   if (isInitialLoading) {
     return (
       <ScreenWrapper>
@@ -994,6 +975,7 @@ export default function ProfileScreen() {
     <ScreenWrapper>
       <ScrollView
         className="flex-1"
+        contentContainerStyle={PAGE_SCROLL_CONTENT_STYLE}
         showsVerticalScrollIndicator={false}
         onScroll={onProfileScroll}
         scrollEventThrottle={16}
@@ -1043,21 +1025,6 @@ export default function ProfileScreen() {
                   </View>
                 </Pressable>
               </Link>
-              {isDesktop && (
-                <Pressable
-                  onPress={() => setShowSignOutConfirm(true)}
-                  disabled={!isAuthenticated || isSigningOut}
-                  className="rounded-full border border-primary/50 bg-black/70 px-4 py-2 shadow-lg"
-                  style={{ opacity: !isAuthenticated || isSigningOut ? 0.5 : 1 }}
-                >
-                  <View className="flex-row items-center gap-2">
-                    <Ionicons name="log-out-outline" size={14} color="#ef4444" />
-                    <Text className="text-xs font-bold tracking-wide text-primary">
-                      {isSigningOut ? "..." : "LOGOUT"}
-                    </Text>
-                  </View>
-                </Pressable>
-              )}
             </View>
 
             <View className="absolute bottom-4 left-4 right-4 flex-row items-end justify-between">
@@ -1300,24 +1267,6 @@ export default function ProfileScreen() {
             <BrandLoader compact />
           </View>
         ) : null}
-
-        {!isDesktop && (
-          <View className="mt-8 pb-8">
-            <SectionHeader title="Account" icon="log-out-outline" />
-            <Pressable
-              onPress={() => setShowSignOutConfirm(true)}
-              disabled={!isAuthenticated || isSigningOut}
-              className="flex-row items-center justify-center gap-2 rounded-xl border border-primary/40 bg-primary/10 py-3.5"
-              style={{ opacity: !isAuthenticated || isSigningOut ? 0.5 : 1 }}
-            >
-              <Ionicons name="log-out-outline" size={18} color="#ef4444" />
-              <Text className="font-semibold text-primary">
-                {isSigningOut ? "Signing out..." : "Sign out"}
-              </Text>
-            </Pressable>
-            {signOutError ? <Text className="mt-2 text-sm text-primary">{signOutError}</Text> : null}
-          </View>
-        )}
       </ScrollView>
 
       <Modal
@@ -1326,206 +1275,135 @@ export default function ProfileScreen() {
         animationType="fade"
         onRequestClose={closeProfileEditor}
       >
-        <View className="flex-1 items-center justify-center bg-black/70 px-5 py-8">
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          className="dialog-backdrop"
+        >
           <Pressable
             className="absolute inset-0"
             onPress={closeProfileEditor}
             disabled={isSavingProfile}
           />
 
-          <KeyboardAvoidingView
-            behavior={Platform.OS === "ios" ? "padding" : undefined}
-            className={`w-full ${isDesktop ? "max-w-xl" : ""}`}
-          >
-            <View className="overflow-hidden rounded-xl border-2 border-border-bright bg-bg-surface">
-              <LinearGradient
-                colors={["rgba(239,68,68,0.2)", "rgba(56,189,248,0.06)", "transparent"]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={{ height: 4, width: "100%" }}
+          <View className="dialog-panel max-w-dialog">
+            <View className="dialog-header flex-row items-center gap-3">
+              <HeaderIconButton
+                icon="close"
+                accessibilityLabel="Close profile editor"
+                onPress={closeProfileEditor}
+                disabled={isSavingProfile}
               />
+              <View className="min-w-0 flex-1">
+                <Text className="text-xs font-semibold uppercase tracking-wide text-text-secondary">
+                  Profile
+                </Text>
+                <Text className="text-lg font-black text-text-primary">Edit Details</Text>
+              </View>
+            </View>
 
-              <View className="flex-row items-center justify-between px-4 pb-2 pt-3">
+            <ScrollView
+              className="shrink"
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
+              <View className="gap-3 p-dialog-gutter">
                 <View>
-                  <Text className="text-xs font-semibold uppercase tracking-wide text-text-secondary">
-                    Profile
+                  <Text className="mb-1 text-xs font-semibold uppercase tracking-wide text-text-secondary">
+                    Username
                   </Text>
-                  <Text className="text-lg font-black text-text-primary">Edit Details</Text>
+                  <TextInput
+                    value={draftUsername}
+                    onChangeText={setDraftUsername}
+                    editable={!isSavingProfile}
+                    maxLength={32}
+                    placeholder="Your username"
+                    placeholderTextColor="#52525b"
+                    className="rounded-lg border-2 border-border-default bg-bg-base px-3 py-2.5 text-text-primary"
+                  />
                 </View>
-                <Pressable
-                  onPress={closeProfileEditor}
-                  disabled={isSavingProfile}
-                  className="h-8 w-8 items-center justify-center rounded-full bg-bg-elevated"
-                >
-                  <Ionicons name="close" size={16} color="#a1a1aa" />
-                </Pressable>
-              </View>
 
-              <ScrollView
-                className="max-h-[70vh]"
-                keyboardShouldPersistTaps="handled"
-                showsVerticalScrollIndicator={false}
-              >
-                <View className="gap-3 px-4 pb-4">
-                  <View>
-                    <Text className="mb-1 text-xs font-semibold uppercase tracking-wide text-text-secondary">
-                      Username
+                <View>
+                  <View className="mb-1 flex-row items-center justify-between">
+                    <Text className="text-xs font-semibold uppercase tracking-wide text-text-secondary">
+                      Bio
                     </Text>
-                    <TextInput
-                      value={draftUsername}
-                      onChangeText={setDraftUsername}
-                      editable={!isSavingProfile}
-                      maxLength={32}
-                      placeholder="Your username"
-                      placeholderTextColor="#52525b"
-                      className="rounded-lg border-2 border-border-default bg-bg-base px-3 py-2.5 text-text-primary"
-                    />
-                  </View>
-
-                  <View>
-                    <View className="mb-1 flex-row items-center justify-between">
-                      <Text className="text-xs font-semibold uppercase tracking-wide text-text-secondary">
-                        Bio
-                      </Text>
-                      <Text className="text-[11px] text-text-secondary">
-                        {draftBio.length}/280
-                      </Text>
-                    </View>
-                    <TextInput
-                      value={draftBio}
-                      onChangeText={setDraftBio}
-                      editable={!isSavingProfile}
-                      maxLength={280}
-                      placeholder="Short bio"
-                      placeholderTextColor="#52525b"
-                      multiline
-                      textAlignVertical="top"
-                      className="min-h-[90px] rounded-lg border-2 border-border-default bg-bg-base px-3 py-2.5 text-text-primary"
-                    />
-                  </View>
-
-                  <View>
-                    <Text className="mb-1 text-xs font-semibold uppercase tracking-wide text-text-secondary">
-                      Avatar URL
+                    <Text className="text-[11px] text-text-secondary">
+                      {draftBio.length}/280
                     </Text>
-                    <TextInput
-                      value={draftAvatarUrl}
-                      onChangeText={setDraftAvatarUrl}
-                      editable={!isSavingProfile}
-                      placeholder="https://..."
-                      placeholderTextColor="#52525b"
-                      autoCapitalize="none"
-                      className="rounded-lg border-2 border-border-default bg-bg-base px-3 py-2.5 text-text-primary"
-                    />
                   </View>
-
-                  <View>
-                    <Text className="mb-1 text-xs font-semibold uppercase tracking-wide text-text-secondary">
-                      Banner URL
-                    </Text>
-                    <TextInput
-                      value={draftBannerUrl}
-                      onChangeText={setDraftBannerUrl}
-                      editable={!isSavingProfile}
-                      placeholder="https://..."
-                      placeholderTextColor="#52525b"
-                      autoCapitalize="none"
-                      className="rounded-lg border-2 border-border-default bg-bg-base px-3 py-2.5 text-text-primary"
-                    />
-                  </View>
-
-                  {profileError ? <Text className="text-sm text-primary">{profileError}</Text> : null}
-
-                  <View className="flex-row gap-2 pt-1">
-                    <Pressable
-                      onPress={closeProfileEditor}
-                      disabled={isSavingProfile}
-                      className="flex-1 items-center justify-center rounded-lg border-2 border-border-default bg-bg-elevated py-3"
-                    >
-                      <Text className="text-sm font-bold text-text-primary">Cancel</Text>
-                    </Pressable>
-                    <Pressable
-                      onPress={handleSaveProfile}
-                      disabled={isSavingProfile}
-                      className="flex-1 flex-row items-center justify-center gap-2 rounded-lg border-2 border-primary bg-primary py-3"
-                      style={{ opacity: isSavingProfile ? 0.6 : 1 }}
-                    >
-                      {isSavingProfile ? (
-                        <BrandLoader compact onPrimary />
-                      ) : (
-                        <>
-                          <Ionicons name="checkmark" size={16} color="#fff" />
-                          <Text className="text-sm font-black uppercase tracking-wide text-white">Save</Text>
-                        </>
-                      )}
-                    </Pressable>
-                  </View>
+                  <TextInput
+                    value={draftBio}
+                    onChangeText={setDraftBio}
+                    editable={!isSavingProfile}
+                    maxLength={280}
+                    placeholder="Short bio"
+                    placeholderTextColor="#52525b"
+                    multiline
+                    textAlignVertical="top"
+                    className="min-h-[90px] rounded-lg border-2 border-border-default bg-bg-base px-3 py-2.5 text-text-primary"
+                  />
                 </View>
-              </ScrollView>
-            </View>
-          </KeyboardAvoidingView>
-        </View>
-      </Modal>
 
-      <Modal
-        visible={showSignOutConfirm}
-        transparent
-        animationType="fade"
-        onRequestClose={() => !isSigningOut && setShowSignOutConfirm(false)}
-      >
-        <View className="flex-1 items-center justify-center bg-black/70 px-5">
-          <Pressable
-            className="absolute inset-0"
-            onPress={() => !isSigningOut && setShowSignOutConfirm(false)}
-            disabled={isSigningOut}
-          />
+                <View>
+                  <Text className="mb-1 text-xs font-semibold uppercase tracking-wide text-text-secondary">
+                    Avatar URL
+                  </Text>
+                  <TextInput
+                    value={draftAvatarUrl}
+                    onChangeText={setDraftAvatarUrl}
+                    editable={!isSavingProfile}
+                    placeholder="https://..."
+                    placeholderTextColor="#52525b"
+                    autoCapitalize="none"
+                    className="rounded-lg border-2 border-border-default bg-bg-base px-3 py-2.5 text-text-primary"
+                  />
+                </View>
 
-          <View className={`w-full overflow-hidden rounded-xl border-2 border-border-bright bg-bg-surface ${isDesktop ? "max-w-md" : ""}`}>
-            <LinearGradient
-              colors={["rgba(239,68,68,0.2)", "transparent"]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={{ height: 4, width: "100%" }}
-            />
+                <View>
+                  <Text className="mb-1 text-xs font-semibold uppercase tracking-wide text-text-secondary">
+                    Banner URL
+                  </Text>
+                  <TextInput
+                    value={draftBannerUrl}
+                    onChangeText={setDraftBannerUrl}
+                    editable={!isSavingProfile}
+                    placeholder="https://..."
+                    placeholderTextColor="#52525b"
+                    autoCapitalize="none"
+                    className="rounded-lg border-2 border-border-default bg-bg-base px-3 py-2.5 text-text-primary"
+                  />
+                </View>
 
-            <View className="items-center px-6 py-8">
-              <View className="mb-4 h-16 w-16 items-center justify-center rounded-full bg-primary/10">
-                <Ionicons name="log-out-outline" size={32} color="#ef4444" />
+                {profileError ? <Text className="text-sm text-primary">{profileError}</Text> : null}
+
+                <View className="flex-row gap-2 pt-1">
+                  <Pressable
+                    onPress={closeProfileEditor}
+                    disabled={isSavingProfile}
+                    className="flex-1 items-center justify-center rounded-lg border-2 border-border-default bg-bg-elevated py-3"
+                  >
+                    <Text className="text-sm font-bold text-text-primary">Cancel</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={handleSaveProfile}
+                    disabled={isSavingProfile}
+                    className="flex-1 flex-row items-center justify-center gap-2 rounded-lg border-2 border-primary bg-primary py-3"
+                    style={{ opacity: isSavingProfile ? 0.6 : 1 }}
+                  >
+                    {isSavingProfile ? (
+                      <BrandLoader compact onPrimary />
+                    ) : (
+                      <>
+                        <Ionicons name="checkmark" size={16} color="#fff" />
+                        <Text className="text-sm font-black uppercase tracking-wide text-white">Save</Text>
+                      </>
+                    )}
+                  </Pressable>
+                </View>
               </View>
-
-              <Text className="text-xl font-black text-text-primary">Sign Out?</Text>
-              <Text className="mt-2 text-center text-sm text-text-secondary">
-                Are you sure you want to sign out of your account?
-              </Text>
-
-              {signOutError ? (
-                <Text className="mt-4 text-center text-sm text-primary">{signOutError}</Text>
-              ) : null}
-
-              <View className="mt-6 w-full flex-row gap-3">
-                <Pressable
-                  onPress={() => setShowSignOutConfirm(false)}
-                  disabled={isSigningOut}
-                  className="flex-1 items-center justify-center rounded-lg border-2 border-border-default bg-bg-elevated py-3.5"
-                >
-                  <Text className="text-sm font-bold text-text-primary">Cancel</Text>
-                </Pressable>
-                <Pressable
-                  onPress={handleSignOut}
-                  disabled={isSigningOut}
-                  className="flex-1 items-center justify-center border-2 border-primary bg-primary py-3.5"
-                  style={{ opacity: isSigningOut ? 0.6 : 1 }}
-                >
-                  {isSigningOut ? (
-                    <BrandLoader compact onPrimary />
-                  ) : (
-                    <Text className="text-sm font-black uppercase tracking-wide text-white">Sign Out</Text>
-                  )}
-                </Pressable>
-              </View>
-            </View>
+            </ScrollView>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </ScreenWrapper>
   );

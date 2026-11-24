@@ -12,10 +12,13 @@ import {
 } from "react-native";
 import { Link, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useAction, useConvexAuth, useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { ScreenWrapper } from "@/components/ScreenWrapper";
+import { useSignOut } from "@/components/SignOutProvider";
+import { PAGE_SCROLL_CONTENT_STYLE } from "@/constants/layout";
+import { CardTopGlow } from "@/components/CardTopGlow";
+import { OverlayHeader } from "@/components/OverlayHeader";
 import { BrandLoader } from "@/components/BrandLoader";
 import { WatchlistPushPreference } from "@/components/WatchlistPush";
 import { useAuthActions } from "@convex-dev/auth/react";
@@ -140,7 +143,6 @@ function PreferenceControl({
 
 export default function ProfileSettingsScreen() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const { signOut } = useAuthActions();
   const { isAuthenticated } = useConvexAuth();
   const animeHomeSettings = useQuery(api.shows.getUserAnimeHomeSettings);
@@ -149,6 +151,8 @@ export default function ProfileSettingsScreen() {
   const setUserAnimeHomeSettings = useMutation(api.shows.setUserAnimeHomeSettings);
   const syncTrackedAnimeRelations = useAction(api.shows.syncTrackedAnimeRelations);
   const requestAccountDeletion = useMutation(api.accountDeletion.request);
+  const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
+  const { isSigningOut, requestSignOut, signOutError } = useSignOut();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
@@ -168,6 +172,10 @@ export default function ProfileSettingsScreen() {
 
   const animeHomeFranchiseMode =
     (animeHomeSettings?.relationMode as AnimeHomeFranchiseMode | undefined) ?? "core_only";
+
+  const closeSignOut = () => {
+    if (!isSigningOut) setShowSignOutConfirm(false);
+  };
 
   const deleteAccount = async () => {
     if (deleteConfirmation !== "DELETE" || isDeletingAccount) return;
@@ -451,41 +459,39 @@ export default function ProfileSettingsScreen() {
   );
 
   return (
-    <ScreenWrapper contentClassName="px-0 py-0" edges={[]}>
-      <View
-        className="flex-1 bg-bg-base"
-        style={{
-          // A transparent stack screen can extend into the system bars on iOS.
-          paddingTop: insets.top,
-          paddingBottom: insets.bottom,
-          paddingLeft: insets.left,
-          paddingRight: insets.right,
-        }}
-      >
-        <View className="border-b border-border-default bg-bg-base px-5 py-5">
-          <View className="flex-row items-start gap-4">
-            <View className="min-w-0 flex-1">
-              <Text className="text-xs font-bold uppercase tracking-wide text-text-muted">Settings</Text>
-              <Text className="mt-1 text-2xl font-black text-text-primary">Profile Controls</Text>
-              <Text className="mt-1 text-sm text-text-secondary">
-                Tracking maintenance and default behavior.
-              </Text>
-            </View>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Close settings"
-              onPress={close}
-              className="h-11 w-11 items-center justify-center rounded-md border border-border-default bg-bg-surface"
-            >
-              <Ionicons name="close" size={18} color="#e4e4e7" />
-            </Pressable>
-          </View>
-          {notice ? <Text className="mt-3 text-xs text-success">{notice}</Text> : null}
-          {error ? <Text className="mt-3 text-xs text-primary">{error}</Text> : null}
-        </View>
+    <SafeAreaView className="flex-1 bg-bg-base">
+      <View className="flex-1">
+        <OverlayHeader title="Profile Controls" onClose={close} closeAccessibilityLabel="Close settings" />
 
-        <ScrollView className="flex-1" contentContainerStyle={{ padding: 20, paddingBottom: 32 }}>
+        {notice || error ? (
+          <View className="gap-1 border-b border-border-default px-page-gutter py-2">
+            {notice ? <Text accessibilityRole="alert" className="text-xs text-success">{notice}</Text> : null}
+            {error ? <Text accessibilityRole="alert" className="text-xs text-primary">{error}</Text> : null}
+          </View>
+        ) : null}
+
+        <ScrollView
+          className="flex-1"
+          contentContainerClassName="px-page-gutter pt-5"
+          contentContainerStyle={PAGE_SCROLL_CONTENT_STYLE}
+        >
           <View className="gap-5">
+            <View className="gap-3">
+              <Text className="text-xs font-black uppercase tracking-wide text-text-secondary">Account</Text>
+              <Pressable
+                accessibilityRole="button"
+                disabled={!isAuthenticated || isSigningOut}
+                onPress={() => setShowSignOutConfirm(true)}
+                className="min-h-11 flex-row items-center gap-2 rounded-lg border border-border-default bg-bg-surface px-3 py-2"
+              >
+                <Ionicons name="log-out-outline" size={18} color="#a1a1aa" />
+                <Text className="flex-1 text-sm font-bold text-text-primary">Sign out</Text>
+              </Pressable>
+              {signOutError ? (
+                <Text accessibilityRole="alert" className="text-sm text-primary">{signOutError}</Text>
+              ) : null}
+            </View>
+
             <View className="gap-3">
               <View className="border-b border-border-default pb-3">
                 <Text className="text-xs font-black uppercase tracking-wide text-text-secondary">
@@ -560,27 +566,81 @@ export default function ProfileSettingsScreen() {
             </View>
 
             <WatchlistPushPreference mode={watchlistAirtimeMode} />
+
             <View className="gap-3 border-t border-border-default pt-5">
-              <Text className="text-xs font-black uppercase tracking-wide text-text-secondary">Account & Privacy</Text>
-              <Pressable accessibilityRole="link" onPress={() => Linking.openURL("https://showtrackerapp.netlify.app/privacy.html")} className="min-h-12 justify-center py-2">
-                <Text className="text-sm font-bold text-text-primary">Privacy policy</Text>
-              </Pressable>
-              <Pressable accessibilityRole="link" onPress={() => Linking.openURL("https://showtrackerapp.netlify.app/support.html")} className="min-h-12 justify-center py-2">
-                <Text className="text-sm font-bold text-text-primary">Support</Text>
-              </Pressable>
+              <Text className="text-xs font-black uppercase tracking-wide text-text-secondary">Help & Privacy</Text>
+              <View className="rounded-lg border border-border-default bg-bg-surface">
+                <Pressable
+                  accessibilityRole="link"
+                  onPress={() => Linking.openURL("https://showtrackerapp.netlify.app/privacy.html")}
+                  className="min-h-11 flex-row items-center justify-between gap-2 border-b border-border-default px-3 py-2"
+                >
+                  <Text className="flex-1 text-sm font-bold text-text-primary">Privacy policy</Text>
+                  <Ionicons name="open-outline" size={16} color="#a1a1aa" />
+                </Pressable>
+                <Pressable
+                  accessibilityRole="link"
+                  onPress={() => Linking.openURL("https://showtrackerapp.netlify.app/support.html")}
+                  className="min-h-11 flex-row items-center justify-between gap-2 px-3 py-2"
+                >
+                  <Text className="flex-1 text-sm font-bold text-text-primary">Support</Text>
+                  <Ionicons name="open-outline" size={16} color="#a1a1aa" />
+                </Pressable>
+              </View>
+            </View>
+
+            <View className="gap-3 border-t border-border-default pt-5">
+              <Text className="text-xs font-black uppercase tracking-wide text-text-secondary">Account deletion</Text>
               <Pressable accessibilityRole="button" disabled={!isAuthenticated} onPress={() => { setDeleteConfirmation(""); setDeleteError(null); setShowDeleteConfirm(true); }} className="rounded-lg border border-primary/40 bg-primary/10 px-4 py-3">
                 <Text className="text-center text-sm font-bold text-primary">Delete account</Text>
               </Pressable>
             </View>
           </View>
         </ScrollView>
+        <Modal visible={showSignOutConfirm} transparent animationType="fade" onRequestClose={closeSignOut}>
+          <View className="dialog-backdrop">
+            <Pressable className="absolute inset-0" focusable={false} onPress={closeSignOut} />
+            <View className="dialog-panel max-w-confirmation">
+              <CardTopGlow />
+              <View className="items-center px-dialog-gutter py-8">
+                <View className="mb-4 h-16 w-16 items-center justify-center rounded-full bg-primary/10">
+                  <Ionicons name="log-out-outline" size={32} color="#ef4444" />
+                </View>
+                <Text className="text-xl font-black text-text-primary">Sign Out?</Text>
+                <Text className="mt-2 text-center text-sm text-text-secondary">
+                  Are you sure you want to sign out of your account?
+                </Text>
+                <View className="mt-6 w-full flex-row gap-3">
+                  <Pressable
+                    accessibilityRole="button"
+                    disabled={isSigningOut}
+                    onPress={closeSignOut}
+                    className="flex-1 items-center justify-center rounded-lg border-2 border-border-default bg-bg-elevated py-3.5"
+                  >
+                    <Text className="text-sm font-bold text-text-primary">Cancel</Text>
+                  </Pressable>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Sign out"
+                    disabled={isSigningOut}
+                    onPress={requestSignOut}
+                    className="flex-1 items-center justify-center border-2 border-primary bg-primary py-3.5"
+                  >
+                    <Text className="text-sm font-black uppercase tracking-wide text-white">Sign Out</Text>
+                  </Pressable>
+                </View>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
         <Modal visible={showDeleteConfirm} transparent animationType="fade" onRequestClose={() => { if (!isDeletingAccount) setShowDeleteConfirm(false); }}>
-          <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} className="flex-1 items-center justify-center bg-black/80 px-6">
-            <View className="w-full max-w-md gap-4 rounded-xl border border-border-default bg-bg-surface p-5">
+          <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} className="dialog-backdrop">
+            <View className="dialog-panel max-w-confirmation gap-4 p-dialog-gutter">
               <Text className="text-xl font-black text-text-primary">Delete your account?</Text>
               <Text className="text-sm leading-5 text-text-secondary">This permanently removes your account, library, watched history, favorites, lists, preferences and shared links. It cannot be undone.</Text>
               <Text className="text-sm leading-5 text-text-secondary">You will be signed out now. Data removal normally completes within 24 hours. Type DELETE to confirm.</Text>
-              <TextInput accessibilityLabel="Type DELETE to confirm account deletion" value={deleteConfirmation} onChangeText={setDeleteConfirmation} autoCapitalize="characters" autoCorrect={false} editable={!isDeletingAccount} placeholder="DELETE" placeholderTextColor="#71717a" className="min-h-12 rounded-lg border border-border-default bg-bg-base px-3 text-base text-text-primary" />
+              <TextInput accessibilityLabel="Type DELETE to confirm account deletion" value={deleteConfirmation} onChangeText={setDeleteConfirmation} autoCapitalize="characters" autoCorrect={false} editable={!isDeletingAccount} placeholder="DELETE" placeholderTextColor="#71717a" className="min-h-12 rounded-lg border border-border-default bg-bg-base px-3 text-[16px] text-text-primary" />
               {deleteError ? <Text accessibilityRole="alert" className="text-sm text-primary">{deleteError}</Text> : null}
               <View className="flex-row gap-3">
                 <Pressable accessibilityRole="button" disabled={isDeletingAccount} onPress={() => setShowDeleteConfirm(false)} className="min-h-12 flex-1 items-center justify-center rounded-lg border border-border-default">
@@ -594,6 +654,6 @@ export default function ProfileSettingsScreen() {
           </KeyboardAvoidingView>
         </Modal>
       </View>
-    </ScreenWrapper>
+    </SafeAreaView>
   );
 }

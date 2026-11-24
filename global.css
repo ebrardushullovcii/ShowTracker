@@ -2,6 +2,24 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer components {
+  .dialog-backdrop {
+    @apply flex-1 items-center justify-center bg-black/70 px-dialog-gutter py-6;
+  }
+
+  .overlay-outline {
+    @apply overflow-hidden rounded-2xl border border-white/10;
+  }
+
+  .dialog-panel {
+    @apply overlay-outline max-h-full w-full bg-bg-surface;
+  }
+
+  .dialog-header {
+    @apply border-b border-border-default px-dialog-gutter pb-3 pt-dialog-gutter;
+  }
+}
+
 /* Midnight Pulse - base styles */
 :root {
   --gradient-brand: linear-gradient(135deg, #ef4444, #f97316);

@@ -19,6 +19,7 @@ import { PageIntro } from "@/components/PageIntro";
 import { ShareButton } from "@/components/sharing/ShareButton";
 import { ShareModal } from "@/components/sharing/ShareModal";
 import { toShareShow, type ShareCollection } from "@/lib/sharing/types";
+import { PAGE_SCROLL_CONTENT_STYLE } from "@/constants/layout";
 import { ScreenWrapper } from "@/components/ScreenWrapper";
 import { BrandLoader } from "@/components/BrandLoader";
 import { SearchShowsModal } from "@/components/SearchShowsModal";
@@ -200,7 +201,7 @@ function EditModeHeader({
         <TextInput
           value={editedName}
           onChangeText={setEditedName}
-          className="text-lg font-semibold text-text-primary bg-bg-base border border-border-default rounded-xl px-4 py-3"
+          className="text-[18px] font-semibold text-text-primary bg-bg-base border border-border-default rounded-xl px-4 py-3"
           placeholder="Enter list name"
           placeholderTextColor="#71717a"
         />
@@ -212,7 +213,7 @@ function EditModeHeader({
         <TextInput
           value={editedDescription}
           onChangeText={setEditedDescription}
-          className="text-sm text-text-primary bg-bg-base border border-border-default rounded-xl px-4 py-3 min-h-[80px]"
+          className="text-[14px] text-text-primary bg-bg-base border border-border-default rounded-xl px-4 py-3 min-h-[80px]"
           placeholder="Add a description (optional)"
           placeholderTextColor="#71717a"
           multiline
@@ -541,7 +542,7 @@ export function ListDetailScreen() {
           )}
           contentContainerStyle={{
             paddingHorizontal: containerPadding,
-            paddingBottom: containerPadding,
+            ...PAGE_SCROLL_CONTENT_STYLE,
           }}
         />
       ) : (
@@ -589,7 +590,7 @@ export function ListDetailScreen() {
           }}
           contentContainerStyle={{
             paddingHorizontal: containerPadding,
-            paddingBottom: containerPadding,
+            ...PAGE_SCROLL_CONTENT_STYLE,
           }}
         />
       )}
@@ -604,7 +605,7 @@ export function ListDetailScreen() {
           }
         }}
       >
-        <View className="flex-1 items-center justify-center bg-black/70 px-5">
+        <View className="dialog-backdrop">
           <Pressable
             className="absolute inset-0"
             disabled={isConfirmingAction}
@@ -615,12 +616,8 @@ export function ListDetailScreen() {
             }}
           />
 
-          <View
-            className={`w-full overflow-hidden rounded-xl border-2 border-border-bright bg-bg-surface ${
-              isDesktop ? "max-w-md" : ""
-            }`}
-          >
-            <View className="items-center px-6 py-8">
+          <View className="dialog-panel max-w-confirmation">
+            <View className="items-center p-dialog-gutter">
               <View className="mb-4 h-16 w-16 items-center justify-center rounded-full bg-primary/10">
                 <Ionicons name="trash-outline" size={32} color="#ef4444" />
               </View>

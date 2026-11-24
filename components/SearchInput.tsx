@@ -34,7 +34,7 @@ export function SearchInput({
         onChangeText={onChangeText}
         placeholder={placeholder}
         placeholderTextColor="#52525b"
-        className="flex-1 text-base text-text-primary"
+        className="min-h-8 min-w-0 flex-1 p-0 text-[16px] text-text-primary"
         returnKeyType="search"
         autoFocus={autoFocus}
       />

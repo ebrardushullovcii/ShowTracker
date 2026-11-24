@@ -122,15 +122,19 @@ const UI_READY_CUES = [
 ];
 
 function getRouteReadyCues(route) {
+  if (route.startsWith("/show/")) {
+    return ["overview"];
+  }
+
   switch (route) {
     case "/":
       return ["watch board", "tv + anime", "loading your dashboard"];
     case "/discover":
-      return ["discover"];
+      return ["trending content", "no discovery data available"];
     case "/search":
       return ["search"];
     case "/profile":
-      return ["preferences", "current status", "appearance"];
+      return ["current streak", "best streak"];
     default:
       return UI_READY_CUES;
   }

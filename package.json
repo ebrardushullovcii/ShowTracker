@@ -45,6 +45,7 @@
     "ios": "expo run:ios"
   },
   "dependencies": {
+    "@bacons/apple-targets": "^5.0.0",
     "@convex-dev/auth": "^0.0.96",
     "@expo/vector-icons": "^15.0.3",
     "@shopify/flash-list": "2.0.2",
@@ -58,6 +59,7 @@
     "expo-document-picker": "~14.0.8",
     "expo-file-system": "~19.0.23",
     "expo-font": "~14.0.11",
+    "expo-haptics": "~15.0.8",
     "expo-image": "~3.0.11",
     "expo-linear-gradient": "~15.0.8",
     "expo-linking": "~8.0.11",

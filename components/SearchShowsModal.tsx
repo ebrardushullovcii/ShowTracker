@@ -1,3 +1,4 @@
+import { HeaderIconButton } from "@/components/HeaderIconButton";
 import { useMemo, useState, useCallback, useEffect, useRef } from "react";
 import {
   Image,
@@ -245,14 +246,15 @@ export function SearchShowsModal({ visible, onClose, listId, existingShowIds }: 
       animationType="fade"
       onRequestClose={handleClose}
     >
-      <View className="flex-1 items-center justify-center bg-black/70 px-5 py-8">
+      <View className="dialog-backdrop">
         <Pressable className="absolute inset-0" onPress={handleClose} />
 
-        <View className="h-[80vh] w-full max-w-lg overflow-hidden rounded-3xl border border-border-bright bg-bg-surface">
+        <View className="dialog-panel h-[80vh] max-w-dialog">
           {/* Header */}
-          <View className="border-b border-border-default px-4 pb-3 pt-4">
-            <View className="flex-row items-center justify-between">
-              <View>
+          <View className="dialog-header">
+            <View className="flex-row items-center gap-3">
+              <HeaderIconButton icon="close" accessibilityLabel="Close show picker" onPress={handleClose} />
+              <View className="min-w-0 flex-1">
                 <Text className="text-xs font-semibold uppercase tracking-wide text-text-secondary">
                   Add Shows
                 </Text>
@@ -260,12 +262,6 @@ export function SearchShowsModal({ visible, onClose, listId, existingShowIds }: 
                   From your watchlist
                 </Text>
               </View>
-              <Pressable
-                onPress={handleClose}
-                className="h-8 w-8 items-center justify-center rounded-full bg-bg-elevated"
-              >
-                <Ionicons name="close" size={16} color="#a1a1aa" />
-              </Pressable>
             </View>
 
             {/* Search Input */}
@@ -309,12 +305,12 @@ export function SearchShowsModal({ visible, onClose, listId, existingShowIds }: 
           {/* Results */}
           <View className="flex-1">
             {isLoading ? (
-              <View className="flex-1 items-center justify-center px-6">
+              <View className="flex-1 items-center justify-center px-dialog-gutter">
                 <BrandLoader />
                 <Text className="mt-3 text-sm text-text-secondary">Loading your watchlist...</Text>
               </View>
             ) : watchlist?.length === 0 ? (
-              <View className="flex-1 items-center justify-center px-6">
+              <View className="flex-1 items-center justify-center px-dialog-gutter">
                 <Text className="text-4xl mb-3">📺</Text>
                 <Text className="text-base font-semibold text-text-primary">Your watchlist is empty</Text>
                 <Text className="mt-1 text-sm text-text-secondary text-center">
@@ -322,7 +318,7 @@ export function SearchShowsModal({ visible, onClose, listId, existingShowIds }: 
                 </Text>
               </View>
             ) : filteredShows.length === 0 ? (
-              <View className="flex-1 items-center justify-center px-6">
+              <View className="flex-1 items-center justify-center px-dialog-gutter">
                 <Text className="text-4xl mb-3">😕</Text>
                 <Text className="text-base font-semibold text-text-primary">No matches found</Text>
                 <Text className="mt-1 text-sm text-text-secondary text-center">

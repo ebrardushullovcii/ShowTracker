@@ -1,7 +1,7 @@
 import type { PropsWithChildren } from "react";
 import { Platform, Pressable, View, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { HeaderIconButton } from "@/components/HeaderIconButton";
+import { OverlayHeader } from "@/components/OverlayHeader";
 import { DESKTOP_SIDEBAR_BREAKPOINT } from "@/constants/navigation";
 
 type OverlayDetailFrameProps = PropsWithChildren<{
@@ -17,9 +17,6 @@ export function OverlayDetailFrame({
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const isDesktop = Platform.OS === "web" && width >= DESKTOP_SIDEBAR_BREAKPOINT;
-  // On phones the sheet starts below the status bar / Dynamic Island, where iOS
-  // turns taps into scroll-to-top and the close button could never be pressed.
-  const sheetTopInset = isDesktop ? 0 : insets.top;
 
   return (
     <View className="flex-1 bg-black/65">
@@ -34,27 +31,25 @@ export function OverlayDetailFrame({
 
       <View
         className={
-          isDesktop
-            ? "ml-auto h-full w-full max-w-5xl overflow-hidden border-l-2 border-border-bright bg-bg-base shadow-2xl"
-            : "flex-1 overflow-hidden rounded-t-[22px] border-t-2 border-border-bright bg-bg-base shadow-2xl"
+          `overlay-outline bg-bg-base ${isDesktop
+            ? "ml-auto h-full w-full max-w-5xl shadow-2xl"
+            : "mx-1 mb-1 flex-1"}`
         }
         style={
           isDesktop
             ? { shadowColor: "#000", shadowOpacity: 0.45, shadowRadius: 36 }
-            : { marginTop: sheetTopInset, shadowColor: "#000", shadowOpacity: 0.35, shadowRadius: 28 }
+            : { marginTop: insets.top + 8, paddingLeft: insets.left, paddingRight: insets.right }
         }
       >
         {isDesktop ? (
           children
         ) : (
           <>
-            <View className="z-30 h-14 justify-center border-b border-border-default bg-bg-base/95 px-3">
-              <HeaderIconButton
-                icon="close"
-                accessibilityLabel={closeAccessibilityLabel}
-                onPress={onClose}
-              />
-            </View>
+            <OverlayHeader
+              title="Details"
+              onClose={onClose}
+              closeAccessibilityLabel={closeAccessibilityLabel}
+            />
             <View className="flex-1 overflow-hidden">{children}</View>
           </>
         )}

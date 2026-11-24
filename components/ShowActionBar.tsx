@@ -151,7 +151,7 @@ export function ShowActionBar({
         <View className="flex-1">
           <Pressable className="absolute inset-0" focusable={false} onPress={closeMore} />
           <View
-            className="absolute w-52 overflow-hidden rounded-lg border border-border-bright bg-bg-base shadow-2xl"
+            className="absolute w-52 overflow-hidden rounded-lg border border-white/10 bg-bg-base shadow-2xl"
             style={{
               left: Math.max(16, moreButtonFrame.x + moreButtonFrame.width - 208),
               top: moreButtonFrame.y + moreButtonFrame.height + 4,

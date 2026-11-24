@@ -1,5 +1,6 @@
 import { Image, Platform, Text, View, useWindowDimensions } from "react-native";
 import type { ReactNode } from "react";
+import { LinearGradient } from "expo-linear-gradient";
 import { toHttpsImageUrl } from "@/lib/image-url";
 
 interface HeroSectionProps {
@@ -27,7 +28,7 @@ export function HeroSection({
   return (
     <View
       className={`relative w-full overflow-hidden ${className ?? ""}`.trim()}
-      style={{ height: heroHeight }}
+      style={{ minHeight: heroHeight }}
     >
       {/* Backdrop image */}
       {heroImageUrl ? (
@@ -40,15 +41,20 @@ export function HeroSection({
         <View className="absolute inset-0 bg-gray-800" />
       )}
 
-      {/* Content overlay */}
-      <View className="absolute left-0 right-0 bottom-0 p-6 justify-end">
+      <View className="mt-auto p-6">
+        <LinearGradient
+          pointerEvents="none"
+          colors={["rgba(0,0,0,0)", "rgba(0,0,0,0.72)", "rgba(0,0,0,0.94)"]}
+          locations={[0, 0.2, 1]}
+          style={{ position: "absolute", top: -32, right: 0, bottom: 0, left: 0 }}
+        />
         {title ? (
           <Text className="text-white text-[28px] font-extrabold tracking-[-0.5px]" numberOfLines={2}>
             {title}
           </Text>
         ) : null}
         {subtitle ? (
-          <Text className="text-gray-300 text-sm mt-1.5 leading-5" numberOfLines={2}>
+          <Text className="mt-1.5 text-sm leading-5 text-zinc-200" numberOfLines={2}>
             {subtitle}
           </Text>
         ) : null}

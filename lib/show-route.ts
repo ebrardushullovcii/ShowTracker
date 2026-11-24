@@ -1,4 +1,4 @@
-import type { MediaType, NormalizedShow } from "@/lib/api/types";
+import type { MediaType, NormalizedShow } from "./api/types";
 
 type NumericShowSource = "tmdb" | "anilist" | "jikan" | "tvmaze";
 type StringShowSource = "imdb";

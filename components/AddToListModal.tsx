@@ -1,3 +1,4 @@
+import { HeaderIconButton } from "@/components/HeaderIconButton";
 import { useState } from "react";
 import {
   Modal,
@@ -111,13 +112,14 @@ export function AddToListModal({ visible, onClose, show }: AddToListModalProps) 
       animationType="fade"
       onRequestClose={onClose}
     >
-      <View className="flex-1 items-center justify-center bg-black/70 px-5 py-8">
+      <View className="dialog-backdrop">
         <Pressable className="absolute inset-0" onPress={onClose} />
 
-        <View className="w-full max-w-md overflow-hidden rounded-3xl border border-border-bright bg-bg-surface">
+        <View className="dialog-panel max-w-dialog">
           {/* Header */}
-          <View className="flex-row items-center justify-between border-b border-border-default px-4 pb-3 pt-4">
-            <View>
+          <View className="dialog-header flex-row items-center gap-3">
+            <HeaderIconButton icon="close" accessibilityLabel="Close add to list" onPress={onClose} />
+            <View className="min-w-0 flex-1">
               <Text className="text-xs font-semibold uppercase tracking-wide text-text-secondary">
                 Add to List
               </Text>
@@ -125,12 +127,6 @@ export function AddToListModal({ visible, onClose, show }: AddToListModalProps) 
                 {show?.title || "Select a list"}
               </Text>
             </View>
-            <Pressable
-              onPress={onClose}
-              className="h-8 w-8 items-center justify-center rounded-full bg-bg-elevated"
-            >
-              <Ionicons name="close" size={16} color="#a1a1aa" />
-            </Pressable>
           </View>
 
           {/* Content */}
@@ -138,7 +134,7 @@ export function AddToListModal({ visible, onClose, show }: AddToListModalProps) 
             className="max-h-[60vh]"
             showsVerticalScrollIndicator={false}
           >
-            <View className="gap-2 p-4">
+            <View className="gap-2 p-dialog-gutter">
               {isLoading ? (
                 <View className="items-center py-8">
                   <BrandLoader compact />
