@@ -73,6 +73,7 @@ export function FilterBar<T extends string>({
     <View className={`relative ${className ?? ""}`.trim()} onLayout={handleLayout}>
       <ScrollView
         horizontal
+        keyboardShouldPersistTaps="handled"
         showsHorizontalScrollIndicator={false}
         onContentSizeChange={(width) => setContentWidth(width)}
         onScroll={showScrollAffordance ? handleScroll : undefined}

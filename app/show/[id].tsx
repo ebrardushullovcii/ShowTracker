@@ -4292,7 +4292,6 @@ export function ShowDetailScreen() {
                 isFavorite={isFavorite}
                 canAddToList
                 isBusy={!canTrackShow || isStatusMenuBusy}
-                isCompact={!isDesktop}
                 isTogglingFavorite={isTogglingFavorite}
                 isRepairingTracking={isRepairingTracking}
                 onToggleWatchlist={() => {
