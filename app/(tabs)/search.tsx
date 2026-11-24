@@ -426,6 +426,7 @@ export function SearchScreen() {
         {/* Filter Buttons */}
         <ScrollView
           horizontal
+          keyboardShouldPersistTaps="handled"
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={{
             flexGrow: 1,
@@ -538,7 +539,7 @@ export function SearchScreen() {
         {openDropdown === "year" && yearOptions.length > 0 && (
           <View className="mb-4 rounded-xl border border-border-default bg-bg-surface p-3">
             <Text className="mb-2 text-xs font-bold uppercase text-text-secondary">Select Year</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            <ScrollView horizontal keyboardShouldPersistTaps="handled" showsHorizontalScrollIndicator={false}>
               <View className="flex-row gap-2">
                 <Pressable
                   onPress={() => { setSelectedYear(""); setOpenDropdown(null); }}
@@ -679,6 +680,7 @@ export function SearchScreen() {
         key={`search-grid-${isWeb ? columns : 2}`}
         numColumns={isWeb ? columns : 2}
         keyExtractor={(item) => `${item.id}-${item.mediaType}`}
+        keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
         ItemSeparatorComponent={() => <View style={{ height: GRID_GAP }} />}
         contentContainerStyle={{ paddingBottom: 8 }}

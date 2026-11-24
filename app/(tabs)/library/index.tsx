@@ -598,6 +598,7 @@ export default function LibraryScreen() {
             data={visibleItems}
             keyExtractor={getItemKey}
             renderItem={renderLibraryItem}
+            keyboardShouldPersistTaps="handled"
             numColumns={columns}
             ItemSeparatorComponent={() => <View style={{ height: GRID_GAP }} />}
             onEndReached={() => {
@@ -729,7 +730,7 @@ export default function LibraryScreen() {
                   {openDropdown === "year" && (
                     <View className="mt-2 rounded-xl border border-border-default bg-bg-surface p-3">
                       <Text className="mb-2 text-xs font-bold uppercase text-text-secondary">Select Year</Text>
-                      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                      <ScrollView horizontal keyboardShouldPersistTaps="handled" showsHorizontalScrollIndicator={false}>
                         <View className="flex-row gap-2">
                           <Pressable
                             onPress={() => { setSelectedYear(""); setOpenDropdown(null); }}

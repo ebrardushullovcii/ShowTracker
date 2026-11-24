@@ -334,6 +334,7 @@ export function SearchShowsModal({ visible, onClose, listId, existingShowIds }: 
                 data={paginatedShows}
                 keyExtractor={(item) => item.id}
                 renderItem={renderItem}
+                keyboardShouldPersistTaps="handled"
                 ListFooterComponent={renderFooter}
                 onEndReached={handleLoadMore}
                 onEndReachedThreshold={0.35}
