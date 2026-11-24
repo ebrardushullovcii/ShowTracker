@@ -10,7 +10,6 @@ type ShowActionBarProps = {
   isFavorite: boolean;
   canAddToList: boolean;
   isBusy: boolean;
-  isCompact?: boolean;
   isTogglingFavorite?: boolean;
   isRepairingTracking?: boolean;
   onToggleWatchlist: () => void;
@@ -74,7 +73,6 @@ export function ShowActionBar({
   isFavorite,
   canAddToList,
   isBusy,
-  isCompact = false,
   isTogglingFavorite = false,
   isRepairingTracking = false,
   onToggleWatchlist,
@@ -112,7 +110,7 @@ export function ShowActionBar({
           <Badge
             label={isTracked ? statusLabel : "Add to watchlist"}
             variant={isTracked ? "accent" : "default"}
-            className={isCompact ? "max-w-[104px]" : "max-w-[150px]"}
+            className="max-w-44"
           />
           <Ionicons name={isTracked ? "chevron-down" : "add"} size={14} color="#a1a1aa" />
         </Pressable>
