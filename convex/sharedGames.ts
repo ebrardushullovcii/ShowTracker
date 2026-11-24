@@ -1,6 +1,7 @@
+import { mutation } from "./lib/approvedFunctions";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { ConvexError, v } from "convex/values";
-import { internalMutation, mutation, query } from "./_generated/server";
+import { internalMutation, query } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { sharedGameFields } from "./shareValidators";
 import { normalizeSharedGame } from "../lib/sharing/share-link";

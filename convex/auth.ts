@@ -5,16 +5,20 @@ import { mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { ACCESS_TOKEN_DURATION_MS } from "./lib/authPolicy";
 import type { MutationCtx } from "./_generated/server";
+import { approvalStatus, initializeAccountAccess, isOwner } from "./lib/accessPolicy";
 
 export const { auth, signIn, signOut, store } = convexAuth({
   providers: [Password, Anonymous],
+  callbacks: { afterUserCreatedOrUpdated: initializeAccountAccess },
   jwt: {
     durationMs: ACCESS_TOKEN_DURATION_MS,
     async customClaims(ctx, { userId }) {
       const deletion = await (ctx.db as MutationCtx["db"]).query("accountDeletions")
         .withIndex("by_user", (q) => q.eq("userId", userId)).first();
       if (deletion) throw new Error("Account deletion is in progress.");
-      return {};
+      const user = await (ctx.db as MutationCtx["db"]).get(userId);
+      if (!user) throw new Error("Account is unavailable.");
+      return { showtrackerApproval: isOwner(userId) ? "approved" : approvalStatus(user) };
     },
   },
 });

@@ -4,7 +4,7 @@
     "description": "Track shows, anime, and movies across web and mobile.",
     "slug": "showtracker",
     "scheme": "showtracker",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "backgroundColor": "#0b0f1a",
@@ -27,7 +27,7 @@
     "ios": {
       "bundleIdentifier": "com.ebrardushullovci.showtracker",
       "appleTeamId": "Q482PG5S54",
-      "buildNumber": "3",
+      "buildNumber": "4",
       "supportsTablet": false,
       "icon": "./assets/icon.png",
       "backgroundColor": "#0b0f1a",

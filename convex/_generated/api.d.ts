@@ -8,11 +8,14 @@
  * @module
  */
 
+import type * as access from "../access.js";
 import type * as accountDeletion from "../accountDeletion.js";
 import type * as auth from "../auth.js";
 import type * as confirmedReleaseValidator from "../confirmedReleaseValidator.js";
 import type * as crons from "../crons.js";
 import type * as http from "../http.js";
+import type * as lib_accessPolicy from "../lib/accessPolicy.js";
+import type * as lib_approvedFunctions from "../lib/approvedFunctions.js";
 import type * as lib_authPolicy from "../lib/authPolicy.js";
 import type * as lib_homeScheduleSignalPolicy from "../lib/homeScheduleSignalPolicy.js";
 import type * as lib_scheduleCacheIndex from "../lib/scheduleCacheIndex.js";
@@ -35,11 +38,14 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  access: typeof access;
   accountDeletion: typeof accountDeletion;
   auth: typeof auth;
   confirmedReleaseValidator: typeof confirmedReleaseValidator;
   crons: typeof crons;
   http: typeof http;
+  "lib/accessPolicy": typeof lib_accessPolicy;
+  "lib/approvedFunctions": typeof lib_approvedFunctions;
   "lib/authPolicy": typeof lib_authPolicy;
   "lib/homeScheduleSignalPolicy": typeof lib_homeScheduleSignalPolicy;
   "lib/scheduleCacheIndex": typeof lib_scheduleCacheIndex;

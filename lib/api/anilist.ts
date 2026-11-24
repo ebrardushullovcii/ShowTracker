@@ -1,4 +1,5 @@
 import { getCached, setCached } from "./cache";
+import { getProviderAccessToken } from "./auth-token";
 import {
   EMPTY_SHOW_CREDITS,
   normalizeAniListCredits,
@@ -265,6 +266,8 @@ async function request<T>(
           headers: {
             "Content-Type": "application/json",
             Accept: "application/json",
+            ...(requestUrl === `${convexSiteUrl}/anilist` && getProviderAccessToken()
+              ? { Authorization: `Bearer ${getProviderAccessToken()}` } : {}),
           },
           body: JSON.stringify({ query, variables }),
           signal: options?.signal,

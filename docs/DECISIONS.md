@@ -159,6 +159,9 @@ Most frequently relevant:
 - [ADR-0077](ADR-0077-schedule-database-io.md): lossless watched-coordinate summaries and shared schedule-bucket batching reduce recurring database I/O while preserving release matching.
 - [ADR-0079](ADR-0079-auth-sessions-across-deployment-moves.md): retain browser refresh-token access across backend moves and explicitly restore share-expiry schedules.
 
+- [ADR-0080](ADR-0080-account-deletion.md): bounded account deletion removes owned data and authentication records while preserving shared catalogues.
+- [ADR-0081](ADR-0081-account-approval.md): new accounts require owner approval; existing accounts retain access and the owner dashboard uses server-configured user IDs.
+
 ## Guidance policy
 
 - [ADR-0061](ADR-0061-minimal-agent-guidance.md): retain decisions, remove process scaffolding, and document decisions rather than every patch.
