@@ -1,4 +1,4 @@
-import { DialogBackdrop } from "@/components/DialogBackdrop";
+import { DialogBackdrop, useDrawerBottomInset } from "@/components/DialogBackdrop";
 import { applyConfirmedRelease } from "@/lib/tracking/confirmed-release";
 import { isEpisodeAtOrAfter, parseEpisodeKey } from "@/lib/tracking/episode-order";
 import { findUnloadedRailSeason } from "@/lib/tracking/rail-season";
@@ -874,6 +874,7 @@ export function ShowDetailScreen() {
   const { isAuthenticated } = useConvexAuth();
   const isDesktop = Platform.OS === "web" && width >= 1024;
   const isOverlayDetailRoute = router.canDismiss();
+  const drawerBottomInset = useDrawerBottomInset(isOverlayDetailRoute);
   const closeOverlayDetailRoute = useCallback(() => {
     if (router.canDismiss()) {
       router.dismiss();
@@ -4830,6 +4831,7 @@ export function ShowDetailScreen() {
           )}
           </View>
         </View>
+        {drawerBottomInset > 0 ? <View style={{ height: drawerBottomInset }} /> : null}
       </ScrollView>
 
       <Modal

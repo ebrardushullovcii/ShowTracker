@@ -6,6 +6,12 @@ import { DESKTOP_SIDEBAR_BREAKPOINT } from "@/constants/navigation";
 const DIALOG_MARGIN = 16;
 const DRAWER_TOP_GAP = 24;
 
+export function useDrawerBottomInset(enabled = true) {
+  const { width } = useWindowDimensions();
+  const { bottom } = useSafeAreaInsets();
+  return enabled && width < DESKTOP_SIDEBAR_BREAKPOINT ? bottom : 0;
+}
+
 export function DialogBackdrop({
   children,
   avoidKeyboard,
@@ -57,10 +63,10 @@ export function TallDialog({
         accessibilityViewIsModal
         onAccessibilityEscape={onClose}
         className={isDrawer
-          ? "w-full flex-1 overflow-hidden rounded-t-[32px] border border-b-0 border-white/10 bg-bg-base"
+          ? "w-full flex-1 overflow-hidden rounded-t-[32px] bg-bg-base"
           : "overlay-outline w-full flex-1 bg-bg-base"}
         style={isDrawer
-          ? { paddingLeft: insets.left, paddingRight: insets.right, paddingBottom: insets.bottom }
+          ? { paddingLeft: insets.left, paddingRight: insets.right }
           : { maxWidth }}
       >
         {children}

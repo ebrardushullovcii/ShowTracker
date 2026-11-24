@@ -1,4 +1,4 @@
-import { DialogBackdrop, TallDialog } from "@/components/DialogBackdrop";
+import { DialogBackdrop, TallDialog, useDrawerBottomInset } from "@/components/DialogBackdrop";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Linking,
@@ -140,6 +140,7 @@ function PreferenceControl({
 }
 
 export default function ProfileSettingsScreen() {
+  const drawerBottomInset = useDrawerBottomInset();
   const router = useRouter();
   const { signOut } = useAuthActions();
   const { isAuthenticated } = useConvexAuth();
@@ -594,6 +595,7 @@ export default function ProfileSettingsScreen() {
               </Pressable>
             </View>
           </View>
+          {drawerBottomInset > 0 ? <View style={{ height: drawerBottomInset }} /> : null}
         </ScrollView>
         <Modal visible={showSignOutConfirm} transparent animationType="fade" onRequestClose={closeSignOut}>
           <DialogBackdrop>
