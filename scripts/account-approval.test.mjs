@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { approveUser, listUsers, setRegistrationPolicy } from "../convex/access.ts";
-import { initializeAccountAccess, requireApproved } from "../convex/lib/accessPolicy.ts";
+import { initializeAccountAccess, registrationRequiresApproval, requireApproved } from "../convex/lib/accessPolicy.ts";
 import * as shows from "../convex/shows.ts";
 import * as schedule from "../convex/schedule.ts";
 import * as stats from "../convex/stats.ts";
@@ -79,6 +79,29 @@ test("existing accounts remain approved; new registrations obey policy and canno
   await initializeAccountAccess(f.context(null), { userId: "pending", existingUserId: null, provider: { id: "password" } });
   assert.equal(f.rows.get("pending").approvalStatus, "pending");
   await assert.rejects(initializeAccountAccess(f.context(null), { userId: "pending", existingUserId: null, provider: { id: "anonymous" } }), /require approval/);
+});
+
+test("open rollout default keeps old clients working until the owner enables approval", async () => {
+  const previousDefault = process.env.SHOWTRACKER_REQUIRE_APPROVAL_BY_DEFAULT;
+  const previousOwner = process.env.SHOWTRACKER_ADMIN_USER_IDS;
+  process.env.SHOWTRACKER_REQUIRE_APPROVAL_BY_DEFAULT = "false";
+  process.env.SHOWTRACKER_ADMIN_USER_IDS = "owner";
+  try {
+    const f = fixture();
+    const owner = f.context("owner", "approved");
+    assert.equal(await registrationRequiresApproval(owner), false);
+    await initializeAccountAccess(owner, { userId: "existing", existingUserId: null, provider: { id: "anonymous" } });
+    assert.equal(f.rows.get("existing").approvalStatus, "approved");
+
+    await setRegistrationPolicy._handler(owner, { requireApproval: true });
+    assert.equal(await registrationRequiresApproval(owner), true);
+    await assert.rejects(initializeAccountAccess(owner, { userId: "pending", existingUserId: null, provider: { id: "anonymous" } }), /require approval/);
+  } finally {
+    if (previousDefault === undefined) delete process.env.SHOWTRACKER_REQUIRE_APPROVAL_BY_DEFAULT;
+    else process.env.SHOWTRACKER_REQUIRE_APPROVAL_BY_DEFAULT = previousDefault;
+    if (previousOwner === undefined) delete process.env.SHOWTRACKER_ADMIN_USER_IDS;
+    else process.env.SHOWTRACKER_ADMIN_USER_IDS = previousOwner;
+  }
 });
 
 test("only trusted owner IDs can see users, approve accounts or change registration", async () => {

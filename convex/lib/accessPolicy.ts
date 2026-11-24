@@ -16,7 +16,8 @@ export function approvalStatus(user: Doc<"users">) {
 export async function registrationRequiresApproval(ctx: QueryCtx | MutationCtx) {
   const settings = await ctx.db.query("registrationSettings")
     .withIndex("by_key", (q) => q.eq("key", "registration")).unique();
-  return settings?.requireApproval ?? true;
+  const defaultRequiresApproval = process.env.SHOWTRACKER_REQUIRE_APPROVAL_BY_DEFAULT !== "false";
+  return settings?.requireApproval ?? defaultRequiresApproval;
 }
 
 // The callback runs inside account creation's transaction. Rejecting an anonymous

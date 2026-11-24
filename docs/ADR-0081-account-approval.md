@@ -8,8 +8,10 @@ registrations to automatic approval; existing pending requests remain pending.
 
 Pending users receive an authenticated session so they can see their status,
 sign out, or delete their account. The app withholds private screens and provider
-hooks until approval. Public app-data functions and the AniList HTTP proxy also
-enforce approval before doing work. New anonymous sign-in is disabled while
+hooks until approval. Public app-data functions enforce approval before doing
+work. The AniList HTTP proxy checks approval for requests with a token and
+requires a token while registration is restricted. Older web clients can still
+use the proxy during open registration. New anonymous sign-in is disabled while
 approval is required; existing guest sessions remain valid. Public shared-game
 snapshots retain their token-based access. Token-protected schedule maintenance
 and all internal jobs retain their existing behavior.
@@ -27,8 +29,11 @@ owner permissions. Configure the intended deployment's owner ID through the
 Convex environment before publishing the dashboard. User lists are paginated,
 with an index for pending requests; there is no polling, new server or database.
 
-Backend and client must ship together so the signup notice, waiting screen and
-authenticated provider proxy agree with the policy. Development previews use a
+Ship the backend and dashboard with open registration while the first iPhone
+update is in review. Set `SHOWTRACKER_REQUIRE_APPROVAL_BY_DEFAULT=false` on
+production before deployment. Once the updated client is available, the owner
+can enable approval from the dashboard. A saved registration policy overrides
+the deployment default. Development previews use a
 separate Convex deployment and token namespace. Production rollout keeps the
 existing auth storage namespace (ADR-0079), and pending users keep the account
 deletion flow (ADR-0080). Approval does not change provider licensing obligations.

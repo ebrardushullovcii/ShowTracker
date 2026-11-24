@@ -26,10 +26,15 @@ export const current = query({
   },
 });
 
-export const registrationPolicy = query({
+const registrationPolicyDefinition = {
   args: {}, returns: v.object({ requireApproval: v.boolean() }),
-  handler: async (ctx) => ({ requireApproval: await registrationRequiresApproval(ctx) }),
-});
+  handler: async (ctx: Parameters<typeof registrationRequiresApproval>[0]) => ({
+    requireApproval: await registrationRequiresApproval(ctx),
+  }),
+};
+
+export const registrationPolicy = query(registrationPolicyDefinition);
+export const getRegistrationPolicy = internalQuery(registrationPolicyDefinition);
 
 export const getApprovalStatus = internalQuery({
   args: { userId: v.id("users") }, returns: v.union(statusValidator, v.null()),

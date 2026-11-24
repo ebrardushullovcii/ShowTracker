@@ -1,4 +1,5 @@
 import { httpRouter } from "convex/server";
+import { internal } from "./_generated/api";
 import { httpAction } from "./_generated/server";
 import { auth } from "./auth";
 import { requireApproved } from "./lib/accessPolicy";
@@ -131,7 +132,12 @@ http.route({
     }
 
     try {
-      await requireApproved(ctx);
+      // Older web clients send no authorization header. Keep their catalogue
+      // working during open registration, then require approval for every request.
+      if (request.headers.has("Authorization") ||
+        (await ctx.runQuery(internal.access.getRegistrationPolicy, {})).requireApproval) {
+        await requireApproved(ctx);
+      }
     } catch {
       return Response.json({ error: "Approved account required." }, { status: 403, headers: corsHeaders });
     }
