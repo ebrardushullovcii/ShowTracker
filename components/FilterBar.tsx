@@ -56,7 +56,7 @@ export function FilterBar<T extends string>({
   const [viewportWidth, setViewportWidth] = useState(0);
   const [contentWidth, setContentWidth] = useState(0);
   const [scrollX, setScrollX] = useState(0);
-  const hasOverflow = contentWidth > viewportWidth + 4;
+  const hasOverflow = viewportWidth > 0 && contentWidth > viewportWidth + 4;
   const showLeftCue = showScrollAffordance && hasOverflow && scrollX > 6;
   const showRightCue =
     showScrollAffordance && hasOverflow && scrollX < contentWidth - viewportWidth - 6;
@@ -65,7 +65,7 @@ export function FilterBar<T extends string>({
     setViewportWidth(event.nativeEvent.layout.width);
   };
 
-  const handleScrollEnd = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+  const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     setScrollX(event.nativeEvent.contentOffset.x);
   };
 
@@ -75,16 +75,21 @@ export function FilterBar<T extends string>({
         horizontal
         showsHorizontalScrollIndicator={false}
         onContentSizeChange={(width) => setContentWidth(width)}
-        onScrollEndDrag={handleScrollEnd}
-        onMomentumScrollEnd={handleScrollEnd}
+        onScroll={showScrollAffordance ? handleScroll : undefined}
+        scrollEventThrottle={32}
         contentContainerStyle={{
-          gap: 8,
           flexGrow: 1,
-          justifyContent: align === "center" ? "center" : "flex-start",
           paddingRight: align === "center" ? 0 : 6,
         }}
       >
-        <View className={`flex-row items-center gap-2 ${contentClassName ?? ""}`.trim()}>
+        <View
+          className={`flex-row items-center gap-2 ${contentClassName ?? ""}`.trim()}
+          style={{
+            flexGrow: 1,
+            flexShrink: 0,
+            justifyContent: align === "center" ? "center" : "flex-start",
+          }}
+        >
           {leadingLabel ? (
             <Text className="mr-1 text-[10px] font-black uppercase tracking-wide text-text-muted">
               {leadingLabel}
@@ -143,7 +148,10 @@ export function FilterBar<T extends string>({
           colors={["#09090b", "rgba(9,9,11,0)"]}
           start={{ x: 0, y: 0.5 }}
           end={{ x: 1, y: 0.5 }}
-          className="absolute bottom-0 left-0 top-0 w-12 justify-center pl-1"
+          style={{
+            position: "absolute", top: 0, bottom: 0, left: 0, width: 28,
+            justifyContent: "center", paddingLeft: 2,
+          }}
         >
           <Ionicons name="chevron-back" size={16} color="#d4d4d8" />
         </LinearGradient>
@@ -154,7 +162,10 @@ export function FilterBar<T extends string>({
           colors={["rgba(9,9,11,0)", "#09090b"]}
           start={{ x: 0, y: 0.5 }}
           end={{ x: 1, y: 0.5 }}
-          className="absolute bottom-0 right-0 top-0 w-14 items-end justify-center pr-1"
+          style={{
+            position: "absolute", top: 0, bottom: 0, right: 0, width: 28,
+            justifyContent: "center", alignItems: "flex-end", paddingRight: 2,
+          }}
         >
           <Ionicons name="chevron-forward" size={16} color="#d4d4d8" />
         </LinearGradient>
