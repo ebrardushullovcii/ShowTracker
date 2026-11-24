@@ -4,7 +4,7 @@
     "description": "Track shows, anime, and movies across web and mobile.",
     "slug": "showtracker",
     "scheme": "showtracker",
-    "version": "0.1.1",
+    "version": "0.1.2",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "backgroundColor": "#0b0f1a",
@@ -28,10 +28,20 @@
     "ios": {
       "bundleIdentifier": "com.ebrardushullovci.showtracker",
       "appleTeamId": "Q482PG5S54",
-      "buildNumber": "4",
+      "buildNumber": "5",
       "supportsTablet": false,
       "icon": "./assets/icon.png",
       "backgroundColor": "#0b0f1a",
+      "privacyManifests": {
+        "NSPrivacyCollectedDataTypes": [
+          {
+            "NSPrivacyCollectedDataType": "NSPrivacyCollectedDataTypeDeviceID",
+            "NSPrivacyCollectedDataTypeLinked": true,
+            "NSPrivacyCollectedDataTypeTracking": false,
+            "NSPrivacyCollectedDataTypePurposes": ["NSPrivacyCollectedDataTypePurposeAppFunctionality"]
+          }
+        ]
+      },
       "config": {
         "usesNonExemptEncryption": false
       }
