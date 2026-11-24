@@ -1,5 +1,6 @@
 import { applyConfirmedRelease } from "@/lib/tracking/confirmed-release";
 import { isEpisodeAtOrAfter, parseEpisodeKey } from "@/lib/tracking/episode-order";
+import { findUnloadedRailSeason } from "@/lib/tracking/rail-season";
 import {
   useCallback,
   useEffect,
@@ -727,10 +728,6 @@ function getEpisodePositionKey(episode: NormalizedEpisode) {
   return `${episode.seasonNumber}:${episode.episodeNumber}`;
 }
 
-function getRailSeasonLoadKey(seasonNumber: number, reason: "previous" | "next" | "anchor") {
-  return `${seasonNumber}:${reason}`;
-}
-
 const episodeDateFormatter = new Intl.DateTimeFormat("en-US", {
   month: "short",
   day: "numeric",
@@ -1367,7 +1364,7 @@ export function ShowDetailScreen() {
       if (trackingArgs === "skip" || !getWatchedEpisodesForSeasonAction || !isInWatchlist) {
         return;
       }
-      const inFlightKey = getRailSeasonLoadKey(seasonNumber, "anchor");
+      const inFlightKey = `watched:${seasonNumber}`;
       if (seasonWatchedKeysRef.current[seasonNumber]) return;
       if (loadingSeasonsRef.current.has(seasonNumber)) return;
       if (inFlightSeasonsRef.current.has(inFlightKey)) return;
@@ -1748,7 +1745,7 @@ export function ShowDetailScreen() {
   );
 
   const resolveSeasonEpisodes = useCallback(async (season: NormalizedSeason) => {
-    if (season.episodes?.length) return season.episodes;
+    if (season.episodes !== undefined) return season.episodes;
     if (!parsedId || parsedId.source !== "tmdb" || parsedId.mediaType !== "tv") {
       return season.episodes ?? [];
     }
@@ -1766,10 +1763,13 @@ export function ShowDetailScreen() {
         season.seasonNumber
       );
       const normalizedSeason = normalizeTmdbSeason(seasonDetails);
-      normalizedSeason.episodes = normalizedSeason.episodes?.map(episode => applyConfirmedRelease(episode, confirmedRelease));
+      if (normalizedSeason.episodes === undefined) {
+        throw new Error("Season response is missing episodes.");
+      }
       const mergedSeason: NormalizedSeason = {
         ...season,
         ...normalizedSeason,
+        episodes: normalizedSeason.episodes.map((episode) => applyConfirmedRelease(episode, confirmedRelease)),
         episodeCount:
           normalizedSeason.episodeCount ??
           season.episodeCount ??
@@ -4050,27 +4050,8 @@ export function ShowDetailScreen() {
         return null;
       }
 
-      const sortedSeasons = [...seasons].sort((a, b) => a.seasonNumber - b.seasonNumber);
-      if (direction === "previous") {
-        const firstLoadedSeason = railLoadedSeasonRange.first;
-        if (firstLoadedSeason === null) return null;
-        return (
-          [...sortedSeasons]
-            .reverse()
-            .find(
-              (season) =>
-                season.seasonNumber < firstLoadedSeason && !season.episodes?.length
-            ) ?? null
-        );
-      }
-
-      const lastLoadedSeason = railLoadedSeasonRange.last;
-      if (lastLoadedSeason === null) return null;
-      return (
-        sortedSeasons.find(
-          (season) => season.seasonNumber > lastLoadedSeason && !season.episodes?.length
-        ) ?? null
-      );
+      const boundary = direction === "previous" ? railLoadedSeasonRange.first : railLoadedSeasonRange.last;
+      return boundary === null ? null : findUnloadedRailSeason(seasons, boundary, direction);
     },
     [parsedId?.source, railLoadedSeasonRange.first, railLoadedSeasonRange.last, seasons, show]
   );
@@ -4078,8 +4059,8 @@ export function ShowDetailScreen() {
   const loadAdjacentRailSeason = useCallback(
     async (direction: "previous" | "next") => {
       const season = getAdjacentRailSeason(direction);
-      if (!season) return;
-      const inFlightKey = getRailSeasonLoadKey(season.seasonNumber, direction);
+      if (!season || seasonErrors[season.seasonNumber] || seasonLoading[season.seasonNumber]) return;
+      const inFlightKey = "rail:adjacent";
       if (inFlightSeasonsRef.current.has(inFlightKey)) {
         return;
       }
@@ -4096,7 +4077,7 @@ export function ShowDetailScreen() {
         setIsRailLoadingMore(false);
       }
     },
-    [getAdjacentRailSeason, loadWatchedKeysForSeason, resolveSeasonEpisodes]
+    [getAdjacentRailSeason, loadWatchedKeysForSeason, resolveSeasonEpisodes, seasonErrors, seasonLoading]
   );
 
   const canLoadPreviousRail = getAdjacentRailSeason("previous") !== null;
