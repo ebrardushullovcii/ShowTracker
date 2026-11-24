@@ -65,7 +65,11 @@ npx eas-cli build --platform ios --profile production
 npx eas-cli submit --platform ios --profile production
 ```
 
-Increment `expo.ios.buildNumber` before uploading another build. Uploading makes a build available to TestFlight after Apple processes it; public App Store release requires a separate review submission.
+Expo increments the iOS build number for both release and TestFlight builds. Set the public version in `app.json` when preparing a new release.
+
+To deploy a beta, open **Actions → Deploy to TestFlight → Run workflow** on `main`. The workflow uses the existing ShowTracker signing profile stored in Expo. Its `testflight` GitHub environment holds `EXPO_TOKEN`, the `ASC_TESTFLIGHT_KEY_ID` variable, and `ASC_TESTFLIGHT_PRIVATE_KEY` for a ShowTracker-scoped individual Apple API key. Until the Apple key is configured, the workflow makes a signed build and shows its link in the run summary.
+
+Apple processes uploads before they appear in TestFlight. Public App Store release uses a separate review submission.
 
 ## Checks
 

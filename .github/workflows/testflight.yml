@@ -1,0 +1,84 @@
+name: Deploy to TestFlight
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: showtracker-testflight
+  cancel-in-progress: false
+
+jobs:
+  testflight:
+    if: github.ref == 'refs/heads/main' && contains(fromJSON('["99851772", "108461578"]'), github.actor_id)
+    runs-on: xcode-27
+    environment: testflight
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Check out main
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build and sign the iOS app
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          if [[ -z "$EXPO_TOKEN" ]]; then
+            echo '::error::Set EXPO_TOKEN in the testflight environment before running this workflow.'
+            exit 1
+          fi
+          build_info="$RUNNER_TEMP/showtracker-build.json"
+          npx --yes eas-cli@27.10.0 build --platform ios --profile testflight \
+            --non-interactive --wait --json > "$build_info"
+          build_id=$(jq -er --arg sha "$GITHUB_SHA" '
+            select(length == 1) | .[0] |
+            select(.status == "FINISHED" and .gitCommitHash == $sha and .platform == "IOS") |
+            .id
+          ' "$build_info")
+          printf 'Signed build: https://expo.dev/accounts/ebrardushullovci/projects/showtracker/builds/%s\n' \
+            "$build_id" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload to TestFlight
+        env:
+          ASC_KEY_ID: ${{ vars.ASC_TESTFLIGHT_KEY_ID }}
+          ASC_PRIVATE_KEY: ${{ secrets.ASC_TESTFLIGHT_PRIVATE_KEY }}
+        run: |
+          if [[ -z "$ASC_KEY_ID" && -z "$ASC_PRIVATE_KEY" ]]; then
+            echo 'Upload is pending a ShowTracker-only App Store Connect key.' >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          if [[ -z "$ASC_KEY_ID" || -z "$ASC_PRIVATE_KEY" ]]; then
+            echo '::error::Configure both ASC_TESTFLIGHT_KEY_ID and ASC_TESTFLIGHT_PRIVATE_KEY.'
+            exit 1
+          fi
+
+          umask 077
+          upload_dir=$(mktemp -d "$RUNNER_TEMP/showtracker-upload.XXXXXX")
+          trap 'rm -rf "$upload_dir"' EXIT
+          printf '%s\n' "$ASC_PRIVATE_KEY" > "$upload_dir/apple.p8"
+          unset ASC_PRIVATE_KEY
+          build_url=$(jq -er '.[0].artifacts.buildUrl' "$RUNNER_TEMP/showtracker-build.json")
+          curl --silent --fail --location --retry 2 "$build_url" -o "$upload_dir/ShowTracker.ipa"
+          unzip -p "$upload_dir/ShowTracker.ipa" 'Payload/ShowTracker.app/Info.plist' > "$upload_dir/Info.plist"
+          bundle_id=$(plutil -extract CFBundleIdentifier raw "$upload_dir/Info.plist")
+          if [[ "$bundle_id" != 'com.ebrardushullovci.showtracker' ]]; then
+            echo '::error::The archive does not contain the ShowTracker bundle.'
+            exit 1
+          fi
+          xcrun altool --upload-app -f "$upload_dir/ShowTracker.ipa" --type ios \
+            --api-key "$ASC_KEY_ID" --api-key-subject user --p8-file-path "$upload_dir/apple.p8"
+          echo 'Uploaded to App Store Connect for TestFlight processing.' >> "$GITHUB_STEP_SUMMARY"

@@ -1,20 +1,28 @@
 {
   "cli": {
     "version": ">= 16.0.0",
-    "appVersionSource": "local"
+    "appVersionSource": "remote"
   },
   "build": {
     "production": {
       "distribution": "store",
       "environment": "production",
       "ios": {
+        "autoIncrement": true,
         "credentialsSource": "local",
         "image": "macos-sequoia-15.6-xcode-26.0"
+      }
+    },
+    "testflight": {
+      "extends": "production",
+      "ios": {
+        "credentialsSource": "remote"
       }
     },
     "simulator": {
       "extends": "production",
       "ios": {
+        "autoIncrement": false,
         "simulator": true
       }
     }
