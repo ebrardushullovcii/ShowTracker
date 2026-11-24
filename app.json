@@ -23,15 +23,31 @@
       "expo-secure-store",
       "expo-notifications",
       "expo-asset",
-      "expo-font"
+      "expo-font",
+      "@bacons/apple-targets"
     ],
     "ios": {
       "bundleIdentifier": "com.ebrardushullovci.showtracker",
       "appleTeamId": "Q482PG5S54",
       "supportsTablet": false,
       "icon": "./assets/icon.png",
-      "backgroundColor": "#0b0f1a",
+      "userInterfaceStyle": "dark",
+      "backgroundColor": "#09090b",
+      "splash": {
+        "image": "./assets/launch-mark.png",
+        "resizeMode": "contain",
+        "backgroundColor": "#09090b"
+      },
+      "entitlements": {
+        "com.apple.security.application-groups": ["group.com.ebrardushullovci.showtracker"]
+      },
       "privacyManifests": {
+        "NSPrivacyAccessedAPITypes": [
+          {
+            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryUserDefaults",
+            "NSPrivacyAccessedAPITypeReasons": ["1C8F.1"]
+          }
+        ],
         "NSPrivacyCollectedDataTypes": [
           {
             "NSPrivacyCollectedDataType": "NSPrivacyCollectedDataTypeDeviceID",

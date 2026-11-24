@@ -4,20 +4,22 @@ import { usePathname, useRouter } from "expo-router";
 import { useConvexAuth, useQuery } from "convex/react";
 import { Platform } from "react-native";
 import { api } from "@/convex/_generated/api";
+import { useSignOut } from "@/components/SignOutProvider";
 import { AccountApprovalScreen } from "./AccountApprovalScreen";
 
 export function AuthGate({ children }: PropsWithChildren) {
   const { isAuthenticated, isLoading } = useConvexAuth();
+  const { isSigningOut } = useSignOut();
   const pathname = usePathname();
   const router = useRouter();
-  const access = useQuery(api.access.current, isAuthenticated ? {} : "skip");
+  const access = useQuery(api.access.current, isAuthenticated && !isSigningOut ? {} : "skip");
   const isAuthRoute = pathname === "/login" || pathname === "/register";
   const isLandingRoute = pathname === "/" || pathname === "/lp" || pathname === "/lp/landing";
   const isShareRoute = pathname.startsWith("/share/");
   const isPublicRoute = isAuthRoute || isShareRoute || pathname === "/admin" || (Platform.OS === "web" && isLandingRoute);
 
   useEffect(() => {
-    if (isLoading) {
+    if (isLoading || isSigningOut) {
       return;
     }
 
@@ -38,9 +40,9 @@ export function AuthGate({ children }: PropsWithChildren) {
     if (isAuthenticated && isAuthRoute) {
       router.replace("/home");
     }
-  }, [isAuthenticated, isLoading, isAuthRoute, isLandingRoute, isPublicRoute, router]);
+  }, [isAuthenticated, isLoading, isAuthRoute, isLandingRoute, isPublicRoute, isSigningOut, router]);
 
-  if (isLoading || (!isAuthenticated && !isPublicRoute) || (isAuthenticated && access === undefined && !isShareRoute)) {
+  if (isSigningOut || isLoading || (!isAuthenticated && !isPublicRoute) || (isAuthenticated && access === undefined && !isShareRoute)) {
     return <></>;
   }
 

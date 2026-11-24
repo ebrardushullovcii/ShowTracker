@@ -1,12 +1,14 @@
 import "@/global.css";
 import { Stack, usePathname } from "expo-router";
 import { StatusBar } from "expo-status-bar";
+import { ClearWatchlistWidget } from "@/components/WatchlistWidgetSnapshot";
 import { LogBox, Platform, View, useWindowDimensions } from "react-native";
 import { ConvexAuthProvider, useAuthToken } from "@convex-dev/auth/react";
 import { useEffect, type PropsWithChildren } from "react";
 import { useConvexAuth, useQuery } from "convex/react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
+import { SignOutProvider, useSignOut } from "@/components/SignOutProvider";
 import { AuthGate } from "@/components/AuthGate";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { Sidebar } from "@/components/Sidebar";
@@ -25,9 +27,21 @@ function renderGatedScreen({ children }: PropsWithChildren) {
   return <AuthGate>{children}</AuthGate>;
 }
 
+const SHELL_PATHS = new Set([
+  "/home",
+  "/discover",
+  "/recommendations",
+  "/search",
+  "/library",
+  "/profile",
+  "/profile/settings",
+  "/import",
+]);
+
 function RootLayoutContent() {
-  const { isAuthenticated } = useConvexAuth();
-  const access = useQuery(api.access.current, isAuthenticated ? {} : "skip");
+  const { isAuthenticated, isLoading } = useConvexAuth();
+  const { isSigningOut } = useSignOut();
+  const access = useQuery(api.access.current, isAuthenticated && !isSigningOut ? {} : "skip");
   const token = useAuthToken();
   useEffect(() => {
     setProviderAccessToken(token);
@@ -37,21 +51,15 @@ function RootLayoutContent() {
   const isDesktop = Platform.OS === "web" && width >= DESKTOP_SIDEBAR_BREAKPOINT;
   const pathname = usePathname();
   const isShellPath =
-    pathname === "/home" ||
-    pathname === "/discover" ||
-    pathname === "/recommendations" ||
-    pathname === "/search" ||
-    pathname === "/library" ||
-    pathname === "/profile" ||
-    pathname === "/profile/settings" ||
-    pathname === "/import" ||
-    pathname.startsWith("/list/") ||
-    pathname.startsWith("/show/");
+    SHELL_PATHS.has(pathname) || pathname.startsWith("/list/") || pathname.startsWith("/show/");
   const shouldShowDesktopSidebar =
     isDesktop && isShellPath && access?.status === "approved";
+  const clearWatchlistWidget =
+    isSigningOut || (!isLoading && !isAuthenticated) || (access !== undefined && access?.status !== "approved");
 
   return (
     <View className="flex-1 flex-row" style={{ backgroundColor: "#09090b" }}>
+      <ClearWatchlistWidget clear={clearWatchlistWidget} />
       {shouldShowDesktopSidebar ? <Sidebar /> : null}
       <View className="flex-1 min-w-0">
         <WatchlistPushProvider canReceive={access?.status === "approved"}>
@@ -63,16 +71,20 @@ function RootLayoutContent() {
                 gestureEnabled: true,
                 fullScreenGestureEnabled: false,
                 animationMatchesGesture: Platform.OS === "ios",
+                contentStyle: Platform.OS === "ios" ? { backgroundColor: "#09090b" } : undefined,
               }}
             >
-              <Stack.Screen name="(tabs)" />
-              <Stack.Screen
-                name="show/[id]"
-                options={{
-                  presentation: "transparentModal",
-                  contentStyle: { backgroundColor: "transparent" },
-                }}
-              />
+              <Stack.Protected guard={!isSigningOut}>
+                <Stack.Screen name="(tabs)" />
+                <Stack.Screen name="find" />
+                <Stack.Screen
+                  name="show/[id]"
+                  options={{
+                    presentation: "transparentModal",
+                    contentStyle: { backgroundColor: "transparent" },
+                  }}
+                />
+              </Stack.Protected>
               <Stack.Screen
                 name="profile/settings"
                 options={{
@@ -102,7 +114,9 @@ export function RootLayout() {
       >
         <ThemeProvider>
           <StatusBar style="light" />
-          <RootLayoutContent />
+          <SignOutProvider>
+            <RootLayoutContent />
+          </SignOutProvider>
         </ThemeProvider>
       </ConvexAuthProvider>
     </GestureHandlerRootView>

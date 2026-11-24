@@ -48,8 +48,8 @@ export function ShowHeader({
 
   return (
     <View
-      style={{ height: heroHeight }}
-      className="relative overflow-hidden rounded-xl border-2 border-border-default"
+      style={{ minHeight: heroHeight }}
+      className="relative mx-page-gutter mt-3 overflow-hidden rounded-xl border-2 border-border-default web:lg:mx-0 web:lg:mt-0"
     >
       {/* Backdrop Image */}
       {backdropUrl ? (
@@ -103,7 +103,7 @@ export function ShowHeader({
 
       {/* Content */}
       <View
-        className={`absolute bottom-0 left-0 right-0 ${isDesktop ? "px-8 pb-8" : "px-5 pb-6"}`}
+        className={`mt-auto pt-20 ${isDesktop ? "px-8 pb-8" : "px-page-gutter pb-6"}`}
       >
         <View className={`${isDesktop ? "flex-row items-end gap-6" : ""}`}>
           {/* Poster - Only visible on desktop, floating over the hero */}
@@ -129,7 +129,7 @@ export function ShowHeader({
           )}
 
           {/* Title Section */}
-          <View className="flex-1">
+          <View className="min-w-0 web:lg:flex-1">
             {/* Badges */}
             <View className="mb-3 flex-row flex-wrap items-center gap-2">
               <Badge
@@ -158,7 +158,6 @@ export function ShowHeader({
                 textShadowOffset: { width: 0, height: 2 },
                 textShadowRadius: 20,
               }}
-              numberOfLines={2}
             >
               {title}
             </Text>

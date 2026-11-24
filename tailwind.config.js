@@ -5,6 +5,14 @@ module.exports = {
   darkMode: "class",
   theme: {
     extend: {
+      spacing: {
+        "page-gutter": "20px",
+        "dialog-gutter": "16px",
+      },
+      maxWidth: {
+        dialog: "512px",
+        confirmation: "448px",
+      },
       colors: {
         // Midnight Pulse - dark (primary experience)
         "bg-base": "#09090b",

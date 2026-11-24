@@ -22,6 +22,12 @@ import {
 import { HeroSection } from "@/components/HeroSection";
 import { MediaPosterCard } from "@/components/MediaPosterCard";
 import { PageIntro } from "@/components/PageIntro";
+import {
+  getPosterGridCellStyle,
+  getPosterGridColumnCount,
+  PAGE_SCROLL_CONTENT_STYLE,
+  POSTER_GRID_GAP,
+} from "@/constants/layout";
 import { ScreenWrapper } from "@/components/ScreenWrapper";
 import { BrandLoader } from "@/components/BrandLoader";
 import { DESKTOP_SIDEBAR_BREAKPOINT } from "@/constants/navigation";
@@ -51,7 +57,6 @@ type TrackedDisplayState = {
 
 const INITIAL_ITEMS_PER_PAGE = 20;
 const LOAD_MORE_THRESHOLD = 0.5;
-const GRID_GAP = 12;
 
 const tabOptions = [
   { value: "all" as const, label: "All" },
@@ -59,17 +64,6 @@ const tabOptions = [
   { value: "anime" as const, label: "Anime" },
   { value: "movie" as const, label: "Movies" },
 ];
-
-function getGridColumnCount(width: number, isWeb: boolean) {
-  if (!isWeb) return 2;
-  if (width < 640) return 2;
-  if (width >= 1800) return 8;
-  if (width >= 1500) return 7;
-  if (width >= 1260) return 6;
-  if (width >= 1040) return 5;
-  if (width >= 920) return 4;
-  return 3;
-}
 
 function getSectionError(reason: unknown, fallback: string) {
   if (reason instanceof Error) return reason.message;
@@ -298,9 +292,8 @@ export function DiscoverScreen() {
   }, []);
 
   const effectiveWidth = gridWidth || Math.max(width - 40, 0);
-  const columns = getGridColumnCount(effectiveWidth, isWeb);
+  const columns = getPosterGridColumnCount(effectiveWidth, isWeb);
   const isCompactLayout = effectiveWidth < 640;
-  const gridItemWidth = (effectiveWidth - (columns - 1) * GRID_GAP) / columns;
 
   // Get filter options for current tab
   const availableFilters = useMemo(
@@ -773,13 +766,7 @@ export function DiscoverScreen() {
 
   const renderItem = useCallback(
     ({ item, index }: { item: NormalizedShow; index: number }) => (
-      <View
-        style={{
-          width: gridItemWidth,
-          marginRight: index % columns === columns - 1 ? 0 : GRID_GAP,
-          marginBottom: GRID_GAP,
-        }}
-      >
+      <View style={getPosterGridCellStyle(index, columns)}>
         <MediaPosterCard
           show={item}
           href={{ pathname: "/show/[id]", params: { id: createShowRouteId(item) } }}
@@ -790,7 +777,7 @@ export function DiscoverScreen() {
         />
       </View>
     ),
-    [gridItemWidth, columns, getTrackedStateLabel, isCompactLayout, isWeb]
+    [columns, getTrackedStateLabel, isCompactLayout, isWeb]
   );
 
   const renderFooter = useCallback(() => {
@@ -847,7 +834,7 @@ export function DiscoverScreen() {
         />
 
         {!isDesktop ? (
-          <Link href="/search" asChild>
+          <Link href={Platform.OS === "ios" ? "/find" : "/search"} asChild>
             <Pressable className="mb-4 flex-row items-center gap-3 rounded-xl border-2 border-border-default bg-bg-surface px-3 py-2.5">
               <View className="h-8 w-8 items-center justify-center rounded-lg bg-bg-base/70">
                 <Feather name="search" size={15} color="#ef4444" />
@@ -1095,12 +1082,13 @@ export function DiscoverScreen() {
           key={`discover-grid-${columns}`}
           numColumns={columns}
           showsVerticalScrollIndicator={false}
+          ItemSeparatorComponent={() => <View style={{ height: POSTER_GRID_GAP }} />}
           onEndReached={loadMoreItems}
           onEndReachedThreshold={LOAD_MORE_THRESHOLD}
           ListHeaderComponent={ListHeader}
           ListFooterComponent={renderFooter}
           ListEmptyComponent={renderEmpty}
-          contentContainerStyle={{ paddingBottom: 32 }}
+          contentContainerStyle={PAGE_SCROLL_CONTENT_STYLE}
         />
       </View>
     </ScreenWrapper>

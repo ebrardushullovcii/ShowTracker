@@ -1,3 +1,4 @@
+import { HeaderIconButton } from "@/components/HeaderIconButton";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AppState,
@@ -21,7 +22,11 @@ import { api } from "@/convex/_generated/api";
 import { FilterBar } from "@/components/FilterBar";
 import { HomeModeSwitch } from "@/components/HomeModeSwitch";
 import { PageIntro } from "@/components/PageIntro";
+import { PAGE_SCROLL_CONTENT_STYLE } from "@/constants/layout";
 import { ScreenWrapper } from "@/components/ScreenWrapper";
+import { PosterCardTitle } from "@/components/PosterCardTitle";
+import { PosterQuickActions } from "@/components/PosterQuickActions";
+import { WatchlistWidgetSnapshot } from "@/components/WatchlistWidgetSnapshot";
 import { BrandLoader } from "@/components/BrandLoader";
 import { useHorizontalSectionSwipe } from "@/hooks/use-horizontal-section-swipe";
 import {
@@ -328,31 +333,20 @@ function getEpisodeCodeLabel(episode: UpcomingEpisode["episode"]) {
   ).padStart(2, "0")}`;
 }
 
+function getWatchlistWidgetShow(item: WatchlistItem) {
+  const routeId = getWatchlistRouteId(item);
+  return routeId ? { ...item, routeId } : null;
+}
+
 function WatchlistCard({
   item,
   isCompact,
-  isSmallPhone,
   scheduleAttentionCount = 0,
 }: {
   item: WatchlistItem;
   isCompact: boolean;
-  isSmallPhone: boolean;
   scheduleAttentionCount?: number;
 }) {
-  const isFabricEnabled =
-    "NativeFabricUIManager" in globalThis || "__turboModuleProxy" in globalThis;
-  const missingPosterTitleFitProps = isFabricEnabled
-    ? {}
-    : {
-        adjustsFontSizeToFit: true,
-        minimumFontScale: 0.72,
-      };
-  const titleFitProps = isFabricEnabled
-    ? {}
-    : {
-        adjustsFontSizeToFit: true,
-        minimumFontScale: 0.62,
-      };
   const routeId = getWatchlistRouteId(item);
   const posterHeight = isCompact ? 206 : 268;
   const safeWatchedEpisodes =
@@ -409,15 +403,7 @@ function WatchlistCard({
           />
         ) : (
           <View className="flex-1 items-center justify-center bg-zinc-800 px-3">
-            <Text
-              className="text-center text-sm font-semibold text-zinc-400"
-              numberOfLines={3}
-              ellipsizeMode="tail"
-              style={isFabricEnabled ? { fontSize: 14, lineHeight: 18 } : undefined}
-              {...missingPosterTitleFitProps}
-            >
-              {item.title}
-            </Text>
+            <PosterCardTitle title={item.title} className="text-center font-semibold text-zinc-400" />
           </View>
         )}
         <LinearGradient
@@ -427,30 +413,16 @@ function WatchlistCard({
           end={{ x: 0.5, y: 1 }}
           style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: isCompact ? 88 : 112 }}
         />
-        <View
-          pointerEvents="none"
-          className="absolute bottom-0 left-0 right-0 border-t border-white/10 bg-black/45"
-          style={{ height: isCompact ? 62 : 78 }}
-        />
         <View className="absolute right-2 top-2 rounded-md border border-white/20 bg-black/80 px-2 py-1">
           <Text className="text-[10px] font-black uppercase tracking-wide text-white">
             {cornerLabel}
           </Text>
         </View>
-        <View className="absolute bottom-0 left-0 right-0 px-2.5 pb-2">
-          <Text
-            className={`${isSmallPhone ? "text-[11px]" : isCompact ? "text-[13px]" : "text-sm"} mb-0.5 font-bold text-white`}
-            numberOfLines={1}
-            ellipsizeMode="tail"
-            style={
-              isFabricEnabled
-                ? { fontSize: isSmallPhone ? 11 : isCompact ? 13 : 14, lineHeight: 16 }
-                : undefined
-            }
-            {...titleFitProps}
-          >
-            {item.title}
-          </Text>
+        <View
+          className="absolute inset-x-0 bottom-0 justify-end border-t border-white/10 bg-black/45 px-2.5 pb-2 pt-1.5"
+          style={{ minHeight: isCompact ? 62 : 78 }}
+        >
+          <PosterCardTitle title={item.title} className="mb-0.5 font-bold text-white" />
           <Text className="text-[11px] text-zinc-300" numberOfLines={1}>
             {progressLabel}
           </Text>
@@ -491,7 +463,7 @@ function WatchlistCard({
     return card;
   }
 
-  return (
+  const link = (
     <Link href={{ pathname: "/show/[id]", params: { id: routeId } }} asChild>
       <Pressable
         accessibilityRole="link"
@@ -503,6 +475,7 @@ function WatchlistCard({
       </Pressable>
     </Link>
   );
+  return <PosterQuickActions routeId={routeId} tracked>{link}</PosterQuickActions>;
 }
 
 function WatchlistCardSkeleton({ isCompact }: { isCompact: boolean }) {
@@ -828,10 +801,10 @@ function MonthPickerModal({
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View className="flex-1 items-center justify-center bg-black/75 px-5 py-8">
+      <View className="dialog-backdrop">
         <Pressable className="absolute inset-0" onPress={onClose} />
 
-        <View className="w-full max-w-xl overflow-hidden rounded-[30px] border border-[#5e3d46] bg-[#120d10]">
+        <View className="dialog-panel max-w-dialog">
           <LinearGradient
             colors={["rgba(255,106,86,0.16)", "rgba(120,36,49,0.08)", "rgba(18,13,16,0.96)"]}
             start={{ x: 0, y: 0 }}
@@ -839,8 +812,9 @@ function MonthPickerModal({
             style={{ position: "absolute", left: 0, right: 0, top: 0, bottom: 0 }}
           />
 
-          <View className="relative border-b border-[#2d1c22] px-5 pb-4 pt-5">
-            <View className="flex-row items-start justify-between gap-4">
+          <View className="dialog-header relative">
+            <View className="flex-row items-start gap-3">
+              <HeaderIconButton icon="close" accessibilityLabel="Close month picker" onPress={onClose} />
               <View className="flex-1">
                 <Text className="text-[10px] font-black uppercase tracking-[1.8px] text-zinc-500">
                   Month Picker
@@ -851,17 +825,10 @@ function MonthPickerModal({
                 </Text>
               </View>
 
-              <Pressable
-                onPress={onClose}
-                accessibilityRole="button"
-                className="h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/5"
-              >
-                <Ionicons name="close" size={18} color="#d4d4d8" />
-              </Pressable>
             </View>
           </View>
 
-          <View className="px-5 py-5">
+          <View className="p-dialog-gutter">
             <View className="mb-5 flex-row items-center justify-between gap-3">
               <Pressable
                 onPress={() => onChangeYear(-1)}
@@ -1451,7 +1418,6 @@ export function HomeScreen() {
   const usesMonthCalendarLayout = isWeb && effectiveWidth >= 980;
   const columns = getColumnCount(effectiveWidth, isWeb);
   const isCompactHomeLayout = effectiveWidth < 640;
-  const isSmallPhone = width < 390;
   const watchlistPageSize = Math.max(columns * 3, 6);
   const secondarySectionPageSize = Math.max(columns * 2, 6);
   const watchlistQueryLimit = Math.max(
@@ -1612,6 +1578,26 @@ export function HomeScreen() {
   const watchlistAirtimeMode =
     (homeSettings?.watchlistAirtimeMode as WatchlistAirtimeMode | undefined) ??
     "same_day";
+  const widgetShows = useMemo(() => {
+    if (Platform.OS !== "ios" || homeFeedMediaFilter !== undefined ||
+        !activeFeed || !watchingWithOthersFeed || !todayScheduledWatchlistFeed ||
+        !watchlistFutureUpcomingCounts || !homeSettings) return undefined;
+
+    const countsByRoute = new Map(watchlistFutureUpcomingCounts.map((item) => [item.routeId, item]));
+    const shows = new Map<string, NonNullable<ReturnType<typeof getWatchlistWidgetShow>>>();
+    for (const item of [...todayScheduledWatchlistFeed, ...watchingWithOthersFeed, ...activeFeed]) {
+      const show = getWatchlistWidgetShow(item);
+      if (!show || item.watchedEpisodes <= 0 ||
+          !hasWatchlistActionableEpisode(item, countsByRoute.get(show.routeId), watchlistAirtimeMode)) continue;
+      shows.set(show.routeId, show);
+    }
+    return Array.from(shows.values()).sort((a, b) => (b.lastWatchedAt ?? 0) - (a.lastWatchedAt ?? 0));
+  }, [activeFeed, homeFeedMediaFilter, homeSettings, todayScheduledWatchlistFeed, watchingWithOthersFeed, watchlistAirtimeMode, watchlistFutureUpcomingCounts]);
+  const widgetFutureRoutes = useMemo(() => widgetShows && new Set(
+    watchlistFutureUpcomingCounts?.filter((item) =>
+      (watchlistAirtimeMode === "after_airtime" ? item.unavailableCount : item.futureCount) > 0
+    ).map((item) => item.routeId),
+  ), [watchlistAirtimeMode, watchlistFutureUpcomingCounts, widgetShows]);
   useEffect(() => {
     if (activeTab !== "watchlist" || watchlistAirtimeMode !== "after_airtime") return;
     const next = watchlistFutureUpcomingCounts?.reduce((earliest, row) =>
@@ -2358,13 +2344,12 @@ export function HomeScreen() {
           <WatchlistCard
             item={item}
             isCompact={isCompactHomeLayout}
-            isSmallPhone={isSmallPhone}
             scheduleAttentionCount={getScheduleAttentionCountForItem(item)}
           />
         </View>
       );
     },
-    [columns, getScheduleAttentionCountForItem, isCompactHomeLayout, isSmallPhone]
+    [columns, getScheduleAttentionCountForItem, isCompactHomeLayout]
   );
 
   // Random per visit; memoized so it holds steady while Home re-renders.
@@ -2480,7 +2465,6 @@ export function HomeScreen() {
                     <WatchlistCard
                       item={item}
                       isCompact={isCompactHomeLayout}
-                      isSmallPhone={isSmallPhone}
                     />
                   </View>
                 ))}
@@ -2556,7 +2540,6 @@ export function HomeScreen() {
                     <WatchlistCard
                       item={item}
                       isCompact={isCompactHomeLayout}
-                      isSmallPhone={isSmallPhone}
                     />
                   </View>
                 ))}
@@ -2634,7 +2617,6 @@ export function HomeScreen() {
                     <WatchlistCard
                       item={item}
                       isCompact={isCompactHomeLayout}
-                      isSmallPhone={isSmallPhone}
                     />
                   </View>
                 ))}
@@ -2695,6 +2677,13 @@ export function HomeScreen() {
 
   return (
     <ScreenWrapper>
+      <WatchlistWidgetSnapshot
+        day={todayKey}
+        timeZone={watchlistTimeZone}
+        airtimeMode={watchlistAirtimeMode}
+        items={widgetShows}
+        futureRoutes={widgetFutureRoutes}
+      />
       <View
         className="flex-1"
         onLayout={(e) => setGridWidth(e.nativeEvent.layout.width)}
@@ -2709,7 +2698,7 @@ export function HomeScreen() {
                 // ref when it mounts.
                 ref={homeWatchlistScrollRef}
                 className="flex-1"
-                contentContainerStyle={{ paddingBottom: 24 }}
+                contentContainerStyle={PAGE_SCROLL_CONTENT_STYLE}
                 showsVerticalScrollIndicator={false}
               >
                 {watchlistHeader}
@@ -2738,7 +2727,7 @@ export function HomeScreen() {
               <ScrollView
                 ref={homeWatchlistScrollRef}
                 className="flex-1"
-                contentContainerStyle={{ paddingBottom: 24 }}
+                contentContainerStyle={PAGE_SCROLL_CONTENT_STYLE}
                 showsVerticalScrollIndicator={false}
                 onScroll={loadMoreNotStartedSectionNearScrollEnd}
                 onContentSizeChange={() => loadMoreNotStartedSectionNearScrollEnd()}
@@ -2757,7 +2746,6 @@ export function HomeScreen() {
                           <WatchlistCard
                             item={item}
                             isCompact={isCompactHomeLayout}
-                            isSmallPhone={isSmallPhone}
                             scheduleAttentionCount={getScheduleAttentionCountForItem(item)}
                           />
                         </View>
@@ -2811,7 +2799,7 @@ export function HomeScreen() {
                 onEndReached={handleWatchlistEndReached}
                 onEndReachedThreshold={0.4}
                 showsVerticalScrollIndicator={false}
-                contentContainerStyle={{ paddingBottom: 24 }}
+                contentContainerStyle={PAGE_SCROLL_CONTENT_STYLE}
                 ListHeaderComponent={watchlistHeader}
                 ListFooterComponent={
                   <>
@@ -2874,7 +2862,7 @@ export function HomeScreen() {
                 ) : (
                   <ScrollView
                     className="min-h-0 flex-1"
-                    contentContainerStyle={{ paddingBottom: 24 }}
+                    contentContainerStyle={PAGE_SCROLL_CONTENT_STYLE}
                     showsVerticalScrollIndicator={false}
                   >
                     <MobileUpcomingCalendar

@@ -11,6 +11,7 @@ import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { AppBackButton } from "@/components/AppBackButton";
 import { PageIntro } from "@/components/PageIntro";
+import { PAGE_SCROLL_CONTENT_STYLE } from "@/constants/layout";
 import { ScreenWrapper } from "@/components/ScreenWrapper";
 import { BrandLoader } from "@/components/BrandLoader";
 
@@ -49,7 +50,7 @@ export default function CreateListScreen() {
 
   return (
     <ScreenWrapper>
-      <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 24 }}>
+      <ScrollView className="flex-1" contentContainerStyle={PAGE_SCROLL_CONTENT_STYLE}>
         <View className="gap-3">
           <PageIntro
             title="Create List"

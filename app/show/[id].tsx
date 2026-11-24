@@ -25,6 +25,7 @@ import {
 import { Link, useLocalSearchParams, useRouter } from "expo-router";
 import { useAction, useConvexAuth, useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
+import { PAGE_SCROLL_CONTENT_STYLE } from "@/constants/layout";
 import { ScreenWrapper } from "@/components/ScreenWrapper";
 import { BrandLoader } from "@/components/BrandLoader";
 import { getProgressTone } from "@/lib/progress-tone";
@@ -36,6 +37,7 @@ import { ShowHeader } from "@/components/ShowHeader";
 import { ShowActionBar } from "@/components/ShowActionBar";
 import { ShareModal } from "@/components/sharing/ShareModal";
 import { toShareShow, type ShareCollection } from "@/lib/sharing/types";
+import { confirmTrackingChange } from "@/lib/tracking-feedback";
 import { SeasonAccordion } from "@/components/SeasonAccordion";
 import {
   ContinueTrackingRail,
@@ -869,7 +871,7 @@ function cleanRichText(value?: string | null) {
 
 export function ShowDetailScreen() {
   const router = useRouter();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, posterAction } = useLocalSearchParams<{ id: string; posterAction?: string }>();
   const parsedId = useMemo(() => parseShowRouteId(id), [id]);
   const { width } = useWindowDimensions();
   const { isAuthenticated } = useConvexAuth();
@@ -2353,6 +2355,7 @@ export function ShowDetailScreen() {
         watchingWithNames: companionOptions?.watchingWithNames,
       });
       setOptimisticTrackingStatus(savedTracking.status);
+      if (!isInWatchlist) confirmTrackingChange();
       return true;
     } catch (mutationError) {
       console.error("Failed to update watch status", mutationError);
@@ -2395,15 +2398,37 @@ export function ShowDetailScreen() {
     void handleSetTrackingStatus(nextStatus);
   };
 
+  const openTrackingEditor = useCallback(() => {
+    setWatchingWithNamesDraft(tracking?.watchingWithNames ?? []);
+    setWatchingWithNameInput("");
+    setIsStatusMenuVisible(true);
+  }, [tracking?.watchingWithNames]);
+
+  const openShowShare = useCallback(() => {
+    if (show) {
+      setShareCollection({ title: show.title, context: "Single show", shows: [toShareShow(show, show.id)] });
+    }
+  }, [show]);
+
   const handleOpenStatusMenu = () => {
     if (!isInWatchlist && show?.mediaType !== "movie") {
       void handleSetTrackingStatus("plan_to_watch");
       return;
     }
-    setWatchingWithNamesDraft(tracking?.watchingWithNames ?? []);
-    setWatchingWithNameInput("");
-    setIsStatusMenuVisible(true);
+    openTrackingEditor();
   };
+
+  const handledPosterAction = useRef<string | null>(null);
+  useEffect(() => {
+    if (Platform.OS === "web" || !show || !posterAction || handledPosterAction.current === id) return;
+    if (posterAction === "share") {
+      handledPosterAction.current = id;
+      openShowShare();
+    } else if (posterAction === "tracking" && canTrackShow && trackingLoaded) {
+      handledPosterAction.current = id;
+      openTrackingEditor();
+    }
+  }, [canTrackShow, id, openShowShare, openTrackingEditor, posterAction, show, trackingLoaded]);
 
   const handleAddToWatchlist = () => {
     if (!show) return;
@@ -2507,6 +2532,7 @@ export function ShowDetailScreen() {
         runtime: episode.runtime,
         action,
       });
+      if (action === "rewatch" || !wasWatched) confirmTrackingChange();
 
       if (action === "rewatch" && result.watchCount) {
         setEpisodeWatchCounts((prev) => ({
@@ -4239,7 +4265,7 @@ export function ShowDetailScreen() {
 
   if (error) {
     return wrapShowDetail(
-      <ScreenWrapper contentClassName="px-4 py-6" edges={detailScreenEdges}>
+      <ScreenWrapper contentClassName="px-page-gutter py-6" edges={detailScreenEdges}>
         <View className="rounded-xl border-2 border-primary/30 bg-primary/10 p-6">
           <Text className="text-lg font-semibold text-primary">Error</Text>
           <Text className="mt-2 text-sm text-text-secondary">{error}</Text>
@@ -4250,7 +4276,7 @@ export function ShowDetailScreen() {
 
   if (!show) {
     return wrapShowDetail(
-      <ScreenWrapper contentClassName="px-4 py-6" edges={detailScreenEdges}>
+      <ScreenWrapper contentClassName="px-page-gutter py-6" edges={detailScreenEdges}>
         <View className="items-center py-12">
           <Text className="text-text-secondary">Show not found.</Text>
         </View>
@@ -4262,7 +4288,7 @@ export function ShowDetailScreen() {
     <ScreenWrapper contentClassName="px-0 py-0" edges={detailScreenEdges}>
       <ScrollView
         className="flex-1"
-        contentContainerStyle={{ paddingBottom: 24 }}
+        contentContainerStyle={PAGE_SCROLL_CONTENT_STYLE}
         showsVerticalScrollIndicator={true}
         bounces={false}
       >
@@ -4304,7 +4330,7 @@ export function ShowDetailScreen() {
                 }}
                 onEditStatus={handleOpenStatusMenu}
                 onAddToList={() => setIsAddToListModalVisible(true)}
-                onShare={() => setShareCollection({ title: show.title, context: "Single show", shows: [toShareShow(show, show.id)] })}
+                onShare={openShowShare}
                 onRepairTracking={() => {
                   void handleRepairTracking();
                 }}
@@ -4314,7 +4340,7 @@ export function ShowDetailScreen() {
         />
 
         {/* Main Content */}
-        <View className={`${isDesktop ? "px-8" : "px-1"} pt-6 pb-8`}>
+        <View className={`${isDesktop ? "px-8" : "px-page-gutter"} pt-6 pb-8`}>
           <View className={`mx-auto w-full ${isDesktop ? "max-w-4xl" : ""}`}>
           <ShowDetailsTabs
             key={show.id}
@@ -4833,7 +4859,7 @@ export function ShowDetailScreen() {
           !isNavigatingToNextSeason && !isPausingRelatedEntries && setNextSeasonPrompt(null)
         }
       >
-        <View className="flex-1 items-center justify-center bg-black/70 px-5 py-8">
+        <View className="dialog-backdrop">
           <Pressable
             className="absolute inset-0"
             focusable={false}
@@ -4843,8 +4869,8 @@ export function ShowDetailScreen() {
             }
           />
 
-          <View className="w-full max-w-sm overflow-hidden rounded-xl border-2 border-border-bright bg-bg-surface">
-            <View className="border-b border-border-default px-4 pb-3 pt-4">
+          <View className="dialog-panel max-w-confirmation">
+            <View className="dialog-header">
               <Text className="text-xs font-semibold uppercase tracking-wide text-text-secondary">
                 Season Complete
               </Text>
@@ -4859,7 +4885,7 @@ export function ShowDetailScreen() {
               </Text>
             </View>
 
-            <View className="gap-2 p-4">
+            <View className="gap-2 p-dialog-gutter">
               <Pressable
                 disabled={isNavigatingToNextSeason || isPausingRelatedEntries}
                 onPress={handleNavigateToNextSeason}
@@ -4916,7 +4942,7 @@ export function ShowDetailScreen() {
           }
         }}
       >
-        <View className="flex-1 items-center justify-center bg-black/70 px-5 py-8">
+        <View className="dialog-backdrop">
           <Pressable
             className="absolute inset-0"
             focusable={false}
@@ -4928,8 +4954,8 @@ export function ShowDetailScreen() {
             }}
           />
 
-          <View className="w-full max-w-sm overflow-hidden rounded-xl border-2 border-border-bright bg-bg-surface">
-            <View className="border-b border-border-default px-4 pb-3 pt-4">
+          <View className="dialog-panel max-w-confirmation">
+            <View className="dialog-header">
               <Text className="text-xs font-semibold uppercase tracking-wide text-text-secondary">
                 Catch Up
               </Text>
@@ -4949,7 +4975,7 @@ export function ShowDetailScreen() {
               </Text>
             </View>
 
-            <View className="gap-2 p-4">
+            <View className="gap-2 p-dialog-gutter">
               <Pressable
                 disabled={isPreviousEpisodesPromptRunning}
                 onPress={() => {
@@ -4997,7 +5023,7 @@ export function ShowDetailScreen() {
         animationType="fade"
         onRequestClose={() => setWatchActionTarget(null)}
       >
-        <View className="flex-1 items-center justify-center bg-black/70 px-5 py-8">
+        <View className="dialog-backdrop">
           <Pressable
             className="absolute inset-0"
             focusable={false}
@@ -5005,8 +5031,8 @@ export function ShowDetailScreen() {
             onPress={() => !isWatchActionRunning && setWatchActionTarget(null)}
           />
 
-          <View className="w-full max-w-sm overflow-hidden rounded-xl border-2 border-border-bright bg-bg-surface">
-            <View className="border-b border-border-default px-4 pb-3 pt-4">
+          <View className="dialog-panel max-w-confirmation">
+            <View className="dialog-header">
               <Text className="text-xs font-semibold uppercase tracking-wide text-text-secondary">
                 {watchActionTarget?.kind === "episode" && watchActionTarget.unwatchOnly
                   ? "Unwatch"
@@ -5020,7 +5046,7 @@ export function ShowDetailScreen() {
               </Text>
             </View>
 
-            <View className="gap-2 p-4">
+            <View className="gap-2 p-dialog-gutter">
               {watchActionTarget?.kind === "episode" && watchActionTarget.unwatchOnly ? (
                 isWatchActionRunning ? (
                   <View className="flex-row items-center justify-center gap-2 py-3.5">
@@ -5106,7 +5132,7 @@ export function ShowDetailScreen() {
           }
         }}
       >
-        <View className="flex-1 items-center justify-center bg-black/70 px-5 py-8">
+        <View className="dialog-backdrop">
           <Pressable
             className="absolute inset-0"
             focusable={false}
@@ -5118,23 +5144,31 @@ export function ShowDetailScreen() {
             }}
           />
 
-          <View className="w-full max-w-sm overflow-hidden rounded-xl border-2 border-border-bright bg-bg-surface">
-            <View className="border-b border-border-default px-4 pb-3 pt-4">
-              <Text className="text-xs font-semibold uppercase tracking-wide text-text-secondary">
-                Franchise Settings
-              </Text>
-              <Text className="mt-1 text-lg font-black text-text-primary" numberOfLines={2}>
-                {cleanedShowTitle}
-              </Text>
-              <Text className="mt-2 text-sm text-text-secondary">
-                Choose how this franchise appears on Home.
-              </Text>
-              <Text className="mt-1 text-xs text-text-muted">
-                Current Home view: {effectiveFranchiseModeLabel}
-              </Text>
+          <View className="dialog-panel max-w-dialog">
+            <View className="dialog-header flex-row items-start gap-3">
+              <HeaderIconButton
+                icon="close"
+                accessibilityLabel="Close franchise settings"
+                disabled={isUpdatingAnimeSettings}
+                onPress={() => setIsFranchiseSettingsModalVisible(false)}
+              />
+              <View className="min-w-0 flex-1">
+                <Text className="text-xs font-semibold uppercase tracking-wide text-text-secondary">
+                  Franchise Settings
+                </Text>
+                <Text className="mt-1 text-lg font-black text-text-primary" numberOfLines={2}>
+                  {cleanedShowTitle}
+                </Text>
+                <Text className="mt-2 text-sm text-text-secondary">
+                  Choose how this franchise appears on Home.
+                </Text>
+                <Text className="mt-1 text-xs text-text-muted">
+                  Current Home view: {effectiveFranchiseModeLabel}
+                </Text>
+              </View>
             </View>
 
-            <View className="gap-2 p-4">
+            <View className="gap-2 p-dialog-gutter">
               <Pressable
                 disabled={isUpdatingAnimeSettings}
                 onPress={() => {
@@ -5280,7 +5314,7 @@ export function ShowDetailScreen() {
         animationType="fade"
         onRequestClose={() => handleResolveRemoveLibraryPrompt(false)}
       >
-        <View className="flex-1 items-center justify-center bg-black/70 px-5 py-8">
+        <View className="dialog-backdrop">
           <Pressable
             className="absolute inset-0"
             focusable={false}
@@ -5288,8 +5322,8 @@ export function ShowDetailScreen() {
             onPress={() => handleResolveRemoveLibraryPrompt(false)}
           />
 
-          <View className="w-full max-w-sm overflow-hidden rounded-xl border-2 border-border-bright bg-bg-surface">
-            <View className="border-b border-border-default px-4 pb-3 pt-4">
+          <View className="dialog-panel max-w-confirmation">
+            <View className="dialog-header">
               <View className="flex-row items-center gap-2">
                 <View className="size-8 items-center justify-center rounded-full border border-primary/35 bg-primary/10">
                   <Ionicons name="trash-outline" size={16} color="#ef4444" />
@@ -5306,7 +5340,7 @@ export function ShowDetailScreen() {
               </Text>
             </View>
 
-            <View className="gap-2 p-4">
+            <View className="gap-2 p-dialog-gutter">
               <Pressable
                 onPress={() => handleResolveRemoveLibraryPrompt(true)}
                 className="items-center justify-center rounded-xl border border-primary/40 bg-primary/15 py-3.5 active:bg-primary/20"
@@ -5337,7 +5371,7 @@ export function ShowDetailScreen() {
       >
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : undefined}
-          className="flex-1 items-center justify-center bg-black/70 px-4 py-6"
+          className="dialog-backdrop"
         >
           <Pressable
             className="absolute inset-0"
@@ -5350,8 +5384,8 @@ export function ShowDetailScreen() {
             }}
           />
 
-          <View className="max-h-full w-full max-w-lg overflow-hidden rounded-xl border-2 border-border-bright bg-bg-surface">
-            <View className="flex-row items-start gap-3 border-b border-border-default px-4 pb-3 pt-4">
+          <View className="dialog-panel max-w-dialog">
+            <View className="dialog-header flex-row items-start gap-3">
               <HeaderIconButton
                 icon="close"
                 accessibilityLabel="Close tracking editor"
@@ -5382,7 +5416,7 @@ export function ShowDetailScreen() {
               </View>
             </View>
 
-            <ScrollView keyboardShouldPersistTaps="handled" contentContainerClassName="gap-2 p-4">
+            <ScrollView keyboardShouldPersistTaps="handled" className="shrink" contentContainerClassName="gap-2 p-dialog-gutter">
               {showMediaType !== "movie" ? (
                 <View
                   className={`rounded-xl border px-3 py-3 ${

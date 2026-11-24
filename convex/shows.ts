@@ -8,6 +8,8 @@ import { computeWatchedHistoryAggregates } from "../lib/tracking/history-aggrega
 import { resolveManualTrackingStatus } from "../lib/tracking/initial-status";
 import { confirmedReleaseFloor } from "../lib/tracking/confirmed-release";
 import { isEpisodeAtOrAfter } from "../lib/tracking/episode-order";
+import { parseShowRouteId } from "../lib/show-route";
+import { approvalStatus } from "./lib/accessPolicy";
 import { buildWatchedEpisodeRanges } from "../lib/tracking/watched-episode-ranges";
 import { deleteScheduleCacheBucket } from "./lib/scheduleCacheIndex";
 import { refreshWatchlistPush } from "./lib/watchlistPushSchedule";
@@ -6874,6 +6876,67 @@ export const batchRewatchEpisodes = mutation({
       watchedEpisodes: refreshed?.watchedEpisodesCount ?? totalWatched,
       status: nextStatus,
     };
+  },
+});
+
+const widgetEpisodePosition = v.object({ season: v.number(), episode: v.number() });
+
+export const markWatchlistWidgetEpisode = internalMutation({
+  args: {
+    userId: v.id("users"),
+    sessionId: v.id("authSessions"),
+    routeId: v.string(),
+    position: widgetEpisodePosition,
+    following: v.array(widgetEpisodePosition),
+    expiresAt: v.number(),
+  },
+  returns: v.object({ saved: v.boolean(), next: v.union(widgetEpisodePosition, v.null()) }),
+  handler: async (ctx, args) => {
+    const rejected = { saved: false, next: null } as const;
+    const now = Date.now();
+    if (args.expiresAt <= now) return rejected;
+
+    const [user, session, deletion] = await Promise.all([
+      ctx.db.get(args.userId),
+      ctx.db.get(args.sessionId),
+      ctx.db.query("accountDeletions").withIndex("by_user", (q) => q.eq("userId", args.userId)).first(),
+    ]);
+    if (!user || approvalStatus(user) !== "approved" || !session || session.userId !== args.userId ||
+        session.expirationTime <= now || deletion) return rejected;
+
+    const route = parseShowRouteId(args.routeId);
+    if (!route || route.source === "imdb" || route.mediaType === "movie") return rejected;
+    const lookupField = { tmdb: "tmdbId", anilist: "anilistId", jikan: "malId", tvmaze: "tvmazeId" } as const;
+    const show = await findShowByLookup(ctx, { [lookupField[route.source]]: route.externalId, mediaType: route.mediaType });
+    if (!show || !isWatchedEpisodeWithinKnownShowBounds(show, args.position)) return rejected;
+
+    const tracked = await ctx.db.query("userShows")
+      .withIndex("by_user_show", (q) => q.eq("userId", args.userId).eq("showId", show._id)).unique();
+    if (!tracked || (tracked.status !== "watching" && tracked.status !== "completed")) return rejected;
+
+    const watched = (position: typeof args.position) => ctx.db.query("watchedEpisodes")
+      .withIndex("by_user_show_season_episode", (q) => q.eq("userId", args.userId)
+        .eq("showId", show._id).eq("season", position.season).eq("episode", position.episode)).first();
+
+    if (!(await watched(args.position))) {
+      await ctx.db.insert("watchedEpisodes", {
+        userId: args.userId,
+        showId: show._id,
+        ...args.position,
+        runtime: show.episodeRuntime,
+        watchedAt: now,
+        watchCount: 1,
+        watchHistory: [now],
+      });
+      await refreshUserShowTrackingAggregates(ctx, args.userId, show._id);
+    }
+
+    for (const position of args.following) {
+      if (isWatchedEpisodeWithinKnownShowBounds(show, position) && !(await watched(position))) {
+        return { saved: true, next: position };
+      }
+    }
+    return { saved: true, next: null };
   },
 });
 

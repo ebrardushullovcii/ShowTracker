@@ -1,7 +1,7 @@
 import type { PropsWithChildren } from "react";
 import { Platform, Pressable, View, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { HeaderIconButton } from "@/components/HeaderIconButton";
+import { OverlayHeader } from "@/components/OverlayHeader";
 import { DESKTOP_SIDEBAR_BREAKPOINT } from "@/constants/navigation";
 
 type OverlayDetailFrameProps = PropsWithChildren<{
@@ -31,27 +31,25 @@ export function OverlayDetailFrame({
 
       <View
         className={
-          isDesktop
-            ? "ml-auto h-full w-full max-w-5xl overflow-hidden border-l-2 border-border-bright bg-bg-base shadow-2xl"
-            : "flex-1 overflow-hidden bg-bg-base"
+          `overlay-outline bg-bg-base ${isDesktop
+            ? "ml-auto h-full w-full max-w-5xl shadow-2xl"
+            : "mx-1 mb-1 flex-1"}`
         }
         style={
           isDesktop
             ? { shadowColor: "#000", shadowOpacity: 0.45, shadowRadius: 36 }
-            : { paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }
+            : { marginTop: insets.top + 8, paddingLeft: insets.left, paddingRight: insets.right }
         }
       >
         {isDesktop ? (
           children
         ) : (
           <>
-            <View className="z-30 h-14 justify-center border-b border-border-default bg-bg-base px-5">
-              <HeaderIconButton
-                icon="close"
-                accessibilityLabel={closeAccessibilityLabel}
-                onPress={onClose}
-              />
-            </View>
+            <OverlayHeader
+              title="Details"
+              onClose={onClose}
+              closeAccessibilityLabel={closeAccessibilityLabel}
+            />
             <View className="flex-1 overflow-hidden">{children}</View>
           </>
         )}

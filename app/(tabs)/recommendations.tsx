@@ -12,6 +12,12 @@ import { api } from "@/convex/_generated/api";
 import { FilterBar } from "@/components/FilterBar";
 import { MediaPosterCard } from "@/components/MediaPosterCard";
 import { PageIntro } from "@/components/PageIntro";
+import {
+  getPosterGridCellStyle,
+  getPosterGridColumnCount,
+  PAGE_SCROLL_CONTENT_STYLE,
+  POSTER_GRID_GAP,
+} from "@/constants/layout";
 import { ScreenWrapper } from "@/components/ScreenWrapper";
 import { BrandLoader } from "@/components/BrandLoader";
 import {
@@ -112,17 +118,6 @@ function isAbortError(error: unknown) {
     (error instanceof DOMException && error.name === "AbortError") ||
     (error instanceof Error && error.name === "AbortError")
   );
-}
-
-function getGridColumnCount(width: number, isWeb: boolean) {
-  if (!isWeb) return 2;
-  if (width < 640) return 2;
-  if (width >= 1800) return 8;
-  if (width >= 1500) return 7;
-  if (width >= 1260) return 6;
-  if (width >= 1040) return 5;
-  if (width >= 920) return 4;
-  return 3;
 }
 
 function toTrackedTmdbKey(mediaType: "tv" | "movie", tmdbId: number) {
@@ -394,7 +389,7 @@ export function RecommendationsScreen() {
   const [gridWidth, setGridWidth] = useState(0);
   const effectiveWidth = gridWidth || Math.max(width - 40, 0);
   const isCompactLayout = effectiveWidth < 640;
-  const columns = getGridColumnCount(effectiveWidth, isWeb);
+  const columns = getPosterGridColumnCount(effectiveWidth, isWeb);
 
   const onGridLayout = useCallback((event: LayoutChangeEvent) => {
     setGridWidth(event.nativeEvent.layout.width);
@@ -951,7 +946,7 @@ export function RecommendationsScreen() {
           numColumns={columns}
           keyExtractor={getRecommendationItemKey}
           showsVerticalScrollIndicator={false}
-          ItemSeparatorComponent={() => <View className="h-3" />}
+          ItemSeparatorComponent={() => <View style={{ height: POSTER_GRID_GAP }} />}
           ListHeaderComponent={
             <View className="pb-2">
               <PageIntro
@@ -1026,8 +1021,8 @@ export function RecommendationsScreen() {
               )}
             </View>
           }
-          renderItem={({ item }) => (
-            <View className="flex-1 px-1.5">
+          renderItem={({ item, index }) => (
+            <View style={getPosterGridCellStyle(index, columns)}>
               <MediaPosterCard
                 show={item}
                 href={{
@@ -1043,19 +1038,17 @@ export function RecommendationsScreen() {
           onEndReached={loadMore}
           onEndReachedThreshold={0.5}
           ListFooterComponent={
-            <View className="h-8">
-              {isLoadingMore && (
-                <View className="items-center py-4">
-                  <BrandLoader compact />
-                  <Text className="mt-2 text-sm text-text-secondary">
-                    Loading more...
-                  </Text>
-                </View>
-              )}
-            </View>
+            isLoadingMore ? (
+              <View className="items-center py-4">
+                <BrandLoader compact />
+                <Text className="mt-2 text-sm text-text-secondary">
+                  Loading more...
+                </Text>
+              </View>
+            ) : null
           }
           ListEmptyComponent={null}
-          contentContainerStyle={{ paddingBottom: 24 }}
+          contentContainerStyle={PAGE_SCROLL_CONTENT_STYLE}
         />
       </View>
     </ScreenWrapper>

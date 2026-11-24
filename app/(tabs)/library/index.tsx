@@ -26,7 +26,14 @@ import { ShareButton } from "@/components/sharing/ShareButton";
 import { ShareModal } from "@/components/sharing/ShareModal";
 import { toShareShow, type ShareCollection } from "@/lib/sharing/types";
 import { SearchInput } from "@/components/SearchInput";
+import {
+  getPosterGridCellStyle,
+  PAGE_SCROLL_CONTENT_STYLE,
+  POSTER_GRID_GAP,
+} from "@/constants/layout";
 import { ScreenWrapper } from "@/components/ScreenWrapper";
+import { PosterCardTitle } from "@/components/PosterCardTitle";
+import { PosterQuickActions } from "@/components/PosterQuickActions";
 import { BrandLoader } from "@/components/BrandLoader";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import {
@@ -70,7 +77,6 @@ type LibraryItem = {
 
 type LibraryDashboardItem = LibraryItem;
 
-const GRID_GAP = 12;
 
 const tabOptions = [
   { value: "all" as const, label: "All" },
@@ -167,26 +173,10 @@ function getHomeColumnCount(width: number, isWeb: boolean) {
 function LibraryCard({
   item,
   isCompact,
-  isSmallPhone,
 }: {
   item: LibraryDashboardItem;
   isCompact: boolean;
-  isSmallPhone: boolean;
 }) {
-  const isFabricEnabled =
-    "NativeFabricUIManager" in globalThis || "__turboModuleProxy" in globalThis;
-  const missingPosterTitleFitProps = isFabricEnabled
-    ? {}
-    : {
-        adjustsFontSizeToFit: true,
-        minimumFontScale: 0.72,
-      };
-  const titleFitProps = isFabricEnabled
-    ? {}
-    : {
-        adjustsFontSizeToFit: true,
-        minimumFontScale: 0.62,
-      };
   const routeId = getRouteId(item);
   const isMovie = item.mediaType === "movie";
   const rawPercent =
@@ -207,15 +197,7 @@ function LibraryCard({
           />
         ) : (
           <View className="flex-1 items-center justify-center bg-zinc-800 px-3">
-            <Text
-              className="text-center text-sm font-semibold text-zinc-400"
-              numberOfLines={3}
-              ellipsizeMode="tail"
-              style={isFabricEnabled ? { fontSize: 14, lineHeight: 18 } : undefined}
-              {...missingPosterTitleFitProps}
-            >
-              {item.title}
-            </Text>
+            <PosterCardTitle title={item.title} className="text-center font-semibold text-zinc-400" />
           </View>
         )}
         <LinearGradient
@@ -233,15 +215,7 @@ function LibraryCard({
           </View>
         ) : null}
         <View className="absolute bottom-0 left-0 right-0 px-2.5 pb-2.5">
-          <Text
-            className={`${isSmallPhone ? "text-[11px]" : "text-sm"} mb-0.5 font-bold leading-4 text-white`}
-            numberOfLines={1}
-            ellipsizeMode="tail"
-            style={isFabricEnabled ? { fontSize: isSmallPhone ? 11 : 14, lineHeight: 16 } : undefined}
-            {...titleFitProps}
-          >
-            {item.title}
-          </Text>
+          <PosterCardTitle title={item.title} className="mb-0.5 font-bold text-white" />
           <Text className="text-xs text-zinc-400" numberOfLines={1}>
             {item.firstAired?.slice(0, 4) ?? "TBA"} · {formatLibraryCardStatus(item)}
           </Text>
@@ -265,7 +239,7 @@ function LibraryCard({
     return card;
   }
 
-  return (
+  const link = (
     <Link href={{ pathname: "/show/[id]", params: { id: routeId } }} asChild>
       <Pressable
         style={({ pressed }) =>
@@ -276,6 +250,8 @@ function LibraryCard({
       </Pressable>
     </Link>
   );
+
+  return <PosterQuickActions routeId={routeId} tracked>{link}</PosterQuickActions>;
 }
 
 export default function LibraryScreen() {
@@ -491,7 +467,6 @@ export default function LibraryScreen() {
   const effectiveWidth = gridWidth || width;
   const columns = getHomeColumnCount(effectiveWidth, isWeb);
   const isCompactLayout = effectiveWidth < 640;
-  const isSmallPhone = width < 390;
   const pageSize = Math.max(columns * 3, 6);
   const hasMore = visibleCount < activeItems.length;
 
@@ -558,26 +533,16 @@ export default function LibraryScreen() {
 
   const renderLibraryItem = useCallback(
     ({ item, index }: { item: LibraryDashboardItem; index: number }) => {
-      const columnIndex = index % columns;
-      const halfGap = GRID_GAP / 2;
-
       return (
-        <View
-          style={{
-            flex: 1,
-            paddingLeft: columnIndex === 0 ? 0 : halfGap,
-            paddingRight: columnIndex === columns - 1 ? 0 : halfGap,
-          }}
-        >
+        <View style={getPosterGridCellStyle(index, columns)}>
           <LibraryCard
             item={item}
             isCompact={isCompactLayout}
-            isSmallPhone={isSmallPhone}
           />
         </View>
       );
     },
-    [columns, isCompactLayout, isSmallPhone]
+    [columns, isCompactLayout]
   );
 
   const headerText =
@@ -600,7 +565,7 @@ export default function LibraryScreen() {
             renderItem={renderLibraryItem}
             keyboardShouldPersistTaps="handled"
             numColumns={columns}
-            ItemSeparatorComponent={() => <View style={{ height: GRID_GAP }} />}
+            ItemSeparatorComponent={() => <View style={{ height: POSTER_GRID_GAP }} />}
             onEndReached={() => {
               if (!canLoadMoreFromEdgeRef.current) {
                 return;
@@ -612,7 +577,7 @@ export default function LibraryScreen() {
             onScroll={onLibraryScroll}
             scrollEventThrottle={16}
             showsVerticalScrollIndicator={false}
-            contentContainerStyle={{ paddingBottom: 16 }}
+            contentContainerStyle={PAGE_SCROLL_CONTENT_STYLE}
             ListHeaderComponent={
               <View className="pb-2">
                 <PageIntro
@@ -797,9 +762,9 @@ export default function LibraryScreen() {
                   )}
 
                   {/* Selected Year & Rating Tags */}
-                  {(selectedYear || selectedRating) && (
+                  {Boolean(selectedYear || selectedRating) && (
                     <View className="mt-2 flex-row flex-wrap gap-2">
-                      {selectedYear && (
+                      {Boolean(selectedYear) && (
                         <Pressable
                           onPress={() => setSelectedYear("")}
                           className="flex-row items-center gap-1 rounded-full bg-primary px-3 py-1"
@@ -808,7 +773,7 @@ export default function LibraryScreen() {
                           <Text className="text-xs text-white">×</Text>
                         </Pressable>
                       )}
-                      {selectedRating && (
+                      {Boolean(selectedRating) && (
                         <Pressable
                           onPress={() => setSelectedRating("")}
                           className="flex-row items-center gap-1 rounded-full bg-primary px-3 py-1"
