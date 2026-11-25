@@ -2574,7 +2574,7 @@ function needsMissingProviderAudit(item) {
   return true;
 }
 
-function getWatchedAnchorBackedReleasedEpisodeFloor(item, releasedEvents) {
+function getWatchedAnchorBackedReleasedEpisodeFloor(item, releasedEvents, releasedEpisodeCeiling) {
   const watchedCount = Math.max(
     0,
     Math.floor(numberOrNull(item.watched_episodes_count) ?? 0)
@@ -2625,7 +2625,10 @@ function getWatchedAnchorBackedReleasedEpisodeFloor(item, releasedEvents) {
   }
 
   return unwatchedReleasedRows > 0
-    ? watchedCount + unwatchedReleasedRows
+    ? Math.min(
+        watchedCount + unwatchedReleasedRows,
+        Math.max(watchedCount, releasedEpisodeCeiling ?? Infinity)
+      )
     : null;
 }
 
@@ -2633,10 +2636,10 @@ function getWatchedAnchorBackedReleasedEpisodeFloor(item, releasedEvents) {
 // latest released row, other-provider rows that aired on or before that day are
 // alternate numbering of the same history, not extra releases. Only rows newer
 // than TMDB's latest released day can add to the count.
-function countReleasedEventsForFact(item, rows, releasedEvents, nowMs) {
+function getDenseTmdbReleasedEpisodeCeiling(item, rows, releasedEvents, nowMs) {
   const tmdbId = positiveIntegerOrNull(item.tmdb_id);
   if (tmdbId === null) {
-    return releasedEvents.length;
+    return null;
   }
 
   const episodesBySeason = new Map();
@@ -2663,13 +2666,13 @@ function countReleasedEventsForFact(item, rows, releasedEvents, nowMs) {
   }
 
   if (episodesBySeason.size === 0 || !latestTmdbDateKey) {
-    return releasedEvents.length;
+    return null;
   }
   let tmdbReleasedCount = 0;
   for (let seasonNumber = 1; seasonNumber <= episodesBySeason.size; seasonNumber += 1) {
     const episodes = episodesBySeason.get(seasonNumber);
     if (!episodes || Math.max(...episodes) !== episodes.size) {
-      return releasedEvents.length;
+      return null;
     }
     tmdbReleasedCount += episodes.size;
   }
@@ -2678,17 +2681,21 @@ function countReleasedEventsForFact(item, rows, releasedEvents, nowMs) {
     const dateKey = dateKeyFromValue(row.air_date ?? row.air_timestamp);
     return Boolean(dateKey && dateKey > latestTmdbDateKey);
   }).length;
-  return Math.min(releasedEvents.length, tmdbReleasedCount + newerRows);
+  return tmdbReleasedCount + newerRows;
 }
 
 function buildReleaseFact(item, match, nowMs, reconciledAt) {
   const releaseRows = dedupeProviderEventsForReleaseFact(match.rows, nowMs, item);
   const releasedEvents = releaseRows.filter((row) => row.air_timestamp <= nowMs);
-  const releasedEventCount = countReleasedEventsForFact(
+  const denseTmdbReleasedEpisodeCeiling = getDenseTmdbReleasedEpisodeCeiling(
     item,
     match.rows,
     releasedEvents,
     nowMs
+  );
+  const releasedEventCount = Math.min(
+    releasedEvents.length,
+    denseTmdbReleasedEpisodeCeiling ?? releasedEvents.length
   );
   const allFutureEvents = dedupeSingleShowEventsForSchedule(
     releaseRows.filter((row) => row.air_timestamp > nowMs)
@@ -2792,8 +2799,13 @@ function buildReleaseFact(item, match, nowMs, reconciledAt) {
     currentProviderMetadataReleasedEpisodes > Math.max(watchedEpisodesCount, importedEpisodeCeiling)
       ? currentProviderMetadataReleasedEpisodes
       : null;
-  const watchedAnchorBackedReleasedEpisodes =
-    getWatchedAnchorBackedReleasedEpisodeFloor(item, releasedEvents);
+  // Watched anchors can recover a partial returning season (ADR-0040), but
+  // alternate provider coordinates cannot add releases inside dense TMDB history.
+  const watchedAnchorBackedReleasedEpisodes = getWatchedAnchorBackedReleasedEpisodeFloor(
+    item,
+    releasedEvents,
+    denseTmdbReleasedEpisodeCeiling
+  );
   const hasTerminalKnownTotal =
     typeof terminalKnownTotalEpisodes === "number" &&
     !hasKnownFutureEvents &&
@@ -7139,6 +7151,47 @@ async function validateFixtureResults(db, summary, deltaPath = defaultDeltaPath)
     "Old cross-provider numbering drift should not add released episodes when the tracked TMDB catalogue is dense, while newer rows still count.",
     { crossProviderAlignmentFact, crossProviderNewerReleaseFact }
   );
+  // Two users share a TMDB show, but TVMaze's season-local aliases are dated
+  // a day earlier. Complete watched histories must not count both versions.
+  const adjacentDayAliases = alignmentTmdbRows.slice(4).map((row, index) => {
+    const airTimestamp = row.air_timestamp - 9 * 60 * 60 * 1000;
+    return {
+      ...alignmentRow("tvmaze", 2, index + 1, index + 5, row.name),
+      air_date: new Date(airTimestamp).toISOString(),
+      air_timestamp: airTimestamp,
+    };
+  });
+  for (const watched of [5, 9]) {
+    const watchedItem = {
+      ...alignmentItem,
+      watched_episodes_count: watched,
+      watched_episode_anchors_json: JSON.stringify(
+        Array.from({ length: watched }, (_, index) => ({ season: 1, episode: index + 1 }))
+      ),
+      last_watched_at: alignmentTmdbRows[watched - 1].air_timestamp,
+      remaining_episodes: 14 - watched,
+    };
+    const match = {
+      confidence: "direct_id",
+      rows: [...alignmentTmdbRows, ...adjacentDayAliases, ...delayedNextRows],
+    };
+    const fact = buildReleaseFact(watchedItem, match, alignmentNowMs, fixtureNowMs);
+    const freshReleaseFact = buildReleaseFact(
+      watchedItem,
+      { ...match, rows: [...match.rows, alignmentRow("tvmaze", 2, 9, 13, "Fresh Case")] },
+      alignmentNowMs,
+      fixtureNowMs
+    );
+    assertValidation(
+      fact.releasedEpisodes === 12 &&
+        fact.totalEpisodes === 14 &&
+        fact.releaseState === "available_now" &&
+        fact.nextScheduled?.episodeNumber === 13 &&
+        freshReleaseFact.releasedEpisodes === 13,
+      "Complete watched histories must respect the dense TMDB count while allowing a genuinely newer release.",
+      { watched, fact, freshReleaseFact }
+    );
+  }
   assertValidation(
     staleDemonSlayerFact.releasedEpisodes === 63 &&
       staleDemonSlayerFact.totalEpisodes === 63 &&
