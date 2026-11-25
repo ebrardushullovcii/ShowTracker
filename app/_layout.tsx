@@ -80,8 +80,10 @@ function RootLayoutContent() {
                 <Stack.Screen
                   name="show/[id]"
                   options={{
-                    presentation: "transparentModal",
-                    contentStyle: { backgroundColor: "transparent" },
+                    presentation: Platform.OS === "ios" ? "modal" : "transparentModal",
+                    contentStyle: {
+                      backgroundColor: Platform.OS === "ios" ? "#09090b" : "transparent",
+                    },
                   }}
                 />
               </Stack.Protected>

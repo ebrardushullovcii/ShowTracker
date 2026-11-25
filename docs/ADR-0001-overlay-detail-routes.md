@@ -12,7 +12,7 @@ Users need to open a title, add or inspect it, and return to the exact position 
 
 ## Decision
 
-Use an **Overlay Detail Route** for `/show/[id]` when the route is opened from inside an existing shell stack. The root stack presents the show route as a transparent modal, and the show screen renders inside an app-owned overlay frame only when the route is dismissible.
+Use an **Overlay Detail Route** for `/show/[id]` when the route is opened from inside an existing shell stack. On web and Android, the root stack presents the show route as a transparent modal, and the show screen renders inside an app-owned overlay frame only when the route is dismissible. On iOS, the route uses the native modal sheet presentation: UIKit owns the backdrop, sheet positioning, and interactive swipe-down dismissal. Its content omits the app-owned drawer frame to avoid nesting two drawers. The close button remains available. Native sheet gestures take precedence over left-edge push-navigation gestures on this route.
 
 Direct/shared visits to `/show/[id]` render the same show detail screen as a normal full page because there is no meaningful source page behind the route.
 
