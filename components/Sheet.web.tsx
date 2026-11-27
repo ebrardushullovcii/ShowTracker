@@ -5,6 +5,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { DialogBackdrop, TallDialog } from "@/components/DialogBackdrop";
 import {
   SHEET_CORNER_RADIUS,
+  SheetDepthContext,
   useSheetMetrics,
   type SheetProps,
   type SheetRouteFrameProps,
@@ -35,7 +36,9 @@ export function SheetDragHandle({ children }: { children: ReactNode }) {
 const CLOSE_ANIMATION_MS = 500;
 
 // Sheets sit below react-native-web's Modal layer so confirmation dialogs opened from a sheet stay on top.
+// vaul portals every drawer straight into <body>, so a drawer opened from another one needs a higher layer.
 const SHEET_Z_INDEX = 900;
+const sheetLayer = (depth: number) => SHEET_Z_INDEX + depth * 2;
 
 const srOnly: CSSProperties = {
   position: "absolute",
@@ -96,7 +99,8 @@ type MobileDrawerProps = {
 };
 
 function MobileDrawer({ open, onOpenChange, onClosed, label, size, dismissible, background, closeLabel, children }: MobileDrawerProps) {
-  const { maxHeight, insets } = useSheetMetrics();
+  const { maxHeight, insets, depth } = useSheetMetrics();
+  const layer = sheetLayer(depth);
   const onClosedRef = useRef(onClosed);
   onClosedRef.current = onClosed;
   const wasOpen = useRef(open);
@@ -129,8 +133,11 @@ function MobileDrawer({ open, onOpenChange, onClosed, label, size, dismissible, 
           style={{
             position: "fixed",
             inset: 0,
-            zIndex: SHEET_Z_INDEX,
+            zIndex: layer,
             background: "rgba(0,0,0,0.45)",
+            // Swiping the dimmed page must not scroll the page behind it.
+            touchAction: "none",
+            overscrollBehavior: "contain",
             opacity: open ? 1 : 0,
             transition: "opacity 300ms cubic-bezier(0.32, 0.72, 0, 1)",
             pointerEvents: open ? "auto" : "none",
@@ -143,7 +150,7 @@ function MobileDrawer({ open, onOpenChange, onClosed, label, size, dismissible, 
             left: 0,
             right: 0,
             bottom: 0,
-            zIndex: SHEET_Z_INDEX + 1,
+            zIndex: layer + 1,
             display: "flex",
             flexDirection: "column",
             // The app's global `body > div { min-height: 100% }` would otherwise stretch the portal.
@@ -163,7 +170,9 @@ function MobileDrawer({ open, onOpenChange, onClosed, label, size, dismissible, 
           <Drawer.Title style={srOnly}>{label}</Drawer.Title>
           <Grabber closeLabel={closeLabel} onClose={() => onOpenChange(false)} />
           <div style={{ display: "flex", flexDirection: "column", flexGrow: size === "tall" ? 1 : 0, flexShrink: 1, minHeight: 0 }}>
-            <SheetDismissContext.Provider value={() => onOpenChange(false)}>{children}</SheetDismissContext.Provider>
+            <SheetDepthContext.Provider value={depth + 1}>
+              <SheetDismissContext.Provider value={() => onOpenChange(false)}>{children}</SheetDismissContext.Provider>
+            </SheetDepthContext.Provider>
           </div>
         </Drawer.Content>
       </Drawer.Portal>
@@ -195,6 +204,7 @@ export function Sheet({
   maxWidth = 512,
   closeLabel,
   onDismiss,
+  surface = "raised",
   children,
 }: SheetProps) {
   const { isDesktop } = useSheetMetrics();
@@ -223,7 +233,8 @@ export function Sheet({
             className="dialog-panel"
             style={{ maxWidth, height: size === "tall" ? "85%" : undefined }}
           >
-            {closeLabel ? <View className="h-3" /> : null}
+            {/* Stands in for the phone grabber row above the drawer header. */}
+            <View className="h-3" />
             {children}
             {closeLabel ? <DesktopCloseButton label={closeLabel} onPress={onClose} /> : null}
           </View>
@@ -242,7 +253,7 @@ export function Sheet({
       label={label}
       size={size}
       dismissible={dismissible}
-      background="#18181b"
+      background={surface === "base" ? "#09090b" : "#18181b"}
       closeLabel={closeLabel}
     >
       {children}

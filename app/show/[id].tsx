@@ -34,6 +34,7 @@ import { Badge } from "@/components/Badge";
 import { ProgressBar } from "@/components/ProgressBar";
 import { OverlayDetailFrame } from "@/components/OverlayDetailFrame";
 import { Sheet, SheetScrollView } from "@/components/Sheet";
+import { SheetHeader } from "@/components/SheetHeader";
 import { ShowHeader } from "@/components/ShowHeader";
 import { ShowActionBar } from "@/components/ShowActionBar";
 import { ShareModal } from "@/components/sharing/ShareModal";
@@ -5001,19 +5002,13 @@ export function ShowDetailScreen() {
       </Modal>
 
       <Sheet visible={!!watchActionTarget} onClose={() => setWatchActionTarget(null)} label="Watch options" dismissible={!isWatchActionRunning}>
-        <View className="dialog-header">
-          <Text className="text-xs font-semibold uppercase tracking-wide text-text-secondary">
-            {watchActionTarget?.kind === "episode" && watchActionTarget.unwatchOnly
-              ? "Unwatch"
-              : "Watch Options"}
-          </Text>
-          <Text className="mt-1 text-lg font-black text-text-primary" numberOfLines={1}>
-            {watchActionTarget?.title}
-          </Text>
-          <Text className="mt-1 text-sm text-text-secondary" numberOfLines={2}>
-            {watchActionTarget?.subtitle}
-          </Text>
-        </View>
+        <SheetHeader
+          title={watchActionTarget?.title ?? "Watch options"}
+          detail={watchActionTarget?.subtitle}
+          detailPlacement="stacked"
+          onClose={() => setWatchActionTarget(null)}
+          closeLabel="Close watch options"
+        />
 
         <View className="gap-2 p-dialog-gutter">
           {watchActionTarget?.kind === "episode" && watchActionTarget.unwatchOnly ? (
@@ -5089,23 +5084,14 @@ export function ShowDetailScreen() {
         </View>
       </Sheet>
 
-      <Sheet visible={isFranchiseSettingsModalVisible} onClose={() => setIsFranchiseSettingsModalVisible(false)} label="Franchise settings" dismissible={!isUpdatingAnimeSettings} closeLabel="Close franchise settings">
-        <View className="sheet-header flex-row items-start gap-3">
-          <View className="min-w-0 flex-1">
-            <Text className="text-xs font-semibold uppercase tracking-wide text-text-secondary">
-              Franchise Settings
-            </Text>
-            <Text className="mt-1 text-lg font-black text-text-primary" numberOfLines={2}>
-              {cleanedShowTitle}
-            </Text>
-            <Text className="mt-2 text-sm text-text-secondary">
-              Choose how this franchise appears on Home.
-            </Text>
-            <Text className="mt-1 text-xs text-text-muted">
-              Current Home view: {effectiveFranchiseModeLabel}
-            </Text>
-          </View>
-        </View>
+      <Sheet visible={isFranchiseSettingsModalVisible} onClose={() => setIsFranchiseSettingsModalVisible(false)} label="Franchise settings" dismissible={!isUpdatingAnimeSettings}>
+        <SheetHeader
+          title="Franchise on Home"
+          detail={`${cleanedShowTitle} · now ${effectiveFranchiseModeLabel}`}
+          detailPlacement="stacked"
+          onClose={() => setIsFranchiseSettingsModalVisible(false)}
+          closeLabel="Close franchise settings"
+        />
 
         <View className="gap-2 p-dialog-gutter">
           <Pressable
@@ -5296,31 +5282,15 @@ export function ShowDetailScreen() {
         </DialogBackdrop>
       </Modal>
 
-      <Sheet visible={isStatusMenuVisible} onClose={() => setIsStatusMenuVisible(false)} label="Edit tracking" dismissible={!isStatusMenuBusy} avoidKeyboard closeLabel="Close tracking editor">
-        <View className="sheet-header flex-row items-start gap-3">
-          <View className="min-w-0 flex-1">
-            <Text className="text-xs font-semibold uppercase tracking-wide text-text-secondary">
-              {showMediaType === "movie" ? "Edit Movie Status" : "Edit Tracking"}
-            </Text>
-            <Text className="mt-1 text-lg font-black text-text-primary" numberOfLines={2}>
-              {cleanedShowTitle}
-            </Text>
-            <Text className="mt-2 text-sm text-text-secondary">
-              {!trackingLoaded
-                ? "Loading your current tracking state."
-                : isInWatchlist
-                  ? `Current status: ${activeTrackingOption.label}`
-                  : showMediaType === "movie"
-                    ? "Pick a status to add this movie to your queue."
-                    : "Pick a status to add this title to your watchlist."}
-            </Text>
-            {showMediaType === "anime" ? (
-              <Text className="mt-1 text-xs text-text-muted">
-                Franchise titles may auto-follow as part of your timeline.
-              </Text>
-            ) : null}
-          </View>
-        </View>
+      <Sheet visible={isStatusMenuVisible} onClose={() => setIsStatusMenuVisible(false)} label="Edit tracking" dismissible={!isStatusMenuBusy} avoidKeyboard>
+        {/* The selected option below already shows the current status. */}
+        <SheetHeader
+          title={showMediaType === "movie" ? "Movie status" : "Edit tracking"}
+          detail={!trackingLoaded ? "Loading..." : cleanedShowTitle}
+          detailPlacement="stacked"
+          onClose={() => setIsStatusMenuVisible(false)}
+          closeLabel="Close tracking editor"
+        />
 
         <SheetScrollView keyboardShouldPersistTaps="handled" className="shrink" contentContainerClassName="gap-2 p-dialog-gutter">
           {showMediaType !== "movie" ? (

@@ -1,4 +1,5 @@
 import { Sheet, SheetScrollView } from "@/components/Sheet";
+import { SheetHeader } from "@/components/SheetHeader";
 import { useDelayedLoading } from "@/hooks/use-delayed-loading";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -1269,15 +1270,8 @@ export default function ProfileScreen() {
         ) : null}
       </ScrollView>
 
-      <Sheet visible={isEditingProfile} onClose={closeProfileEditor} label="Edit profile details" dismissible={!isSavingProfile} avoidKeyboard closeLabel="Close profile editor">
-        <View className="sheet-header flex-row items-center gap-3">
-          <View className="min-w-0 flex-1">
-            <Text className="text-xs font-semibold uppercase tracking-wide text-text-secondary">
-              Profile
-            </Text>
-            <Text className="text-lg font-black text-text-primary">Edit Details</Text>
-          </View>
-        </View>
+      <Sheet visible={isEditingProfile} onClose={closeProfileEditor} label="Edit profile details" dismissible={!isSavingProfile} avoidKeyboard>
+        <SheetHeader title="Edit profile" onClose={closeProfileEditor} closeLabel="Close profile editor" />
 
         <SheetScrollView
           className="shrink"

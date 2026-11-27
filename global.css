@@ -14,11 +14,6 @@
   .dialog-header {
     @apply border-b border-border-default px-dialog-gutter pb-3 pt-dialog-gutter;
   }
-
-  /* Header inside a drawer: the grabber row above it already provides the top spacing. */
-  .sheet-header {
-    @apply border-b border-border-default px-dialog-gutter pb-3;
-  }
 }
 
 /* Midnight Pulse - base styles */

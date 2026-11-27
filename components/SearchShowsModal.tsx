@@ -8,6 +8,7 @@ import {
 } from "react-native";
 import { FlashList } from "@shopify/flash-list";
 import { Sheet, SheetScrollView } from "@/components/Sheet";
+import { SheetHeader } from "@/components/SheetHeader";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Ionicons } from "@expo/vector-icons";
@@ -239,56 +240,41 @@ export function SearchShowsModal({ visible, onClose, listId, existingShowIds }: 
   };
 
   return (
-    <Sheet visible={visible} onClose={handleClose} label="Add shows" size="tall" avoidKeyboard closeLabel="Close show picker">
-      {/* Header */}
-      <View className="sheet-header">
-        <View className="flex-row items-center gap-3">
-          <View className="min-w-0 flex-1">
-            <Text className="text-xs font-semibold uppercase tracking-wide text-text-secondary">
-              Add Shows
-            </Text>
-            <Text className="text-lg font-black text-text-primary">
-              From your watchlist
-            </Text>
-          </View>
+    <Sheet visible={visible} onClose={handleClose} label="Add shows" size="tall" avoidKeyboard>
+      <SheetHeader
+        title="Add shows"
+        detail={
+          isLoading
+            ? undefined
+            : debouncedQuery.trim()
+              ? `${filteredShows.length} result${filteredShows.length === 1 ? "" : "s"}`
+              : `${filteredShows.length} in your watchlist`
+        }
+        onClose={handleClose}
+        closeLabel="Close show picker"
+      >
+        <View className="flex-row items-center rounded-xl border border-border-default bg-bg-base px-3">
+          <Ionicons name="search" size={18} color="#71717a" />
+          <TextInput
+            value={query}
+            onChangeText={setQuery}
+            placeholder="Search your watchlist..."
+            placeholderTextColor="#52525b"
+            className="flex-1 px-3 py-2.5 text-text-primary"
+          />
+          {query.length > 0 && (
+            <Pressable accessibilityRole="button" accessibilityLabel="Clear search" onPress={() => setQuery("")}>
+              <Ionicons name="close-circle" size={18} color="#71717a" />
+            </Pressable>
+          )}
         </View>
-
-        {/* Search Input */}
-        <View className="mt-4 flex-row items-center gap-2">
-          <View className="flex-1 flex-row items-center rounded-xl border border-border-default bg-bg-base px-3">
-            <Ionicons name="search" size={18} color="#71717a" />
-            <TextInput
-              value={query}
-              onChangeText={setQuery}
-              placeholder="Search your watchlist..."
-              placeholderTextColor="#52525b"
-              className="flex-1 px-3 py-2.5 text-text-primary"
-            />
-            {query.length > 0 && (
-              <Pressable onPress={() => setQuery("")}>
-                <Ionicons name="close-circle" size={18} color="#71717a" />
-              </Pressable>
-            )}
-          </View>
-        </View>
-
-        {/* Status label */}
-        {!isLoading && (
-          <View className="mt-2">
-            <Text className="text-sm text-text-secondary">
-              {debouncedQuery.trim() 
-                ? `${filteredShows.length} result${filteredShows.length === 1 ? "" : "s"}`
-                : `${filteredShows.length} shows in watchlist (A-Z)`}
-            </Text>
-          </View>
-        )}
 
         {addError && (
-          <View className="mt-2 rounded-xl bg-primary/10 p-3">
+          <View className="rounded-xl bg-primary/10 p-3">
             <Text className="text-sm text-primary">{addError}</Text>
           </View>
         )}
-      </View>
+      </SheetHeader>
 
       {/* Results */}
       <View className="flex-1">

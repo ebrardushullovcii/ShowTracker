@@ -1,4 +1,4 @@
-import type { PropsWithChildren, ReactNode } from "react";
+import { createContext, useContext, type PropsWithChildren, type ReactNode } from "react";
 import { Platform, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { DESKTOP_SIDEBAR_BREAKPOINT } from "@/constants/navigation";
@@ -8,6 +8,11 @@ export const SHEET_TALL_DETENT = 0.82;
 export const SHEET_CORNER_RADIUS = 28;
 /** Minimum gap between the status bar and the top of a sheet. */
 const SHEET_MIN_TOP_GAP = 16;
+/** Each drawer opened from inside another starts this much lower, so the one beneath stays visible. */
+const SHEET_NEST_OFFSET = 20;
+
+/** How many drawers are open beneath the current one. */
+export const SheetDepthContext = createContext(0);
 
 export type SheetSize = "tall" | "auto";
 
@@ -32,6 +37,8 @@ export type SheetProps = PropsWithChildren<{
   closeLabel?: string;
   /** Called once the sheet has fully closed. */
   onDismiss?: () => void;
+  /** "base" matches content that paints the app background edge to edge (for example the share composer). */
+  surface?: "raised" | "base";
 }>;
 
 export type SheetRouteFrameProps = {
@@ -48,10 +55,12 @@ export type SheetRouteFrameProps = {
 export function useSheetMetrics() {
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
+  const depth = useContext(SheetDepthContext);
   const maxHeight = Math.round(
-    Math.min(height - insets.top - SHEET_MIN_TOP_GAP, height * SHEET_TALL_DETENT),
+    Math.min(height - insets.top - SHEET_MIN_TOP_GAP, height * SHEET_TALL_DETENT) - depth * SHEET_NEST_OFFSET,
   );
   return {
+    depth,
     width,
     height,
     insets,

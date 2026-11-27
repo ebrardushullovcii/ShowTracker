@@ -11,6 +11,7 @@ import {
   type ReactNode,
 } from "react";
 import {
+  BackHandler,
   Keyboard,
   KeyboardAvoidingView,
   Modal,
@@ -43,6 +44,7 @@ import Animated, {
 } from "react-native-reanimated";
 import {
   SHEET_CORNER_RADIUS,
+  SheetDepthContext,
   useSheetMetrics,
   type SheetProps,
   type SheetRouteFrameProps,
@@ -86,6 +88,15 @@ export const SheetScrollView = forwardRef<ScrollView, ScrollViewProps>(function 
   const sheet = useContext(SheetGestureContext);
   const scrollRef = useRef<ScrollView>(null);
   useImperativeHandle(forwardedRef, () => scrollRef.current as ScrollView);
+
+  // A remounted list starts at the top, so the sheet must not keep the old offset.
+  useEffect(() => {
+    if (!sheet) return;
+    const { scrollY } = sheet;
+    return () => {
+      scrollY.value = 0;
+    };
+  }, [sheet]);
 
   const handleScroll = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -200,13 +211,14 @@ function SheetBody({
   contentDraggable,
   closeLabel,
 }: SheetBodyProps) {
-  const { height, insets, topGap } = useSheetMetrics();
+  const { height, insets, topGap, depth } = useSheetMetrics();
   const keyboardVisible = useKeyboardVisible(avoidKeyboard);
   const offscreen = height;
   const translateY = useSharedValue(offscreen);
   const scrollY = useSharedValue(0);
   const touchingScroll = useSharedValue(false);
   const dragAnchor = useSharedValue(0);
+  const closing = useSharedValue(false);
   const presentedRef = useRef(presented);
   presentedRef.current = presented;
 
@@ -247,6 +259,16 @@ function SheetBody({
     }, 80);
   }, [closeAfterAnimation, dismissible, hide, onClose, settle]);
 
+  // Android back on a route drawer animates it away like the other close paths.
+  useEffect(() => {
+    if (!closeAfterAnimation) return;
+    const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
+      requestClose();
+      return true;
+    });
+    return () => subscription.remove();
+  }, [closeAfterAnimation, requestClose]);
+
   const scrollGesture = useMemo(
     () =>
       Gesture.Native()
@@ -268,6 +290,7 @@ function SheetBody({
         .simultaneousWithExternalGesture(scrollGesture)
         .onStart(() => {
           dragAnchor.value = 0;
+          closing.value = false;
         })
         .onUpdate((event) => {
           // Inside scrolled content, the drag scrolls first; the sheet follows once the top is reached.
@@ -282,12 +305,17 @@ function SheetBody({
             translateY.value > DISMISS_DISTANCE ||
             (translateY.value > 12 && event.velocityY > DISMISS_VELOCITY);
           if (shouldClose) {
+            closing.value = true;
             runOnJS(requestClose)();
-          } else {
+          }
+        })
+        // Runs after onEnd and also when the system cancels the drag midway.
+        .onFinalize(() => {
+          if (!closing.value && translateY.value > 0) {
             translateY.value = withSpring(0, SETTLE_SPRING);
           }
         }),
-    [dismissible, dragAnchor, requestClose, scrollGesture, scrollY, touchingScroll, translateY],
+    [closing, dismissible, dragAnchor, requestClose, scrollGesture, scrollY, touchingScroll, translateY],
   );
   // A gesture object attaches to one detector, so the optional drag handle gets its own.
   const pan = useMemo(() => makePan(), [makePan]);
@@ -332,11 +360,13 @@ function SheetBody({
           </View>
         </GestureDetector>
       )}
-      <SheetDismissContext.Provider value={requestClose}>
-        <SheetGestureContext.Provider value={gestureState}>
-          <View style={[styles.content, { flexGrow: size === "tall" ? 1 : 0 }]}>{children}</View>
-        </SheetGestureContext.Provider>
-      </SheetDismissContext.Provider>
+      <SheetDepthContext.Provider value={depth + 1}>
+        <SheetDismissContext.Provider value={requestClose}>
+          <SheetGestureContext.Provider value={gestureState}>
+            <View style={[styles.content, { flexGrow: size === "tall" ? 1 : 0 }]}>{children}</View>
+          </SheetGestureContext.Provider>
+        </SheetDismissContext.Provider>
+      </SheetDepthContext.Provider>
     </Animated.View>
   );
 
@@ -375,6 +405,7 @@ export function Sheet({
   contentDraggable = true,
   closeLabel,
   onDismiss,
+  surface = "raised",
   children,
 }: SheetProps) {
   const [mounted, setMounted] = useState(visible);
@@ -409,7 +440,7 @@ export function Sheet({
             dismissible={dismissible}
             avoidKeyboard={avoidKeyboard}
             padBottom
-            surfaceColor="#18181b"
+            surfaceColor={surface === "base" ? "#09090b" : "#18181b"}
             contentDraggable={contentDraggable}
             closeLabel={closeLabel}
           >

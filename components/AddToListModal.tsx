@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { Sheet, SheetScrollView } from "@/components/Sheet";
+import { SheetHeader } from "@/components/SheetHeader";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
@@ -100,18 +101,13 @@ export function AddToListModal({ visible, onClose, show }: AddToListModalProps) 
   const isLoading = userLists === undefined || showConvexId === undefined;
 
   return (
-    <Sheet visible={visible} onClose={onClose} label="Add to list" closeLabel="Close add to list">
-      {/* Header */}
-      <View className="sheet-header flex-row items-center gap-3">
-        <View className="min-w-0 flex-1">
-          <Text className="text-xs font-semibold uppercase tracking-wide text-text-secondary">
-            Add to List
-          </Text>
-          <Text className="text-lg font-black text-text-primary" numberOfLines={1}>
-            {show?.title || "Select a list"}
-          </Text>
-        </View>
-      </View>
+    <Sheet visible={visible} onClose={onClose} label="Add to list">
+      <SheetHeader
+        title="Add to list"
+        detail={show?.title}
+        onClose={onClose}
+        closeLabel="Close add to list"
+      />
 
       {/* Content */}
       <SheetScrollView

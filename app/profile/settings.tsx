@@ -459,9 +459,9 @@ export default function ProfileSettingsScreen() {
   );
 
   return (
-    <SheetRouteFrame onClose={close} label="Profile controls" maxWidth={512} closeLabel="Close settings">
+    <SheetRouteFrame onClose={close} label="Profile controls" maxWidth={512}>
       <View className="min-h-0 flex-1">
-        <SheetHeader title="Profile Controls" />
+        <SheetHeader title="Profile controls" onClose={close} closeLabel="Close settings" />
 
         {notice || error ? (
           <View className="gap-1 border-b border-border-default px-page-gutter py-2">

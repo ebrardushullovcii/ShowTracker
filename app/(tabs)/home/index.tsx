@@ -1,4 +1,5 @@
 import { Sheet } from "@/components/Sheet";
+import { SheetHeader } from "@/components/SheetHeader";
 import { useDelayedLoading } from "@/hooks/use-delayed-loading";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -801,7 +802,7 @@ function MonthPickerModal({
   );
 
   return (
-    <Sheet visible={visible} onClose={onClose} label="Month picker" closeLabel="Close month picker">
+    <Sheet visible={visible} onClose={onClose} label="Month picker">
       <LinearGradient
         colors={["rgba(255,106,86,0.16)", "rgba(120,36,49,0.08)", "rgba(18,13,16,0.96)"]}
         start={{ x: 0, y: 0 }}
@@ -809,20 +810,7 @@ function MonthPickerModal({
         style={{ position: "absolute", left: 0, right: 0, top: 0, bottom: 0 }}
       />
 
-      <View className="sheet-header relative">
-        <View className="flex-row items-start gap-3">
-          <View className="flex-1">
-            <Text className="text-[10px] font-black uppercase tracking-[1.8px] text-zinc-500">
-              Month Picker
-            </Text>
-            <Text className="mt-2 text-2xl font-black text-white">Jump through the schedule</Text>
-            <Text className="mt-1 text-sm text-zinc-400">
-              Pick a month directly instead of paging one step at a time.
-            </Text>
-          </View>
-
-        </View>
-      </View>
+      <SheetHeader title="Jump to a month" onClose={onClose} closeLabel="Close month picker" />
 
       <View className="p-dialog-gutter">
         <View className="mb-5 flex-row items-center justify-between gap-3">
