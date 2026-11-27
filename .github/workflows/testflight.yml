@@ -16,7 +16,7 @@ concurrency:
 jobs:
   testflight:
     if: github.ref == 'refs/heads/main' && contains(fromJSON('["99851772", "108461578"]'), github.actor_id)
-    runs-on: xcode-27
+    runs-on: macos-26
     environment: testflight
     timeout-minutes: 90
     defaults:
@@ -44,19 +44,17 @@ jobs:
             echo '::error::Set EXPO_TOKEN in the testflight environment before running this workflow.'
             exit 1
           fi
-          build_info="$RUNNER_TEMP/showtracker-build.json"
+          ipa_path="$RUNNER_TEMP/ShowTracker.ipa"
           npx --yes eas-cli@27.10.0 build --platform ios --profile testflight \
-            --non-interactive --wait --json > "$build_info"
-          build_id=$(jq -er --arg sha "$GITHUB_SHA" '
-            select(length == 1) | .[0] |
-            select(.status == "FINISHED" and .gitCommitHash == $sha and .platform == "IOS") |
-            .id
-          ' "$build_info")
-          printf 'Signed build: https://expo.dev/accounts/ebrardushullovci/projects/showtracker/builds/%s\n' \
-            "$build_id" >> "$GITHUB_STEP_SUMMARY"
+            --local --non-interactive --output "$ipa_path"
+          if [[ ! -f "$ipa_path" ]]; then
+            echo '::error::Local EAS build did not produce ShowTracker.ipa.'
+            exit 1
+          fi
 
       - name: Upload to TestFlight
         env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
           ASC_KEY_ID: ${{ vars.ASC_TESTFLIGHT_KEY_ID }}
           ASC_PRIVATE_KEY: ${{ secrets.ASC_TESTFLIGHT_PRIVATE_KEY }}
         run: |
@@ -74,16 +72,24 @@ jobs:
           trap 'rm -rf "$upload_dir"' EXIT
           printf '%s\n' "$ASC_PRIVATE_KEY" > "$upload_dir/apple.p8"
           unset ASC_PRIVATE_KEY
-          build_url=$(jq -er '.[0].artifacts.buildUrl' "$RUNNER_TEMP/showtracker-build.json")
-          curl --silent --fail --location --retry 2 "$build_url" -o "$upload_dir/ShowTracker.ipa"
-          unzip -p "$upload_dir/ShowTracker.ipa" 'Payload/ShowTracker.app/Info.plist' > "$upload_dir/Info.plist"
+          ipa_path="$RUNNER_TEMP/ShowTracker.ipa"
+          unzip -p "$ipa_path" 'Payload/ShowTracker.app/Info.plist' > "$upload_dir/Info.plist"
           bundle_id=$(plutil -extract CFBundleIdentifier raw "$upload_dir/Info.plist")
           if [[ "$bundle_id" != 'com.ebrardushullovci.showtracker' ]]; then
             echo '::error::The archive does not contain the ShowTracker bundle.'
             exit 1
           fi
+          app_version=$(plutil -extract CFBundleShortVersionString raw "$upload_dir/Info.plist")
+          build_number=$(plutil -extract CFBundleVersion raw "$upload_dir/Info.plist")
+          npx --yes eas-cli@27.10.0 env:pull production --non-interactive --path "$upload_dir/eas.env" >/dev/null
+          convex_url=$(sed -n 's/^EXPO_PUBLIC_CONVEX_URL=//p' "$upload_dir/eas.env" | tr -d '"' | head -1)
+          if [[ -z "$convex_url" ]] || ! unzip -p "$ipa_path" 'Payload/ShowTracker.app/main.jsbundle' | grep -aFq "$convex_url"; then
+            echo '::error::The production Convex URL was not embedded in main.jsbundle.'
+            exit 1
+          fi
           # altool requires an issuer argument even with an individual key.
-          xcrun altool --upload-app -f "$upload_dir/ShowTracker.ipa" --type ios \
+          xcrun altool --upload-app -f "$ipa_path" --type ios \
             --api-key "$ASC_KEY_ID" --api-issuer user --api-key-subject user \
             --p8-file-path "$upload_dir/apple.p8"
-          echo 'Uploaded to App Store Connect for TestFlight processing.' >> "$GITHUB_STEP_SUMMARY"
+          printf 'Uploaded ShowTracker %s (%s) to App Store Connect for TestFlight processing.\n' \
+            "$app_version" "$build_number" >> "$GITHUB_STEP_SUMMARY"
