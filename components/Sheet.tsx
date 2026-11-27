@@ -11,6 +11,7 @@ import {
   type ReactNode,
 } from "react";
 import {
+  Keyboard,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -115,6 +116,22 @@ export const SheetScrollView = forwardRef<ScrollView, ScrollViewProps>(function 
   return sheet ? <GestureDetector gesture={sheet.scrollGesture}>{scrollView}</GestureDetector> : scrollView;
 });
 
+function useKeyboardVisible(enabled: boolean) {
+  const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    if (!enabled) return;
+    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+    const show = Keyboard.addListener(showEvent, () => setVisible(true));
+    const hide = Keyboard.addListener(hideEvent, () => setVisible(false));
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, [enabled]);
+  return enabled && visible;
+}
+
 /** Region that drags the sheet when its content handles its own scrolling (for example a WebView). */
 export function SheetDragHandle({ children }: { children: ReactNode }) {
   const sheet = useContext(SheetGestureContext);
@@ -184,6 +201,7 @@ function SheetBody({
   closeLabel,
 }: SheetBodyProps) {
   const { height, insets, topGap } = useSheetMetrics();
+  const keyboardVisible = useKeyboardVisible(avoidKeyboard);
   const offscreen = height;
   const translateY = useSharedValue(offscreen);
   const scrollY = useSharedValue(0);
@@ -299,7 +317,8 @@ function SheetBody({
           flexGrow: size === "tall" ? 1 : 0,
           paddingLeft: insets.left,
           paddingRight: insets.right,
-          paddingBottom: padBottom ? insets.bottom : 0,
+          // The keyboard covers the home indicator, so its inset would only add a gap.
+          paddingBottom: padBottom && !keyboardVisible ? insets.bottom : 0,
         },
         sheetStyle,
       ]}

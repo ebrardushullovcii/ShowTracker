@@ -263,7 +263,6 @@ export function SearchShowsModal({ visible, onClose, listId, existingShowIds }: 
               placeholder="Search your watchlist..."
               placeholderTextColor="#52525b"
               className="flex-1 px-3 py-2.5 text-text-primary"
-              autoFocus
             />
             {query.length > 0 && (
               <Pressable onPress={() => setQuery("")}>
