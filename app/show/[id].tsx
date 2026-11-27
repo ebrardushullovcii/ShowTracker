@@ -875,6 +875,9 @@ export function ShowDetailScreen() {
   const { isAuthenticated } = useConvexAuth();
   const isDesktop = Platform.OS === "web" && width >= 1024;
   const isOverlayDetailRoute = router.canDismiss();
+  const pendingNextSeasonRouteRef = useRef<string | null>(null);
+  // The season prompt waits until the catch-up drawer has fully gone, so two native modals never overlap.
+  const [isCatchUpSheetMounted, setIsCatchUpSheetMounted] = useState(false);
   const drawerBottomInset = useDrawerBottomInset(isOverlayDetailRoute);
   const closeOverlayDetailRoute = useCallback(() => {
     if (router.canDismiss()) {
@@ -2885,6 +2888,7 @@ export function ShowDetailScreen() {
           );
         });
 
+      setIsCatchUpSheetMounted(true);
       setPreviousEpisodesPrompt({
         episode,
         missingEpisodes: missingPreviousEpisodes,
@@ -3669,15 +3673,34 @@ export function ShowDetailScreen() {
     }
   };
 
+  const openPendingNextSeasonRoute = () => {
+    const routeId = pendingNextSeasonRouteRef.current;
+    pendingNextSeasonRouteRef.current = null;
+    if (!routeId) return;
+    try {
+      router.push({ pathname: "/show/[id]", params: { id: routeId } });
+    } catch (navigationError) {
+      console.error("Failed to navigate to next season", navigationError);
+      setTrackingError("Could not open the next season.");
+    }
+  };
+
   const handleNavigateToNextSeason = () => {
     if (!nextSeasonPrompt || isNavigatingToNextSeason) {
       return;
     }
 
     const routeId = nextSeasonPrompt.nextRouteId;
-    setIsNavigatingToNextSeason(true);
     setNextSeasonPrompt(null);
 
+    // iOS cannot present the next route while the prompt's modal is still dismissing,
+    // so the push waits for the prompt drawer's onDismiss there.
+    if (Platform.OS === "ios") {
+      pendingNextSeasonRouteRef.current = routeId;
+      return;
+    }
+
+    setIsNavigatingToNextSeason(true);
     try {
       router.push({ pathname: "/show/[id]", params: { id: routeId } });
     } catch (navigationError) {
@@ -4835,7 +4858,13 @@ export function ShowDetailScreen() {
         {drawerBottomInset > 0 ? <View style={{ height: drawerBottomInset }} /> : null}
       </SheetScrollView>
 
-      <Sheet visible={!!nextSeasonPrompt} onClose={() => setNextSeasonPrompt(null)} label="Season complete" dismissible={!isNavigatingToNextSeason && !isPausingRelatedEntries}>
+      <Sheet
+        visible={!!nextSeasonPrompt && !isCatchUpSheetMounted}
+        onClose={() => setNextSeasonPrompt(null)}
+        onDismiss={openPendingNextSeasonRoute}
+        label="Season complete"
+        dismissible={!isNavigatingToNextSeason && !isPausingRelatedEntries}
+      >
         <SheetHeader
           title="Season complete"
           detail={nextSeasonPrompt ? `Next: ${nextSeasonPrompt.nextTitle}` : undefined}
@@ -4889,7 +4918,13 @@ export function ShowDetailScreen() {
         </View>
       </Sheet>
 
-      <Sheet visible={!!previousEpisodesPrompt} onClose={() => setPreviousEpisodesPrompt(null)} label="Catch up" dismissible={!isPreviousEpisodesPromptRunning}>
+      <Sheet
+        visible={!!previousEpisodesPrompt}
+        onClose={() => setPreviousEpisodesPrompt(null)}
+        onDismiss={() => setIsCatchUpSheetMounted(false)}
+        label="Catch up"
+        dismissible={!isPreviousEpisodesPromptRunning}
+      >
         <SheetHeader
           title="Catch up"
           detail={

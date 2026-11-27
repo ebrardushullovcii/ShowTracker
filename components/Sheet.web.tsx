@@ -1,6 +1,7 @@
-import { createContext, forwardRef, useContext, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { createContext, forwardRef, useCallback, useContext, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Modal, Pressable, ScrollView, View, type ScrollViewProps } from "react-native";
 import { Drawer } from "vaul";
+import { useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { DialogBackdrop, TallDialog } from "@/components/DialogBackdrop";
 import {
@@ -298,9 +299,21 @@ export function Sheet({
   );
 }
 
+function useRouteFocused() {
+  const [focused, setFocused] = useState(true);
+  useFocusEffect(
+    useCallback(() => {
+      setFocused(true);
+      return () => setFocused(false);
+    }, []),
+  );
+  return focused;
+}
+
 export function SheetRouteFrame({ children, onClose, label, maxWidth = 1024, alignEnd, closeLabel }: SheetRouteFrameProps) {
   const { isDesktop } = useSheetMetrics();
   const [open, setOpen] = useState(true);
+  const focused = useRouteFocused();
 
   if (isDesktop) {
     return (
@@ -311,6 +324,10 @@ export function SheetRouteFrame({ children, onClose, label, maxWidth = 1024, ali
       </TallDialog>
     );
   }
+
+  // The drawer portals into <body>, outside the stack that hides unfocused routes, so it hides
+  // itself while another screen is pushed on top.
+  if (!focused) return null;
 
   return (
     <MobileDrawer

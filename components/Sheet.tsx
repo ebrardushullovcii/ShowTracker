@@ -34,6 +34,7 @@ import {
   type PanGesture,
 } from "react-native-gesture-handler";
 import { Ionicons } from "@expo/vector-icons";
+import { useFocusEffect } from "expo-router";
 import Animated, {
   Easing,
   interpolate,
@@ -216,6 +217,7 @@ type SheetBodyProps = {
   surfaceColor: string;
   contentDraggable: boolean;
   closeLabel?: string;
+  handlesBack?: boolean;
 };
 
 function SheetBody({
@@ -232,6 +234,7 @@ function SheetBody({
   surfaceColor,
   contentDraggable,
   closeLabel,
+  handlesBack = false,
 }: SheetBodyProps) {
   const { height, insets, topGap, depth } = useSheetMetrics();
   const keyboardVisible = useKeyboardVisible(avoidKeyboard);
@@ -272,6 +275,8 @@ function SheetBody({
   );
 
   useEffect(() => {
+    // A resize mid-exit must not reopen a route drawer that is already leaving.
+    if (routeClosingRef.current) return;
     isPresented.value = presented;
     if (presented) {
       translateY.value = withTiming(0, OPEN_TIMING);
@@ -311,15 +316,16 @@ function SheetBody({
     }, 80);
   }, [closeAfterAnimation, closeFromRef, dismissible, hide, isPresented, settle]);
 
-  // Android back on a route drawer animates it away like the other close paths.
+  // Android back on a route drawer animates it away like the other close paths, but only while
+  // its route is the focused one; a screen pushed on top handles its own back press.
   useEffect(() => {
-    if (!closeAfterAnimation) return;
+    if (!closeAfterAnimation || !handlesBack) return;
     const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
       requestClose();
       return true;
     });
     return () => subscription.remove();
-  }, [closeAfterAnimation, requestClose]);
+  }, [closeAfterAnimation, handlesBack, requestClose]);
 
   const scrollGesture = useMemo(
     () =>
@@ -532,8 +538,21 @@ export function Sheet({
   );
 }
 
+/** Whether the route that renders this drawer is the focused screen. */
+export function useRouteFocused() {
+  const [focused, setFocused] = useState(true);
+  useFocusEffect(
+    useCallback(() => {
+      setFocused(true);
+      return () => setFocused(false);
+    }, []),
+  );
+  return focused;
+}
+
 /** Frame for a route presented as a drawer over the page that opened it. */
 export function SheetRouteFrame({ children, onClose, label, closeLabel }: SheetRouteFrameProps) {
+  const focused = useRouteFocused();
   return (
     <SheetBody
       label={label}
@@ -547,6 +566,7 @@ export function SheetRouteFrame({ children, onClose, label, closeLabel }: SheetR
       surfaceColor="#09090b"
       contentDraggable
       closeLabel={closeLabel}
+      handlesBack={focused}
     >
       {children}
     </SheetBody>
