@@ -153,7 +153,8 @@ function MobileDrawer({
     <Drawer.Root
       open={open}
       onOpenChange={onOpenChange}
-      dismissible={dismissible}
+      // A hidden drawer sits under another screen and must not react to Escape or drags meant for it.
+      dismissible={dismissible && !hidden}
       // Non-modal keeps react-native-web dialogs opened from inside the sheet clickable.
       modal={false}
       repositionInputs={false}
@@ -178,15 +179,18 @@ function MobileDrawer({
         />
         <Drawer.Content
           aria-describedby={undefined}
+          onEscapeKeyDown={(event) => {
+            if (hidden) event.preventDefault();
+          }}
           style={{
             position: "fixed",
             left: 0,
             right: 0,
             bottom: 0,
             zIndex: layer + 1,
-            ...(hidden ? { visibility: "hidden" as const, pointerEvents: "none" as const } : null),
             // vaul leaves closed content clickable while it slides away.
-            pointerEvents: open ? "auto" : "none",
+            pointerEvents: open && !hidden ? "auto" : "none",
+            visibility: hidden ? "hidden" : undefined,
             display: "flex",
             flexDirection: "column",
             // The app's global `body > div { min-height: 100% }` would otherwise stretch the portal.
