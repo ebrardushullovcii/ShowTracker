@@ -219,8 +219,11 @@ function SheetBody({
   const touchingScroll = useSharedValue(false);
   const dragAnchor = useSharedValue(0);
   const closing = useSharedValue(false);
+  const isPresented = useSharedValue(presented);
   const presentedRef = useRef(presented);
   presentedRef.current = presented;
+  const routeClosingRef = useRef(false);
+  const settleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const settle = useCallback(() => {
     translateY.value = withSpring(0, SETTLE_SPRING);
@@ -236,12 +239,20 @@ function SheetBody({
   );
 
   useEffect(() => {
+    isPresented.value = presented;
     if (presented) {
       translateY.value = withTiming(0, OPEN_TIMING);
     } else {
       hide(onHidden);
     }
-  }, [hide, onHidden, presented, translateY]);
+  }, [hide, isPresented, onHidden, presented, translateY]);
+
+  useEffect(
+    () => () => {
+      if (settleTimerRef.current) clearTimeout(settleTimerRef.current);
+    },
+    [],
+  );
 
   const requestClose = useCallback(() => {
     if (!dismissible) {
@@ -249,15 +260,22 @@ function SheetBody({
       return;
     }
     if (closeAfterAnimation) {
+      // Two close triggers in a row must not dismiss the route twice.
+      if (routeClosingRef.current) return;
+      routeClosingRef.current = true;
+      isPresented.value = false;
       hide(onClose);
       return;
     }
+    if (!presentedRef.current) return;
     onClose();
     // A parent that refuses to close (for example while saving) leaves the sheet open.
-    setTimeout(() => {
+    if (settleTimerRef.current) clearTimeout(settleTimerRef.current);
+    settleTimerRef.current = setTimeout(() => {
+      settleTimerRef.current = null;
       if (presentedRef.current) settle();
     }, 80);
-  }, [closeAfterAnimation, dismissible, hide, onClose, settle]);
+  }, [closeAfterAnimation, dismissible, hide, isPresented, onClose, settle]);
 
   // Android back on a route drawer animates it away like the other close paths.
   useEffect(() => {
@@ -284,8 +302,10 @@ function SheetBody({
   const makePan = useCallback(
     () =>
       Gesture.Pan()
-        .enabled(dismissible)
-        .activeOffsetY([-8, 8])
+        // A closing sheet ignores touches, so a drag cannot interrupt its exit animation.
+        .enabled(dismissible && presented)
+        // Only a downward drag can start moving the sheet; upward drags are scrolls.
+        .activeOffsetY(8)
         .failOffsetX([-16, 16])
         .simultaneousWithExternalGesture(scrollGesture)
         .onStart(() => {
@@ -311,11 +331,11 @@ function SheetBody({
         })
         // Runs after onEnd and also when the system cancels the drag midway.
         .onFinalize(() => {
-          if (!closing.value && translateY.value > 0) {
+          if (!closing.value && isPresented.value && translateY.value > 0) {
             translateY.value = withSpring(0, SETTLE_SPRING);
           }
         }),
-    [closing, dismissible, dragAnchor, requestClose, scrollGesture, scrollY, touchingScroll, translateY],
+    [closing, dismissible, dragAnchor, isPresented, presented, requestClose, scrollGesture, scrollY, touchingScroll, translateY],
   );
   // A gesture object attaches to one detector, so the optional drag handle gets its own.
   const pan = useMemo(() => makePan(), [makePan]);
@@ -335,6 +355,7 @@ function SheetBody({
 
   const surface = (
     <Animated.View
+      pointerEvents={presented ? "auto" : "none"}
       accessibilityViewIsModal
       accessibilityLabel={label}
       onAccessibilityEscape={requestClose}
@@ -409,12 +430,22 @@ export function Sheet({
   children,
 }: SheetProps) {
   const [mounted, setMounted] = useState(visible);
+  // Parents often clear the data behind a sheet as they close it; keep showing the last content
+  // while the sheet slides away.
+  const lastChildren = useRef(children);
+  if (visible) lastChildren.current = children;
 
   useEffect(() => {
     if (visible) setMounted(true);
   }, [visible]);
 
-  const handleHidden = useCallback(() => setMounted(false), []);
+  const onDismissRef = useRef(onDismiss);
+  onDismissRef.current = onDismiss;
+  const handleHidden = useCallback(() => {
+    setMounted(false);
+    // React Native only reports Modal.onDismiss on iOS.
+    if (Platform.OS !== "ios") onDismissRef.current?.();
+  }, []);
 
   return (
     <Modal
@@ -444,7 +475,7 @@ export function Sheet({
             contentDraggable={contentDraggable}
             closeLabel={closeLabel}
           >
-            {children}
+            {visible ? children : lastChildren.current}
           </SheetBody>
         </GestureHandlerRootView>
       ) : null}

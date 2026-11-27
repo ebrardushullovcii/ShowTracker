@@ -1,4 +1,4 @@
-import { Sheet } from "@/components/Sheet";
+import { Sheet, SheetScrollView } from "@/components/Sheet";
 import { SheetHeader } from "@/components/SheetHeader";
 import { useDelayedLoading } from "@/hooks/use-delayed-loading";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -812,7 +812,7 @@ function MonthPickerModal({
 
       <SheetHeader title="Jump to a month" onClose={onClose} closeLabel="Close month picker" />
 
-      <View className="p-dialog-gutter">
+      <SheetScrollView className="shrink" contentContainerClassName="p-dialog-gutter">
         <View className="mb-5 flex-row items-center justify-between gap-3">
           <Pressable
             onPress={() => onChangeYear(-1)}
@@ -915,7 +915,7 @@ function MonthPickerModal({
             </Text>
           </Pressable>
         </View>
-      </View>
+      </SheetScrollView>
     </Sheet>
   );
 }

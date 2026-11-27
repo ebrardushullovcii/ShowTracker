@@ -4835,171 +4835,112 @@ export function ShowDetailScreen() {
         {drawerBottomInset > 0 ? <View style={{ height: drawerBottomInset }} /> : null}
       </SheetScrollView>
 
-      <Modal
-        visible={!!nextSeasonPrompt}
-        transparent
-        animationType="fade"
-        onRequestClose={() =>
-          !isNavigatingToNextSeason && !isPausingRelatedEntries && setNextSeasonPrompt(null)
-        }
-      >
-        <DialogBackdrop>
+      <Sheet visible={!!nextSeasonPrompt} onClose={() => setNextSeasonPrompt(null)} label="Season complete" dismissible={!isNavigatingToNextSeason && !isPausingRelatedEntries}>
+        <SheetHeader
+          title="Season complete"
+          detail={nextSeasonPrompt ? `Next: ${nextSeasonPrompt.nextTitle}` : undefined}
+          detailPlacement="stacked"
+          onClose={() => setNextSeasonPrompt(null)}
+          closeLabel="Stay here"
+        />
+
+        <View className="gap-2 p-dialog-gutter">
           <Pressable
-            className="absolute inset-0"
-            focusable={false}
-            style={{ outlineWidth: 0, outlineStyle: "solid", outlineColor: "transparent" }}
-            onPress={() =>
-              !isNavigatingToNextSeason && !isPausingRelatedEntries && setNextSeasonPrompt(null)
-            }
-          />
+            disabled={isNavigatingToNextSeason || isPausingRelatedEntries}
+            onPress={handleNavigateToNextSeason}
+            className="items-center justify-center rounded-xl border border-primary/40 bg-primary/15 py-3.5 active:bg-primary/20"
+          >
+            {isNavigatingToNextSeason ? (
+              <View className="flex-row items-center gap-2">
+                <BrandLoader compact />
+                <Text className="font-semibold text-text-primary">Opening...</Text>
+              </View>
+            ) : (
+              <Text className="font-semibold text-text-primary">Go to Next Season</Text>
+            )}
+          </Pressable>
 
-          <View className="dialog-panel max-w-confirmation">
-            <View className="dialog-header">
-              <Text className="text-xs font-semibold uppercase tracking-wide text-text-secondary">
-                Season Complete
-              </Text>
-              <Text className="mt-1 text-lg font-black text-text-primary" numberOfLines={2}>
-                {nextSeasonPrompt?.completedSeasonName}
-              </Text>
-              <Text className="mt-2 text-sm leading-relaxed text-text-secondary">
-                You finished this season. Move to the next entry?
-              </Text>
-              <Text className="mt-1 text-sm font-semibold text-text-primary" numberOfLines={2}>
-                {nextSeasonPrompt?.nextTitle}
-              </Text>
-            </View>
-
-            <View className="gap-2 p-dialog-gutter">
-              <Pressable
-                disabled={isNavigatingToNextSeason || isPausingRelatedEntries}
-                onPress={handleNavigateToNextSeason}
-                className="items-center justify-center rounded-xl border border-primary/40 bg-primary/15 py-3.5 active:bg-primary/20"
-              >
-                {isNavigatingToNextSeason ? (
-                  <View className="flex-row items-center gap-2">
-                    <BrandLoader compact />
-                    <Text className="font-semibold text-text-primary">Opening...</Text>
-                  </View>
-                ) : (
-                  <Text className="font-semibold text-text-primary">Go to Next Season</Text>
-                )}
-              </Pressable>
-
-              <Pressable
-                disabled={isNavigatingToNextSeason || isPausingRelatedEntries}
-                onPress={() => {
-                  void handlePauseOtherRelatedSeasons();
-                }}
-                className="items-center justify-center rounded-xl border border-border-default bg-bg-base py-3.5 active:bg-bg-elevated"
-              >
-                {isPausingRelatedEntries ? (
-                  <View className="flex-row items-center gap-2">
-                    <BrandLoader compact />
-                    <Text className="font-semibold text-text-secondary">Pausing...</Text>
-                  </View>
-                ) : (
-                  <Text className="font-semibold text-text-secondary">
-                    Pause Other Franchise Titles
-                  </Text>
-                )}
-              </Pressable>
-
-              <Pressable
-                disabled={isNavigatingToNextSeason || isPausingRelatedEntries}
-                onPress={() => setNextSeasonPrompt(null)}
-                className="items-center justify-center rounded-xl border border-border-default bg-bg-base py-3.5 active:bg-bg-elevated"
-              >
-                <Text className="font-semibold text-text-secondary">Stay Here</Text>
-              </Pressable>
-            </View>
-          </View>
-        </DialogBackdrop>
-      </Modal>
-
-      <Modal
-        visible={!!previousEpisodesPrompt}
-        transparent
-        animationType="fade"
-        onRequestClose={() => {
-          if (!isPreviousEpisodesPromptRunning) {
-            setPreviousEpisodesPrompt(null);
-          }
-        }}
-      >
-        <DialogBackdrop>
           <Pressable
-            className="absolute inset-0"
-            focusable={false}
-            style={{ outlineWidth: 0, outlineStyle: "solid", outlineColor: "transparent" }}
+            disabled={isNavigatingToNextSeason || isPausingRelatedEntries}
             onPress={() => {
-              if (!isPreviousEpisodesPromptRunning) {
-                setPreviousEpisodesPrompt(null);
-              }
+              void handlePauseOtherRelatedSeasons();
             }}
-          />
-
-          <View className="dialog-panel max-w-confirmation">
-            <View className="dialog-header">
-              <Text className="text-xs font-semibold uppercase tracking-wide text-text-secondary">
-                Catch Up
+            className="items-center justify-center rounded-xl border border-border-default bg-bg-base py-3.5 active:bg-bg-elevated"
+          >
+            {isPausingRelatedEntries ? (
+              <View className="flex-row items-center gap-2">
+                <BrandLoader compact />
+                <Text className="font-semibold text-text-secondary">Pausing...</Text>
+              </View>
+            ) : (
+              <Text className="font-semibold text-text-secondary">
+                Pause Other Franchise Titles
               </Text>
-              <Text className="mt-1 text-lg font-black text-text-primary" numberOfLines={2}>
-                {previousEpisodesPrompt?.episode.name ??
-                  `Episode ${previousEpisodesPrompt?.episode.episodeNumber ?? ""}`}
-              </Text>
-              <Text className="mt-1 text-sm text-text-secondary" numberOfLines={2}>
-                {previousEpisodesPrompt
-                  ? `S${String(previousEpisodesPrompt.episode.seasonNumber).padStart(2, "0")}E${String(previousEpisodesPrompt.episode.episodeNumber).padStart(2, "0")}`
-                  : ""}
-              </Text>
-              <Text className="mt-2 text-sm leading-relaxed text-text-secondary">
-                {previousEpisodesPrompt
-                  ? `You still have ${previousEpisodesPrompt.missingEpisodes.length} earlier released episode${previousEpisodesPrompt.missingEpisodes.length === 1 ? "" : "s"} not marked as watched.`
-                  : ""}
-              </Text>
-            </View>
+            )}
+          </Pressable>
 
-            <View className="gap-2 p-dialog-gutter">
-              <Pressable
-                disabled={isPreviousEpisodesPromptRunning}
-                onPress={() => {
-                  void handlePreviousEpisodesPromptChoice("all");
-                }}
-                className="items-center justify-center rounded-xl border border-primary/40 bg-primary/15 py-3.5 active:bg-primary/20"
-              >
-                {isPreviousEpisodesPromptRunning ? (
-                  <View className="flex-row items-center gap-2">
-                    <BrandLoader compact />
-                    <Text className="font-semibold text-text-primary">Processing...</Text>
-                  </View>
-                ) : (
-                  <Text className="font-semibold text-text-primary">
-                    Mark Previous Episodes Too
-                  </Text>
-                )}
-              </Pressable>
+          <Pressable
+            disabled={isNavigatingToNextSeason || isPausingRelatedEntries}
+            onPress={() => setNextSeasonPrompt(null)}
+            className="items-center justify-center rounded-xl border border-border-default bg-bg-base py-3.5 active:bg-bg-elevated"
+          >
+            <Text className="font-semibold text-text-secondary">Stay Here</Text>
+          </Pressable>
+        </View>
+      </Sheet>
 
-              <Pressable
-                disabled={isPreviousEpisodesPromptRunning}
-                onPress={() => {
-                  void handlePreviousEpisodesPromptChoice("current");
-                }}
-                className="items-center justify-center rounded-xl border border-border-default bg-bg-base py-3.5 active:bg-bg-elevated"
-              >
-                <Text className="font-semibold text-text-secondary">Only This Episode</Text>
-              </Pressable>
+      <Sheet visible={!!previousEpisodesPrompt} onClose={() => setPreviousEpisodesPrompt(null)} label="Catch up" dismissible={!isPreviousEpisodesPromptRunning}>
+        <SheetHeader
+          title="Catch up"
+          detail={
+            previousEpisodesPrompt
+              ? `S${String(previousEpisodesPrompt.episode.seasonNumber).padStart(2, "0")}E${String(previousEpisodesPrompt.episode.episodeNumber).padStart(2, "0")} · ${previousEpisodesPrompt.missingEpisodes.length} earlier episode${previousEpisodesPrompt.missingEpisodes.length === 1 ? "" : "s"} not marked watched`
+              : undefined
+          }
+          detailPlacement="stacked"
+          onClose={() => setPreviousEpisodesPrompt(null)}
+          closeLabel="Close catch up"
+        />
 
-              <Pressable
-                disabled={isPreviousEpisodesPromptRunning}
-                onPress={() => setPreviousEpisodesPrompt(null)}
-                className="items-center justify-center rounded-xl py-2"
-              >
-                <Text className="text-sm text-text-muted">Cancel</Text>
-              </Pressable>
-            </View>
-          </View>
-        </DialogBackdrop>
-      </Modal>
+        <View className="gap-2 p-dialog-gutter">
+          <Pressable
+            disabled={isPreviousEpisodesPromptRunning}
+            onPress={() => {
+              void handlePreviousEpisodesPromptChoice("all");
+            }}
+            className="items-center justify-center rounded-xl border border-primary/40 bg-primary/15 py-3.5 active:bg-primary/20"
+          >
+            {isPreviousEpisodesPromptRunning ? (
+              <View className="flex-row items-center gap-2">
+                <BrandLoader compact />
+                <Text className="font-semibold text-text-primary">Processing...</Text>
+              </View>
+            ) : (
+              <Text className="font-semibold text-text-primary">
+                Mark Previous Episodes Too
+              </Text>
+            )}
+          </Pressable>
+
+          <Pressable
+            disabled={isPreviousEpisodesPromptRunning}
+            onPress={() => {
+              void handlePreviousEpisodesPromptChoice("current");
+            }}
+            className="items-center justify-center rounded-xl border border-border-default bg-bg-base py-3.5 active:bg-bg-elevated"
+          >
+            <Text className="font-semibold text-text-secondary">Only This Episode</Text>
+          </Pressable>
+
+          <Pressable
+            disabled={isPreviousEpisodesPromptRunning}
+            onPress={() => setPreviousEpisodesPrompt(null)}
+            className="items-center justify-center rounded-xl py-2"
+          >
+            <Text className="text-sm text-text-muted">Cancel</Text>
+          </Pressable>
+        </View>
+      </Sheet>
 
       <Sheet visible={!!watchActionTarget} onClose={() => setWatchActionTarget(null)} label="Watch options" dismissible={!isWatchActionRunning}>
         <SheetHeader

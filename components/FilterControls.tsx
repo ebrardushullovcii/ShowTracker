@@ -29,8 +29,7 @@ type OpenSheet = "genres" | "year" | "rating" | null;
 
 function genreChipLabel(genres: FilterOption[], selected: string[]) {
   if (selected.length === 0) return "Genre";
-  const first = genres.find((option) => option.value === selected[0])?.label ?? selected[0];
-  return selected.length === 1 ? first : `${first} +${selected.length - 1}`;
+  return genres.find((option) => option.value === selected[0])?.label ?? selected[0];
 }
 
 /**
@@ -63,6 +62,8 @@ export function FilterControls({
         {genres.length > 0 ? (
           <DropdownFilterChip
             label={genreChipLabel(genres, selectedGenres)}
+            // Kept outside the label so a long genre name cannot truncate the count.
+            suffix={selectedGenres.length > 1 ? `+${selectedGenres.length - 1}` : undefined}
             active={selectedGenres.length > 0}
             open={openSheet === "genres"}
             onPress={() => setOpenSheet("genres")}
@@ -82,7 +83,7 @@ export function FilterControls({
         ) : null}
         {ratings.length > 0 ? (
           <DropdownFilterChip
-            label={selectedRating ? `${selectedRating}+ rating` : "Rating"}
+            label={selectedRating ? `★ ${selectedRating}+` : "Rating"}
             active={Boolean(selectedRating)}
             open={openSheet === "rating"}
             onPress={() => setOpenSheet("rating")}
@@ -97,8 +98,8 @@ export function FilterControls({
         <SheetHeader
           title="Genres"
           detail={selectedGenres.length > 0 ? `${selectedGenres.length} selected` : "Pick any"}
-          actionLabel="Done"
-          onAction={close}
+          onClose={close}
+          closeLabel="Close genre filter"
         />
         <SheetScrollView className="shrink" contentContainerClassName="p-dialog-gutter">
           <TileGrid columns={2}>
@@ -231,19 +232,24 @@ function OptionTile({
 
 const TILE_GAP = 8;
 
-/** Even columns sized from the measured width, so tiles line up edge to edge. */
+/** Even columns that have their final height on the first frame, so drawers open at the right size. */
 function TileGrid({ columns, children }: { columns: number; children: ReactNode }) {
-  const [width, setWidth] = useState(0);
-  const tileWidth = width > 0 ? Math.floor((width - TILE_GAP * (columns - 1)) / columns) : 0;
+  const items = Children.toArray(children);
+  const rows: ReactNode[][] = [];
+  for (let index = 0; index < items.length; index += columns) {
+    rows.push(items.slice(index, index + columns));
+  }
   return (
-    <View
-      className="flex-row flex-wrap"
-      style={{ gap: TILE_GAP }}
-      onLayout={(event) => setWidth(event.nativeEvent.layout.width)}
-    >
-      {tileWidth > 0
-        ? Children.map(children, (child) => <View style={{ width: tileWidth }}>{child}</View>)
-        : null}
+    <View style={{ gap: TILE_GAP }}>
+      {rows.map((row, rowIndex) => (
+        <View key={rowIndex} className="flex-row" style={{ gap: TILE_GAP }}>
+          {Array.from({ length: columns }, (_, column) => (
+            <View key={column} className="min-w-0 flex-1">
+              {row[column] ?? null}
+            </View>
+          ))}
+        </View>
+      ))}
     </View>
   );
 }

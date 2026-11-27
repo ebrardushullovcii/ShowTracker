@@ -34,6 +34,8 @@ type DropdownFilterChipProps = {
   active?: boolean;
   open?: boolean;
   onPress: () => void;
+  /** Short text that never truncates, shown after the label (for example "+2"). */
+  suffix?: string;
   /** When set, an active chip shows a clear button in place of its chevron. */
   onClear?: () => void;
   clearAccessibilityLabel?: string;
@@ -180,6 +182,7 @@ export function FilterBar<T extends string>({
 
 export function DropdownFilterChip({
   label,
+  suffix,
   active = false,
   open = false,
   onPress,
@@ -204,12 +207,15 @@ export function DropdownFilterChip({
       >
         <Text
           numberOfLines={1}
-          className={`max-w-[160px] text-xs font-black uppercase tracking-wide ${
+          className={`max-w-[140px] shrink text-xs font-black uppercase tracking-wide ${
             active ? "text-text-primary" : "text-text-secondary"
           }`}
         >
           {label}
         </Text>
+        {suffix ? (
+          <Text className="shrink-0 text-xs font-black text-primary">{suffix}</Text>
+        ) : null}
         {showClear ? null : (
           <Ionicons name="chevron-down" size={16} color={active ? "#ef4444" : "#a1a1aa"} />
         )}

@@ -15,7 +15,8 @@ import {
 export { SHEET_CORNER_RADIUS } from "@/components/sheetLayout";
 export type { SheetProps, SheetRouteFrameProps, SheetSize } from "@/components/sheetLayout";
 
-// vaul already lets a scrolled element keep the drag until it reaches its top edge.
+// vaul already lets a scrolled element keep the drag until it reaches its top edge, and content in an
+// iframe (the share composer) never reaches vaul, so `contentDraggable` needs no web handling.
 export const SheetScrollView = forwardRef<ScrollView, ScrollViewProps>(function SheetScrollView(props, ref) {
   return <ScrollView ref={ref} {...props} />;
 });
@@ -95,21 +96,43 @@ type MobileDrawerProps = {
   dismissible: boolean;
   background: string;
   closeLabel?: string;
+  /** Route content already pads its own bottom safe area. */
+  padBottom?: boolean;
   children: ReactNode;
 };
 
-function MobileDrawer({ open, onOpenChange, onClosed, label, size, dismissible, background, closeLabel, children }: MobileDrawerProps) {
+function MobileDrawer({
+  open,
+  onOpenChange,
+  onClosed,
+  label,
+  size,
+  dismissible,
+  background,
+  closeLabel,
+  padBottom = true,
+  children,
+}: MobileDrawerProps) {
   const { maxHeight, insets, depth } = useSheetMetrics();
   const layer = sheetLayer(depth);
   const onClosedRef = useRef(onClosed);
   onClosedRef.current = onClosed;
   const wasOpen = useRef(open);
+  const [closing, setClosing] = useState(false);
+  const requestClose = () => {
+    if (dismissible) onOpenChange(false);
+  };
 
   // vaul does not report the end of its close animation in non-modal mode, so wait it out.
+  // Until then the backdrop keeps catching taps, so nothing underneath opens mid-close.
   useEffect(() => {
     if (wasOpen.current && !open) {
-      const timer = setTimeout(() => onClosedRef.current?.(), CLOSE_ANIMATION_MS);
       wasOpen.current = open;
+      setClosing(true);
+      const timer = setTimeout(() => {
+        setClosing(false);
+        onClosedRef.current?.();
+      }, CLOSE_ANIMATION_MS);
       return () => clearTimeout(timer);
     }
     wasOpen.current = open;
@@ -127,9 +150,7 @@ function MobileDrawer({ open, onOpenChange, onClosed, label, size, dismissible, 
       <Drawer.Portal>
         <div
           aria-hidden
-          onClick={() => {
-            if (dismissible) onOpenChange(false);
-          }}
+          onClick={requestClose}
           style={{
             position: "fixed",
             inset: 0,
@@ -140,7 +161,7 @@ function MobileDrawer({ open, onOpenChange, onClosed, label, size, dismissible, 
             overscrollBehavior: "contain",
             opacity: open ? 1 : 0,
             transition: "opacity 300ms cubic-bezier(0.32, 0.72, 0, 1)",
-            pointerEvents: open ? "auto" : "none",
+            pointerEvents: open || closing ? "auto" : "none",
           }}
         />
         <Drawer.Content
@@ -157,7 +178,7 @@ function MobileDrawer({ open, onOpenChange, onClosed, label, size, dismissible, 
             minHeight: 0,
             height: size === "tall" ? maxHeight : "auto",
             maxHeight,
-            paddingBottom: insets.bottom,
+            paddingBottom: padBottom ? insets.bottom : 0,
             background,
             borderTopLeftRadius: SHEET_CORNER_RADIUS,
             borderTopRightRadius: SHEET_CORNER_RADIUS,
@@ -168,10 +189,10 @@ function MobileDrawer({ open, onOpenChange, onClosed, label, size, dismissible, 
           }}
         >
           <Drawer.Title style={srOnly}>{label}</Drawer.Title>
-          <Grabber closeLabel={closeLabel} onClose={() => onOpenChange(false)} />
+          <Grabber closeLabel={closeLabel} onClose={requestClose} />
           <div style={{ display: "flex", flexDirection: "column", flexGrow: size === "tall" ? 1 : 0, flexShrink: 1, minHeight: 0 }}>
             <SheetDepthContext.Provider value={depth + 1}>
-              <SheetDismissContext.Provider value={() => onOpenChange(false)}>{children}</SheetDismissContext.Provider>
+              <SheetDismissContext.Provider value={requestClose}>{children}</SheetDismissContext.Provider>
             </SheetDepthContext.Provider>
           </div>
         </Drawer.Content>
@@ -208,6 +229,12 @@ export function Sheet({
   children,
 }: SheetProps) {
   const { isDesktop } = useSheetMetrics();
+  // Parents often clear the data behind a sheet as they close it; keep the last content while it slides away.
+  const lastChildren = useRef(children);
+  if (visible) lastChildren.current = children;
+  const closeIfDismissible = () => {
+    if (dismissible) onClose();
+  };
 
   if (isDesktop) {
     return (
@@ -225,7 +252,7 @@ export function Sheet({
             className="absolute inset-0"
             accessible={false}
             focusable={false}
-            onPress={dismissible ? onClose : undefined}
+            onPress={closeIfDismissible}
           />
           <View
             accessibilityViewIsModal
@@ -235,8 +262,8 @@ export function Sheet({
           >
             {/* Stands in for the phone grabber row above the drawer header. */}
             <View className="h-3" />
-            {children}
-            {closeLabel ? <DesktopCloseButton label={closeLabel} onPress={onClose} /> : null}
+            <SheetDismissContext.Provider value={closeIfDismissible}>{children}</SheetDismissContext.Provider>
+            {closeLabel ? <DesktopCloseButton label={closeLabel} onPress={closeIfDismissible} /> : null}
           </View>
         </DialogBackdrop>
       </Modal>
@@ -256,7 +283,7 @@ export function Sheet({
       background={surface === "base" ? "#09090b" : "#18181b"}
       closeLabel={closeLabel}
     >
-      {children}
+      {visible ? children : lastChildren.current}
     </MobileDrawer>
   );
 }
@@ -285,6 +312,7 @@ export function SheetRouteFrame({ children, onClose, label, maxWidth = 1024, ali
       dismissible
       background="#09090b"
       closeLabel={closeLabel}
+      padBottom={false}
     >
       {children}
     </MobileDrawer>

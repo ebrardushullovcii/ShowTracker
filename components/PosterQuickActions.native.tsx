@@ -15,6 +15,10 @@ export function PosterQuickActions({ children, routeId, tracked }: PosterQuickAc
     router.push({ pathname: "/show/[id]", params: { id: routeId, posterAction } });
   };
   const closeMenu = () => setMenu("closing");
+  // Taps while the drawer is already closing must not change which action runs afterwards.
+  const chooseAction = (action: PosterAction) => {
+    setMenu((current) => (current === "open" ? action : current));
+  };
   const showMenu = () => {
     if (Platform.OS === "ios") {
       setMenu("open");
@@ -54,7 +58,7 @@ export function PosterQuickActions({ children, routeId, tracked }: PosterQuickAc
             accessibilityRole="button"
             accessibilityLabel={trackingLabel}
             className="min-h-14 flex-row items-center gap-3 px-dialog-gutter py-3 active:bg-bg-elevated"
-            onPress={() => setMenu("tracking")}
+            onPress={() => chooseAction("tracking")}
           >
             <Ionicons name="checkmark-circle-outline" size={22} color="#a1a1aa" />
             <Text className="flex-1 text-base font-semibold text-text-primary">{trackingLabel}</Text>
@@ -64,7 +68,7 @@ export function PosterQuickActions({ children, routeId, tracked }: PosterQuickAc
             accessibilityRole="button"
             accessibilityLabel="Share"
             className="min-h-14 flex-row items-center gap-3 px-dialog-gutter py-3 active:bg-bg-elevated"
-            onPress={() => setMenu("share")}
+            onPress={() => chooseAction("share")}
           >
             <Ionicons name="share-outline" size={22} color="#a1a1aa" />
             <Text className="flex-1 text-base font-semibold text-text-primary">Share</Text>
