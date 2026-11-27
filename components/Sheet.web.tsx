@@ -118,22 +118,30 @@ function MobileDrawer({
   const onClosedRef = useRef(onClosed);
   onClosedRef.current = onClosed;
   const wasOpen = useRef(open);
-  const [closing, setClosing] = useState(false);
+  const layerRef = useRef(layer);
+  layerRef.current = layer;
   const requestClose = () => {
     if (dismissible) onOpenChange(false);
   };
 
   // vaul does not report the end of its close animation in non-modal mode, so wait it out.
-  // Until then the backdrop keeps catching taps, so nothing underneath opens mid-close.
+  // vaul also drops the backdrop as soon as closing starts, so a blocker catches taps until the
+  // close finishes; otherwise a tap could open another show that this route's close then dismisses.
   useEffect(() => {
     if (wasOpen.current && !open) {
       wasOpen.current = open;
-      setClosing(true);
+      const blocker = document.createElement("div");
+      blocker.setAttribute("aria-hidden", "true");
+      Object.assign(blocker.style, { position: "fixed", inset: "0", zIndex: String(layerRef.current) });
+      document.body.appendChild(blocker);
       const timer = setTimeout(() => {
-        setClosing(false);
+        blocker.remove();
         onClosedRef.current?.();
       }, CLOSE_ANIMATION_MS);
-      return () => clearTimeout(timer);
+      return () => {
+        clearTimeout(timer);
+        blocker.remove();
+      };
     }
     wasOpen.current = open;
   }, [open]);
@@ -161,7 +169,7 @@ function MobileDrawer({
             overscrollBehavior: "contain",
             opacity: open ? 1 : 0,
             transition: "opacity 300ms cubic-bezier(0.32, 0.72, 0, 1)",
-            pointerEvents: open || closing ? "auto" : "none",
+            pointerEvents: open ? "auto" : "none",
           }}
         />
         <Drawer.Content
