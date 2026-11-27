@@ -99,6 +99,7 @@ type MobileDrawerProps = {
   closeLabel?: string;
   /** Route content already pads its own bottom safe area. */
   padBottom?: boolean;
+  hidden?: boolean;
   children: ReactNode;
 };
 
@@ -112,6 +113,7 @@ function MobileDrawer({
   background,
   closeLabel,
   padBottom = true,
+  hidden = false,
   children,
 }: MobileDrawerProps) {
   const { maxHeight, insets, depth } = useSheetMetrics();
@@ -161,6 +163,7 @@ function MobileDrawer({
           aria-hidden
           onClick={requestClose}
           style={{
+            display: hidden ? "none" : undefined,
             position: "fixed",
             inset: 0,
             zIndex: layer,
@@ -181,6 +184,7 @@ function MobileDrawer({
             right: 0,
             bottom: 0,
             zIndex: layer + 1,
+            ...(hidden ? { visibility: "hidden" as const, pointerEvents: "none" as const } : null),
             // vaul leaves closed content clickable while it slides away.
             pointerEvents: open ? "auto" : "none",
             display: "flex",
@@ -325,15 +329,14 @@ export function SheetRouteFrame({ children, onClose, label, maxWidth = 1024, ali
     );
   }
 
-  // The drawer portals into <body>, outside the stack that hides unfocused routes, so it hides
-  // itself while another screen is pushed on top.
-  if (!focused) return null;
-
   return (
     <MobileDrawer
       open={open}
       onOpenChange={setOpen}
       onClosed={onClose}
+      // The drawer portals into <body>, outside the stack that hides unfocused routes, so it hides
+      // itself while another screen is on top. It stays mounted so its content and scroll survive.
+      hidden={!focused}
       label={label}
       size="tall"
       dismissible
