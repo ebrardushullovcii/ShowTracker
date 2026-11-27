@@ -1,11 +1,10 @@
-import { DialogBackdrop } from "@/components/DialogBackdrop";
+import { Sheet, SheetScrollView } from "@/components/Sheet";
+import { SheetHeader } from "@/components/SheetHeader";
 import { useDelayedLoading } from "@/hooks/use-delayed-loading";
-import { HeaderIconButton } from "@/components/HeaderIconButton";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AppState,
   Image,
-  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -803,141 +802,121 @@ function MonthPickerModal({
   );
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <DialogBackdrop>
-        <Pressable className="absolute inset-0" onPress={onClose} />
+    <Sheet visible={visible} onClose={onClose} label="Month picker">
+      <LinearGradient
+        colors={["rgba(255,106,86,0.16)", "rgba(120,36,49,0.08)", "rgba(18,13,16,0.96)"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={{ position: "absolute", left: 0, right: 0, top: 0, bottom: 0 }}
+      />
 
-        <View className="dialog-panel max-w-dialog">
-          <LinearGradient
-            colors={["rgba(255,106,86,0.16)", "rgba(120,36,49,0.08)", "rgba(18,13,16,0.96)"]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={{ position: "absolute", left: 0, right: 0, top: 0, bottom: 0 }}
-          />
+      <SheetHeader title="Jump to a month" onClose={onClose} closeLabel="Close month picker" />
 
-          <View className="dialog-header relative">
-            <View className="flex-row items-start gap-3">
-              <HeaderIconButton icon="close" accessibilityLabel="Close month picker" onPress={onClose} />
-              <View className="flex-1">
-                <Text className="text-[10px] font-black uppercase tracking-[1.8px] text-zinc-500">
-                  Month Picker
-                </Text>
-                <Text className="mt-2 text-2xl font-black text-white">Jump through the schedule</Text>
-                <Text className="mt-1 text-sm text-zinc-400">
-                  Pick a month directly instead of paging one step at a time.
-                </Text>
-              </View>
+      <SheetScrollView className="shrink" contentContainerClassName="p-dialog-gutter">
+        <View className="mb-5 flex-row items-center justify-between gap-3">
+          <Pressable
+            onPress={() => onChangeYear(-1)}
+            accessibilityRole="button"
+            className="rounded-full border border-white/10 bg-white/5 px-3 py-2"
+          >
+            <Text className="text-[11px] font-black uppercase tracking-[1.2px] text-zinc-200">
+              Prev Year
+            </Text>
+          </Pressable>
 
-            </View>
+          <View className="items-center">
+            <Text className="text-[10px] font-black uppercase tracking-[1.6px] text-zinc-500">
+              Browse Year
+            </Text>
+            <Text className="mt-1 text-3xl font-black text-white">{pickerYear}</Text>
           </View>
 
-          <View className="p-dialog-gutter">
-            <View className="mb-5 flex-row items-center justify-between gap-3">
-              <Pressable
-                onPress={() => onChangeYear(-1)}
-                accessibilityRole="button"
-                className="rounded-full border border-white/10 bg-white/5 px-3 py-2"
-              >
-                <Text className="text-[11px] font-black uppercase tracking-[1.2px] text-zinc-200">
-                  Prev Year
-                </Text>
-              </Pressable>
-
-              <View className="items-center">
-                <Text className="text-[10px] font-black uppercase tracking-[1.6px] text-zinc-500">
-                  Browse Year
-                </Text>
-                <Text className="mt-1 text-3xl font-black text-white">{pickerYear}</Text>
-              </View>
-
-              <Pressable
-                onPress={() => onChangeYear(1)}
-                accessibilityRole="button"
-                className="rounded-full border border-white/10 bg-white/5 px-3 py-2"
-              >
-                <Text className="text-[11px] font-black uppercase tracking-[1.2px] text-zinc-200">
-                  Next Year
-                </Text>
-              </Pressable>
-            </View>
-
-            <View className="gap-3">
-              {monthRows.map((row, rowIndex) => (
-                <View key={`month-row-${rowIndex}`} className="flex-row gap-3">
-                  {row.map((monthIndex) => {
-                    const isSelected =
-                      selectedMonthDate.getFullYear() === pickerYear &&
-                      selectedMonthDate.getMonth() === monthIndex;
-                    const isCurrent =
-                      currentMonthDate.getFullYear() === pickerYear &&
-                      currentMonthDate.getMonth() === monthIndex;
-
-                    return (
-                      <Pressable
-                        key={`month-option-${monthIndex}`}
-                        onPress={() => onSelectMonth(monthIndex)}
-                        accessibilityRole="button"
-                        className={`min-h-[86px] flex-1 rounded-[24px] border px-3 py-3 ${
-                          isSelected
-                            ? "border-[#ff745f] bg-[#2a151a]"
-                            : isCurrent
-                              ? "border-[#87505a] bg-[#1d1318]"
-                              : "border-[#34252c] bg-[#161014]"
-                        }`}
-                        style={({ pressed }) => ({
-                          transform: [{ scale: pressed ? 0.985 : 1 }],
-                        })}
-                      >
-                        <Text
-                          className={`text-[10px] font-black uppercase tracking-[1.5px] ${
-                            isSelected ? "text-[#ffb0a4]" : "text-zinc-500"
-                          }`}
-                        >
-                          {String(monthIndex + 1).padStart(2, "0")}
-                        </Text>
-                        <Text className="mt-2 text-lg font-black text-white">
-                          {getMonthShortLabel(monthIndex)}
-                        </Text>
-                        <Text
-                          className={`mt-2 text-[11px] font-bold ${
-                            isSelected
-                              ? "text-[#ffcabf]"
-                              : isCurrent
-                                ? "text-zinc-200"
-                                : "text-zinc-500"
-                          }`}
-                        >
-                          {isSelected ? "Selected month" : isCurrent ? "Current month" : "Open month"}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-              ))}
-            </View>
-
-            <View className="mt-5 flex-row items-center justify-between gap-3 rounded-[24px] border border-[#2d1c22] bg-[#171114] px-4 py-3">
-              <View className="flex-1">
-                <Text className="text-[10px] font-black uppercase tracking-[1.4px] text-zinc-500">
-                  Quick Reset
-                </Text>
-                <Text className="mt-1 text-sm text-zinc-300">{getMonthTitle(currentMonthDate)}</Text>
-              </View>
-
-              <Pressable
-                onPress={onGoToCurrentMonth}
-                accessibilityRole="button"
-                className="rounded-full border border-[#ff6a56]/45 bg-[#35181d] px-4 py-2.5"
-              >
-                <Text className="text-[11px] font-black uppercase tracking-[1.2px] text-[#ffb0a4]">
-                  Current
-                </Text>
-              </Pressable>
-            </View>
-          </View>
+          <Pressable
+            onPress={() => onChangeYear(1)}
+            accessibilityRole="button"
+            className="rounded-full border border-white/10 bg-white/5 px-3 py-2"
+          >
+            <Text className="text-[11px] font-black uppercase tracking-[1.2px] text-zinc-200">
+              Next Year
+            </Text>
+          </Pressable>
         </View>
-      </DialogBackdrop>
-    </Modal>
+
+        <View className="gap-3">
+          {monthRows.map((row, rowIndex) => (
+            <View key={`month-row-${rowIndex}`} className="flex-row gap-3">
+              {row.map((monthIndex) => {
+                const isSelected =
+                  selectedMonthDate.getFullYear() === pickerYear &&
+                  selectedMonthDate.getMonth() === monthIndex;
+                const isCurrent =
+                  currentMonthDate.getFullYear() === pickerYear &&
+                  currentMonthDate.getMonth() === monthIndex;
+
+                return (
+                  <Pressable
+                    key={`month-option-${monthIndex}`}
+                    onPress={() => onSelectMonth(monthIndex)}
+                    accessibilityRole="button"
+                    className={`min-h-[86px] flex-1 rounded-[24px] border px-3 py-3 ${
+                      isSelected
+                        ? "border-[#ff745f] bg-[#2a151a]"
+                        : isCurrent
+                          ? "border-[#87505a] bg-[#1d1318]"
+                          : "border-[#34252c] bg-[#161014]"
+                    }`}
+                    style={({ pressed }) => ({
+                      transform: [{ scale: pressed ? 0.985 : 1 }],
+                    })}
+                  >
+                    <Text
+                      className={`text-[10px] font-black uppercase tracking-[1.5px] ${
+                        isSelected ? "text-[#ffb0a4]" : "text-zinc-500"
+                      }`}
+                    >
+                      {String(monthIndex + 1).padStart(2, "0")}
+                    </Text>
+                    <Text className="mt-2 text-lg font-black text-white">
+                      {getMonthShortLabel(monthIndex)}
+                    </Text>
+                    <Text
+                      className={`mt-2 text-[11px] font-bold ${
+                        isSelected
+                          ? "text-[#ffcabf]"
+                          : isCurrent
+                            ? "text-zinc-200"
+                            : "text-zinc-500"
+                      }`}
+                    >
+                      {isSelected ? "Selected month" : isCurrent ? "Current month" : "Open month"}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          ))}
+        </View>
+
+        <View className="mt-5 flex-row items-center justify-between gap-3 rounded-[24px] border border-[#2d1c22] bg-[#171114] px-4 py-3">
+          <View className="flex-1">
+            <Text className="text-[10px] font-black uppercase tracking-[1.4px] text-zinc-500">
+              Quick Reset
+            </Text>
+            <Text className="mt-1 text-sm text-zinc-300">{getMonthTitle(currentMonthDate)}</Text>
+          </View>
+
+          <Pressable
+            onPress={onGoToCurrentMonth}
+            accessibilityRole="button"
+            className="rounded-full border border-[#ff6a56]/45 bg-[#35181d] px-4 py-2.5"
+          >
+            <Text className="text-[11px] font-black uppercase tracking-[1.2px] text-[#ffb0a4]">
+              Current
+            </Text>
+          </Pressable>
+        </View>
+      </SheetScrollView>
+    </Sheet>
   );
 }
 

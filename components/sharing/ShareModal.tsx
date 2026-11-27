@@ -1,25 +1,24 @@
-import { OverlayHeader } from "@/components/OverlayHeader";
-import { TallDialog, useDrawerBottomInset } from "@/components/DialogBackdrop";
-import { Modal, View } from "react-native";
+import { SheetHeader } from "@/components/SheetHeader";
+import { Sheet, SheetDragHandle } from "@/components/Sheet";
+import { View } from "react-native";
 import ShareComposer from "./ShareComposer";
 import type { ShareCollection } from "@/lib/sharing/types";
 
 export function ShareModal({ collection, onClose }: { collection: ShareCollection | null; onClose: () => void }) {
-  const drawerBottomInset = useDrawerBottomInset();
-
   return (
-    <Modal visible={!!collection} transparent animationType="fade" onRequestClose={onClose}>
-      <TallDialog onClose={onClose}>
-        <OverlayHeader
+    <Sheet visible={!!collection} onClose={onClose} label="Share shows" size="tall" maxWidth={1180} contentDraggable={false} surface="base">
+      <SheetDragHandle>
+        <SheetHeader
           title="Share shows"
-          subtitle={collection?.context}
+          detail={collection?.context}
+          detailPlacement="stacked"
           onClose={onClose}
-          closeAccessibilityLabel="Close share preview"
+          closeLabel="Close share preview"
         />
-        <View className="min-h-0 flex-1" style={{ paddingBottom: drawerBottomInset }}>
-          {collection ? <ShareComposer collection={collection} onClose={onClose} /> : null}
-        </View>
-      </TallDialog>
-    </Modal>
+      </SheetDragHandle>
+      <View className="min-h-0 flex-1">
+        {collection ? <ShareComposer collection={collection} onClose={onClose} /> : null}
+      </View>
+    </Sheet>
   );
 }

@@ -4,7 +4,6 @@ import { Feather } from "@expo/vector-icons";
 import {
   Platform,
   Pressable,
-  ScrollView,
   Text,
   View,
   useWindowDimensions,
@@ -15,11 +14,8 @@ import { useQuery } from "convex/react";
 import { Link } from "expo-router";
 import { api } from "@/convex/_generated/api";
 import { Button } from "@/components/Button";
-import {
-  ClearFilterChip,
-  DropdownFilterChip,
-  FilterBar,
-} from "@/components/FilterBar";
+import { FilterBar } from "@/components/FilterBar";
+import { FilterControls } from "@/components/FilterControls";
 import { HeroSection } from "@/components/HeroSection";
 import { MediaPosterCard } from "@/components/MediaPosterCard";
 import { PageIntro } from "@/components/PageIntro";
@@ -200,7 +196,6 @@ export function DiscoverScreen() {
   const [selectedGenres, setSelectedGenres] = useState<string[]>([]);
   const [selectedYear, setSelectedYear] = useState<string>("");
   const [selectedRating, setSelectedRating] = useState<string>("");
-  const [openDropdown, setOpenDropdown] = useState<string | null>(null);
 
   const [tvState, setTvState] = useState<TabState>({
     items: [],
@@ -327,7 +322,6 @@ export function DiscoverScreen() {
     setSelectedGenres([]);
     setSelectedYear("");
     setSelectedRating("");
-    setOpenDropdown(null);
   };
 
   const toggleGenre = (genre: string) => {
@@ -884,161 +878,21 @@ export function DiscoverScreen() {
           compact={isCompactLayout}
         />
 
-        {/* Filter Buttons */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{
-            flexGrow: 1,
-            gap: 8,
-            justifyContent: "center",
-            paddingBottom: 8,
-          }}
-          className="mb-2"
-        >
-          {genreOptions.length > 0 && (
-            <DropdownFilterChip
-              onPress={() => setOpenDropdown(openDropdown === "genres" ? null : "genres")}
-              active={selectedGenres.length > 0}
-              open={openDropdown === "genres"}
-              label={selectedGenres.length > 0 ? `${selectedGenres.length} Genre${selectedGenres.length > 1 ? "s" : ""}` : "Genre"}
-            />
-          )}
-
-          {yearOptions.length > 0 && (
-            <DropdownFilterChip
-              onPress={() => setOpenDropdown(openDropdown === "year" ? null : "year")}
-              active={Boolean(selectedYear)}
-              open={openDropdown === "year"}
-              label={selectedYear || "Year"}
-            />
-          )}
-
-          {ratingOptions.length > 0 && (
-            <DropdownFilterChip
-              onPress={() => setOpenDropdown(openDropdown === "rating" ? null : "rating")}
-              active={Boolean(selectedRating)}
-              open={openDropdown === "rating"}
-              label={selectedRating ? `${selectedRating}+` : "Rating"}
-            />
-          )}
-
-          {hasActiveFilters && (
-            <ClearFilterChip onPress={clearFilters} />
-          )}
-        </ScrollView>
-
-        {/* Dropdown Content */}
-        {openDropdown === "genres" && genreOptions.length > 0 && (
-          <View className="mb-4 rounded-xl border border-border-default bg-bg-surface p-3">
-            <Text className="mb-2 text-xs font-bold uppercase text-text-secondary">Select Genres</Text>
-            <View className="flex-row flex-wrap gap-2">
-              {genreOptions.map((option) => (
-                <Pressable
-                  key={option.value}
-                  onPress={() => toggleGenre(option.value)}
-                  className={`rounded-full border px-3 py-1.5 ${
-                    selectedGenres.includes(option.value)
-                      ? "border-primary bg-primary"
-                      : "border-border-default bg-bg-primary"
-                  }`}
-                >
-                  <Text className={`text-xs ${selectedGenres.includes(option.value) ? "text-white" : "text-text-secondary"}`}>
-                    {option.label}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-          </View>
-        )}
-
-        {openDropdown === "year" && yearOptions.length > 0 && (
-          <View className="mb-4 rounded-xl border border-border-default bg-bg-surface p-3">
-            <Text className="mb-2 text-xs font-bold uppercase text-text-secondary">Select Year</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              <View className="flex-row gap-2">
-                <Pressable
-                  onPress={() => { setSelectedYear(""); setOpenDropdown(null); }}
-                  className={`rounded-full border px-4 py-2 ${!selectedYear ? "border-primary bg-primary" : "border-border-default bg-bg-primary"}`}
-                >
-                  <Text className={`text-sm ${!selectedYear ? "text-white" : "text-text-secondary"}`}>Any</Text>
-                </Pressable>
-                {yearOptions.slice(0, 15).map((option) => (
-                  <Pressable
-                    key={option.value}
-                    onPress={() => { setSelectedYear(option.value); setOpenDropdown(null); }}
-                    className={`rounded-full border px-4 py-2 ${selectedYear === option.value ? "border-primary bg-primary" : "border-border-default bg-bg-primary"}`}
-                  >
-                    <Text className={`text-sm ${selectedYear === option.value ? "text-white" : "text-text-secondary"}`}>
-                      {option.label}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
-            </ScrollView>
-          </View>
-        )}
-
-        {openDropdown === "rating" && ratingOptions.length > 0 && (
-          <View className="mb-4 rounded-xl border border-border-default bg-bg-surface p-3">
-            <Text className="mb-2 text-xs font-bold uppercase text-text-secondary">Min Rating</Text>
-            <View className="flex-row gap-2">
-              <Pressable
-                onPress={() => { setSelectedRating(""); setOpenDropdown(null); }}
-                className={`flex-1 rounded-lg border py-2 ${!selectedRating ? "border-primary bg-primary" : "border-border-default bg-bg-primary"}`}
-              >
-                <Text className={`text-center text-sm ${!selectedRating ? "text-white" : "text-text-secondary"}`}>Any</Text>
-              </Pressable>
-              {ratingOptions.map((option) => (
-                <Pressable
-                  key={option.value}
-                  onPress={() => { setSelectedRating(option.value); setOpenDropdown(null); }}
-                  className={`flex-1 rounded-lg border py-2 ${selectedRating === option.value ? "border-primary bg-primary" : "border-border-default bg-bg-primary"}`}
-                >
-                  <Text className={`text-center text-sm ${selectedRating === option.value ? "text-white" : "text-text-secondary"}`}>
-                    {option.label}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-          </View>
-        )}
-
-        {/* Active Filter Tags */}
-        {hasActiveFilters && (
-          <View className="mb-3 flex-row flex-wrap gap-2">
-            {selectedGenres.map((genre) => (
-              <Pressable
-                key={genre}
-                onPress={() => toggleGenre(genre)}
-                className="flex-row items-center gap-1 rounded-full bg-primary px-3 py-1"
-              >
-                <Text className="text-xs font-medium text-white">
-                  {genreOptions.find((g) => g.value === genre)?.label || genre}
-                </Text>
-                <Text className="text-xs text-white">×</Text>
-              </Pressable>
-            ))}
-            {selectedYear && (
-              <Pressable
-                onPress={() => setSelectedYear("")}
-                className="flex-row items-center gap-1 rounded-full bg-primary px-3 py-1"
-              >
-                <Text className="text-xs font-medium text-white">{selectedYear}</Text>
-                <Text className="text-xs text-white">×</Text>
-              </Pressable>
-            )}
-            {selectedRating && (
-              <Pressable
-                onPress={() => setSelectedRating("")}
-                className="flex-row items-center gap-1 rounded-full bg-primary px-3 py-1"
-              >
-                <Text className="text-xs font-medium text-white">{selectedRating}+ ⭐</Text>
-                <Text className="text-xs text-white">×</Text>
-              </Pressable>
-            )}
-          </View>
-        )}
+        <FilterControls
+          className="mb-3"
+          genres={genreOptions}
+          selectedGenres={selectedGenres}
+          onToggleGenre={toggleGenre}
+          onClearGenres={() => setSelectedGenres([])}
+          years={yearOptions}
+          selectedYear={selectedYear}
+          onSelectYear={setSelectedYear}
+          ratings={ratingOptions}
+          selectedRating={selectedRating}
+          onSelectRating={setSelectedRating}
+          hasActiveFilters={hasActiveFilters}
+          onClearAll={clearFilters}
+        />
 
         {(activeState.items.length > 0 ||
           (typeof stableDiscoverCount === "number" && stableDiscoverCount > 0)) ? (
@@ -1066,7 +920,6 @@ export function DiscoverScreen() {
       selectedGenres,
       selectedYear,
       selectedRating,
-      openDropdown,
       genreOptions,
       yearOptions,
       ratingOptions,

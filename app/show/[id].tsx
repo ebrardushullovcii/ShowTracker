@@ -32,8 +32,9 @@ import { BrandLoader } from "@/components/BrandLoader";
 import { getProgressTone } from "@/lib/progress-tone";
 import { Badge } from "@/components/Badge";
 import { ProgressBar } from "@/components/ProgressBar";
-import { HeaderIconButton } from "@/components/HeaderIconButton";
 import { OverlayDetailFrame } from "@/components/OverlayDetailFrame";
+import { Sheet, SheetScrollView } from "@/components/Sheet";
+import { SheetHeader } from "@/components/SheetHeader";
 import { ShowHeader } from "@/components/ShowHeader";
 import { ShowActionBar } from "@/components/ShowActionBar";
 import { ShareModal } from "@/components/sharing/ShareModal";
@@ -874,6 +875,9 @@ export function ShowDetailScreen() {
   const { isAuthenticated } = useConvexAuth();
   const isDesktop = Platform.OS === "web" && width >= 1024;
   const isOverlayDetailRoute = router.canDismiss();
+  const pendingNextSeasonRouteRef = useRef<string | null>(null);
+  // The season prompt waits until the catch-up drawer has fully gone, so two native modals never overlap.
+  const [isCatchUpSheetMounted, setIsCatchUpSheetMounted] = useState(false);
   const drawerBottomInset = useDrawerBottomInset(isOverlayDetailRoute);
   const closeOverlayDetailRoute = useCallback(() => {
     if (router.canDismiss()) {
@@ -2884,6 +2888,7 @@ export function ShowDetailScreen() {
           );
         });
 
+      setIsCatchUpSheetMounted(true);
       setPreviousEpisodesPrompt({
         episode,
         missingEpisodes: missingPreviousEpisodes,
@@ -3668,15 +3673,34 @@ export function ShowDetailScreen() {
     }
   };
 
+  const openPendingNextSeasonRoute = () => {
+    const routeId = pendingNextSeasonRouteRef.current;
+    pendingNextSeasonRouteRef.current = null;
+    if (!routeId) return;
+    try {
+      router.push({ pathname: "/show/[id]", params: { id: routeId } });
+    } catch (navigationError) {
+      console.error("Failed to navigate to next season", navigationError);
+      setTrackingError("Could not open the next season.");
+    }
+  };
+
   const handleNavigateToNextSeason = () => {
     if (!nextSeasonPrompt || isNavigatingToNextSeason) {
       return;
     }
 
     const routeId = nextSeasonPrompt.nextRouteId;
-    setIsNavigatingToNextSeason(true);
     setNextSeasonPrompt(null);
 
+    // iOS cannot present the next route while the prompt's modal is still dismissing,
+    // so the push waits for the prompt drawer's onDismiss there.
+    if (Platform.OS === "ios") {
+      pendingNextSeasonRouteRef.current = routeId;
+      return;
+    }
+
+    setIsNavigatingToNextSeason(true);
     try {
       router.push({ pathname: "/show/[id]", params: { id: routeId } });
     } catch (navigationError) {
@@ -4268,7 +4292,7 @@ export function ShowDetailScreen() {
 
   return wrapShowDetail(
     <ScreenWrapper contentClassName="px-0 py-0" edges={detailScreenEdges}>
-      <ScrollView
+      <SheetScrollView
         className="flex-1"
         contentContainerStyle={PAGE_SCROLL_CONTENT_STYLE}
         showsVerticalScrollIndicator={true}
@@ -4832,464 +4856,356 @@ export function ShowDetailScreen() {
           </View>
         </View>
         {drawerBottomInset > 0 ? <View style={{ height: drawerBottomInset }} /> : null}
-      </ScrollView>
+      </SheetScrollView>
 
-      <Modal
-        visible={!!nextSeasonPrompt}
-        transparent
-        animationType="fade"
-        onRequestClose={() =>
-          !isNavigatingToNextSeason && !isPausingRelatedEntries && setNextSeasonPrompt(null)
-        }
+      <Sheet
+        visible={!!nextSeasonPrompt && !isCatchUpSheetMounted}
+        onClose={() => setNextSeasonPrompt(null)}
+        onDismiss={openPendingNextSeasonRoute}
+        label="Season complete"
+        dismissible={!isNavigatingToNextSeason && !isPausingRelatedEntries}
       >
-        <DialogBackdrop>
+        <SheetHeader
+          title="Season complete"
+          detail={nextSeasonPrompt ? `Next: ${nextSeasonPrompt.nextTitle}` : undefined}
+          detailPlacement="stacked"
+          onClose={() => setNextSeasonPrompt(null)}
+          closeLabel="Stay here"
+        />
+
+        <View className="gap-2 p-dialog-gutter">
           <Pressable
-            className="absolute inset-0"
-            focusable={false}
-            style={{ outlineWidth: 0, outlineStyle: "solid", outlineColor: "transparent" }}
-            onPress={() =>
-              !isNavigatingToNextSeason && !isPausingRelatedEntries && setNextSeasonPrompt(null)
-            }
-          />
-
-          <View className="dialog-panel max-w-confirmation">
-            <View className="dialog-header">
-              <Text className="text-xs font-semibold uppercase tracking-wide text-text-secondary">
-                Season Complete
-              </Text>
-              <Text className="mt-1 text-lg font-black text-text-primary" numberOfLines={2}>
-                {nextSeasonPrompt?.completedSeasonName}
-              </Text>
-              <Text className="mt-2 text-sm leading-relaxed text-text-secondary">
-                You finished this season. Move to the next entry?
-              </Text>
-              <Text className="mt-1 text-sm font-semibold text-text-primary" numberOfLines={2}>
-                {nextSeasonPrompt?.nextTitle}
-              </Text>
-            </View>
-
-            <View className="gap-2 p-dialog-gutter">
-              <Pressable
-                disabled={isNavigatingToNextSeason || isPausingRelatedEntries}
-                onPress={handleNavigateToNextSeason}
-                className="items-center justify-center rounded-xl border border-primary/40 bg-primary/15 py-3.5 active:bg-primary/20"
-              >
-                {isNavigatingToNextSeason ? (
-                  <View className="flex-row items-center gap-2">
-                    <BrandLoader compact />
-                    <Text className="font-semibold text-text-primary">Opening...</Text>
-                  </View>
-                ) : (
-                  <Text className="font-semibold text-text-primary">Go to Next Season</Text>
-                )}
-              </Pressable>
-
-              <Pressable
-                disabled={isNavigatingToNextSeason || isPausingRelatedEntries}
-                onPress={() => {
-                  void handlePauseOtherRelatedSeasons();
-                }}
-                className="items-center justify-center rounded-xl border border-border-default bg-bg-base py-3.5 active:bg-bg-elevated"
-              >
-                {isPausingRelatedEntries ? (
-                  <View className="flex-row items-center gap-2">
-                    <BrandLoader compact />
-                    <Text className="font-semibold text-text-secondary">Pausing...</Text>
-                  </View>
-                ) : (
-                  <Text className="font-semibold text-text-secondary">
-                    Pause Other Franchise Titles
-                  </Text>
-                )}
-              </Pressable>
-
-              <Pressable
-                disabled={isNavigatingToNextSeason || isPausingRelatedEntries}
-                onPress={() => setNextSeasonPrompt(null)}
-                className="items-center justify-center rounded-xl border border-border-default bg-bg-base py-3.5 active:bg-bg-elevated"
-              >
-                <Text className="font-semibold text-text-secondary">Stay Here</Text>
-              </Pressable>
-            </View>
-          </View>
-        </DialogBackdrop>
-      </Modal>
-
-      <Modal
-        visible={!!previousEpisodesPrompt}
-        transparent
-        animationType="fade"
-        onRequestClose={() => {
-          if (!isPreviousEpisodesPromptRunning) {
-            setPreviousEpisodesPrompt(null);
-          }
-        }}
-      >
-        <DialogBackdrop>
-          <Pressable
-            className="absolute inset-0"
-            focusable={false}
-            style={{ outlineWidth: 0, outlineStyle: "solid", outlineColor: "transparent" }}
-            onPress={() => {
-              if (!isPreviousEpisodesPromptRunning) {
-                setPreviousEpisodesPrompt(null);
-              }
-            }}
-          />
-
-          <View className="dialog-panel max-w-confirmation">
-            <View className="dialog-header">
-              <Text className="text-xs font-semibold uppercase tracking-wide text-text-secondary">
-                Catch Up
-              </Text>
-              <Text className="mt-1 text-lg font-black text-text-primary" numberOfLines={2}>
-                {previousEpisodesPrompt?.episode.name ??
-                  `Episode ${previousEpisodesPrompt?.episode.episodeNumber ?? ""}`}
-              </Text>
-              <Text className="mt-1 text-sm text-text-secondary" numberOfLines={2}>
-                {previousEpisodesPrompt
-                  ? `S${String(previousEpisodesPrompt.episode.seasonNumber).padStart(2, "0")}E${String(previousEpisodesPrompt.episode.episodeNumber).padStart(2, "0")}`
-                  : ""}
-              </Text>
-              <Text className="mt-2 text-sm leading-relaxed text-text-secondary">
-                {previousEpisodesPrompt
-                  ? `You still have ${previousEpisodesPrompt.missingEpisodes.length} earlier released episode${previousEpisodesPrompt.missingEpisodes.length === 1 ? "" : "s"} not marked as watched.`
-                  : ""}
-              </Text>
-            </View>
-
-            <View className="gap-2 p-dialog-gutter">
-              <Pressable
-                disabled={isPreviousEpisodesPromptRunning}
-                onPress={() => {
-                  void handlePreviousEpisodesPromptChoice("all");
-                }}
-                className="items-center justify-center rounded-xl border border-primary/40 bg-primary/15 py-3.5 active:bg-primary/20"
-              >
-                {isPreviousEpisodesPromptRunning ? (
-                  <View className="flex-row items-center gap-2">
-                    <BrandLoader compact />
-                    <Text className="font-semibold text-text-primary">Processing...</Text>
-                  </View>
-                ) : (
-                  <Text className="font-semibold text-text-primary">
-                    Mark Previous Episodes Too
-                  </Text>
-                )}
-              </Pressable>
-
-              <Pressable
-                disabled={isPreviousEpisodesPromptRunning}
-                onPress={() => {
-                  void handlePreviousEpisodesPromptChoice("current");
-                }}
-                className="items-center justify-center rounded-xl border border-border-default bg-bg-base py-3.5 active:bg-bg-elevated"
-              >
-                <Text className="font-semibold text-text-secondary">Only This Episode</Text>
-              </Pressable>
-
-              <Pressable
-                disabled={isPreviousEpisodesPromptRunning}
-                onPress={() => setPreviousEpisodesPrompt(null)}
-                className="items-center justify-center rounded-xl py-2"
-              >
-                <Text className="text-sm text-text-muted">Cancel</Text>
-              </Pressable>
-            </View>
-          </View>
-        </DialogBackdrop>
-      </Modal>
-
-      <Modal
-        visible={!!watchActionTarget}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setWatchActionTarget(null)}
-      >
-        <DialogBackdrop>
-          <Pressable
-            className="absolute inset-0"
-            focusable={false}
-            style={{ outlineWidth: 0, outlineStyle: "solid", outlineColor: "transparent" }}
-            onPress={() => !isWatchActionRunning && setWatchActionTarget(null)}
-          />
-
-          <View className="dialog-panel max-w-confirmation">
-            <View className="dialog-header">
-              <Text className="text-xs font-semibold uppercase tracking-wide text-text-secondary">
-                {watchActionTarget?.kind === "episode" && watchActionTarget.unwatchOnly
-                  ? "Unwatch"
-                  : "Watch Options"}
-              </Text>
-              <Text className="mt-1 text-lg font-black text-text-primary" numberOfLines={1}>
-                {watchActionTarget?.title}
-              </Text>
-              <Text className="mt-1 text-sm text-text-secondary" numberOfLines={2}>
-                {watchActionTarget?.subtitle}
-              </Text>
-            </View>
-
-            <View className="gap-2 p-dialog-gutter">
-              {watchActionTarget?.kind === "episode" && watchActionTarget.unwatchOnly ? (
-                isWatchActionRunning ? (
-                  <View className="flex-row items-center justify-center gap-2 py-3.5">
-                    <BrandLoader compact />
-                    <Text className="font-semibold text-text-secondary">Processing...</Text>
-                  </View>
-                ) : null
-              ) : (
-                <Pressable
-                  disabled={isWatchActionRunning}
-                  onPress={() => void handleWatchActionChoice("rewatch")}
-                  className="items-center justify-center rounded-xl border border-border-default bg-bg-base py-3.5 active:bg-bg-elevated"
-                >
-                  {isWatchActionRunning ? (
-                    <View className="flex-row items-center gap-2">
-                      <BrandLoader compact />
-                      <Text className="font-semibold text-text-secondary">Processing...</Text>
-                    </View>
-                  ) : (
-                    <Text className="font-semibold text-text-primary">Rewatch</Text>
-                  )}
-                </Pressable>
-              )}
-
-              <Pressable
-                disabled={isWatchActionRunning}
-                onPress={() => void handleWatchActionChoice("not_watched")}
-                className="items-center justify-center rounded-xl border border-border-default bg-bg-base py-3.5 active:bg-bg-elevated"
-              >
-                <Text className="font-semibold text-text-secondary">
-                  {watchActionTarget?.kind === "show" && show?.mediaType === "anime"
-                    ? "Mark This Title Not Watched"
-                    : "Mark Not Watched"}
-                </Text>
-              </Pressable>
-
-              {watchActionTarget?.kind === "episode" && watchActionTarget.laterWatchedCount > 0 ? (
-                <Pressable
-                  disabled={isWatchActionRunning}
-                  onPress={() => void handleWatchActionChoice("not_watched_from")}
-                  className="items-center justify-center rounded-xl border border-primary/35 bg-primary/10 py-3 active:bg-primary/15"
-                >
-                  <Text className="font-semibold text-primary">
-                    Mark This & Later Not Watched
-                  </Text>
-                  <Text className="mt-0.5 text-xs text-text-secondary">
-                    {`Also unwatches ${watchActionTarget.laterWatchedCount} later episode${watchActionTarget.laterWatchedCount === 1 ? "" : "s"}`}
-                  </Text>
-                </Pressable>
-              ) : null}
-
-              {watchActionTarget?.kind === "show" && canClearRelatedAnimeWatched ? (
-                <Pressable
-                  disabled={isWatchActionRunning}
-                  onPress={() => void handleWatchActionChoice("not_watched_related")}
-                  className="items-center justify-center rounded-xl border border-primary/35 bg-primary/10 py-3.5 active:bg-primary/15"
-                >
-                  <Text className="font-semibold text-primary">
-                    Mark Entire Franchise Not Watched
-                  </Text>
-                </Pressable>
-              ) : null}
-
-              <Pressable
-                disabled={isWatchActionRunning}
-                onPress={() => setWatchActionTarget(null)}
-                className="items-center justify-center rounded-xl py-2"
-              >
-                <Text className="text-sm text-text-muted">Cancel</Text>
-              </Pressable>
-            </View>
-          </View>
-        </DialogBackdrop>
-      </Modal>
-
-      <Modal
-        visible={isFranchiseSettingsModalVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => {
-          if (!isUpdatingAnimeSettings) {
-            setIsFranchiseSettingsModalVisible(false);
-          }
-        }}
-      >
-        <DialogBackdrop>
-          <Pressable
-            className="absolute inset-0"
-            focusable={false}
-            style={{ outlineWidth: 0, outlineStyle: "solid", outlineColor: "transparent" }}
-            onPress={() => {
-              if (!isUpdatingAnimeSettings) {
-                setIsFranchiseSettingsModalVisible(false);
-              }
-            }}
-          />
-
-          <View className="dialog-panel max-w-dialog">
-            <View className="dialog-header flex-row items-start gap-3">
-              <HeaderIconButton
-                icon="close"
-                accessibilityLabel="Close franchise settings"
-                disabled={isUpdatingAnimeSettings}
-                onPress={() => setIsFranchiseSettingsModalVisible(false)}
-              />
-              <View className="min-w-0 flex-1">
-                <Text className="text-xs font-semibold uppercase tracking-wide text-text-secondary">
-                  Franchise Settings
-                </Text>
-                <Text className="mt-1 text-lg font-black text-text-primary" numberOfLines={2}>
-                  {cleanedShowTitle}
-                </Text>
-                <Text className="mt-2 text-sm text-text-secondary">
-                  Choose how this franchise appears on Home.
-                </Text>
-                <Text className="mt-1 text-xs text-text-muted">
-                  Current Home view: {effectiveFranchiseModeLabel}
-                </Text>
+            disabled={isNavigatingToNextSeason || isPausingRelatedEntries}
+            onPress={handleNavigateToNextSeason}
+            className="items-center justify-center rounded-xl border border-primary/40 bg-primary/15 py-3.5 active:bg-primary/20"
+          >
+            {isNavigatingToNextSeason ? (
+              <View className="flex-row items-center gap-2">
+                <BrandLoader compact />
+                <Text className="font-semibold text-text-primary">Opening...</Text>
               </View>
-            </View>
+            ) : (
+              <Text className="font-semibold text-text-primary">Go to Next Season</Text>
+            )}
+          </Pressable>
 
-            <View className="gap-2 p-dialog-gutter">
-              <Pressable
-                disabled={isUpdatingAnimeSettings}
-                onPress={() => {
-                  void handleSetFranchiseRelationMode("inherit");
-                }}
-                className={`flex-row items-center gap-3 rounded-xl border px-3 py-3 ${
-                  franchiseAnimeRelationMode === null
-                    ? "border-primary/60 bg-primary/15"
-                    : "border-border-default bg-bg-base"
-                }`}
-                style={({ pressed }) => ({
-                  opacity: isUpdatingAnimeSettings ? 0.45 : pressed ? 0.9 : 1,
-                })}
-              >
-                <View className="flex-1">
-                  <Text
-                    className={`text-sm font-semibold ${
-                      franchiseAnimeRelationMode === null
-                        ? "text-primary"
-                        : "text-text-primary"
-                    }`}
-                  >
-                    Inherit Global Setting
-                  </Text>
-                  <Text className="mt-0.5 text-xs text-text-secondary">
-                    Follow your Profile franchise preference for this title.
-                  </Text>
-                </View>
-                <Ionicons
-                  name={
-                    franchiseAnimeRelationMode === null
-                      ? "radio-button-on"
-                      : "radio-button-off"
-                  }
-                  size={18}
-                  color={franchiseAnimeRelationMode === null ? "#ef4444" : "#71717a"}
-                />
-              </Pressable>
+          <Pressable
+            disabled={isNavigatingToNextSeason || isPausingRelatedEntries}
+            onPress={() => {
+              void handlePauseOtherRelatedSeasons();
+            }}
+            className="items-center justify-center rounded-xl border border-border-default bg-bg-base py-3.5 active:bg-bg-elevated"
+          >
+            {isPausingRelatedEntries ? (
+              <View className="flex-row items-center gap-2">
+                <BrandLoader compact />
+                <Text className="font-semibold text-text-secondary">Pausing...</Text>
+              </View>
+            ) : (
+              <Text className="font-semibold text-text-secondary">
+                Pause Other Franchise Titles
+              </Text>
+            )}
+          </Pressable>
 
-              <Pressable
-                disabled={isUpdatingAnimeSettings}
-                onPress={() => {
-                  void handleSetFranchiseRelationMode("core_only");
-                }}
-                className={`flex-row items-center gap-3 rounded-xl border px-3 py-3 ${
-                  franchiseAnimeRelationMode === "core_only"
-                    ? "border-primary/60 bg-primary/15"
-                    : "border-border-default bg-bg-base"
-                }`}
-                style={({ pressed }) => ({
-                  opacity: isUpdatingAnimeSettings ? 0.45 : pressed ? 0.9 : 1,
-                })}
-              >
-                <View className="flex-1">
-                  <Text
-                    className={`text-sm font-semibold ${
-                      franchiseAnimeRelationMode === "core_only"
-                        ? "text-primary"
-                        : "text-text-primary"
-                    }`}
-                  >
-                    Core Franchise Titles
-                  </Text>
-                  <Text className="mt-0.5 text-xs text-text-secondary">
-                    Keep Home focused on the main franchise timeline.
-                  </Text>
-                </View>
-                <Ionicons
-                  name={
-                    franchiseAnimeRelationMode === "core_only"
-                      ? "radio-button-on"
-                      : "radio-button-off"
-                  }
-                  size={18}
-                  color={franchiseAnimeRelationMode === "core_only" ? "#ef4444" : "#71717a"}
-                />
-              </Pressable>
+          <Pressable
+            disabled={isNavigatingToNextSeason || isPausingRelatedEntries}
+            onPress={() => setNextSeasonPrompt(null)}
+            className="items-center justify-center rounded-xl border border-border-default bg-bg-base py-3.5 active:bg-bg-elevated"
+          >
+            <Text className="font-semibold text-text-secondary">Stay Here</Text>
+          </Pressable>
+        </View>
+      </Sheet>
 
-              <Pressable
-                disabled={isUpdatingAnimeSettings}
-                onPress={() => {
-                  void handleSetFranchiseRelationMode("all_relations");
-                }}
-                className={`flex-row items-center gap-3 rounded-xl border px-3 py-3 ${
-                  franchiseAnimeRelationMode === "all_relations"
-                    ? "border-primary/60 bg-primary/15"
-                    : "border-border-default bg-bg-base"
-                }`}
-                style={({ pressed }) => ({
-                  opacity: isUpdatingAnimeSettings ? 0.45 : pressed ? 0.9 : 1,
-                })}
-              >
-                <View className="flex-1">
-                  <Text
-                    className={`text-sm font-semibold ${
-                      franchiseAnimeRelationMode === "all_relations"
-                        ? "text-primary"
-                        : "text-text-primary"
-                    }`}
-                  >
-                    All Franchise Titles
-                  </Text>
-                  <Text className="mt-0.5 text-xs text-text-secondary">
-                    Include side stories and related entries on Home.
-                  </Text>
-                </View>
-                <Ionicons
-                  name={
-                    franchiseAnimeRelationMode === "all_relations"
-                      ? "radio-button-on"
-                      : "radio-button-off"
-                  }
-                  size={18}
-                  color={franchiseAnimeRelationMode === "all_relations" ? "#ef4444" : "#71717a"}
-                />
-              </Pressable>
+      <Sheet
+        visible={!!previousEpisodesPrompt}
+        onClose={() => setPreviousEpisodesPrompt(null)}
+        onDismiss={() => setIsCatchUpSheetMounted(false)}
+        label="Catch up"
+        dismissible={!isPreviousEpisodesPromptRunning}
+      >
+        <SheetHeader
+          title="Catch up"
+          detail={
+            previousEpisodesPrompt
+              ? `S${String(previousEpisodesPrompt.episode.seasonNumber).padStart(2, "0")}E${String(previousEpisodesPrompt.episode.episodeNumber).padStart(2, "0")} · ${previousEpisodesPrompt.missingEpisodes.length} earlier episode${previousEpisodesPrompt.missingEpisodes.length === 1 ? "" : "s"} not marked watched`
+              : undefined
+          }
+          detailPlacement="stacked"
+          onClose={() => setPreviousEpisodesPrompt(null)}
+          closeLabel="Close catch up"
+        />
 
-              {isUpdatingAnimeSettings ? (
-                <View className="flex-row items-center justify-center gap-2 py-1">
+        <View className="gap-2 p-dialog-gutter">
+          <Pressable
+            disabled={isPreviousEpisodesPromptRunning}
+            onPress={() => {
+              void handlePreviousEpisodesPromptChoice("all");
+            }}
+            className="items-center justify-center rounded-xl border border-primary/40 bg-primary/15 py-3.5 active:bg-primary/20"
+          >
+            {isPreviousEpisodesPromptRunning ? (
+              <View className="flex-row items-center gap-2">
+                <BrandLoader compact />
+                <Text className="font-semibold text-text-primary">Processing...</Text>
+              </View>
+            ) : (
+              <Text className="font-semibold text-text-primary">
+                Mark Previous Episodes Too
+              </Text>
+            )}
+          </Pressable>
+
+          <Pressable
+            disabled={isPreviousEpisodesPromptRunning}
+            onPress={() => {
+              void handlePreviousEpisodesPromptChoice("current");
+            }}
+            className="items-center justify-center rounded-xl border border-border-default bg-bg-base py-3.5 active:bg-bg-elevated"
+          >
+            <Text className="font-semibold text-text-secondary">Only This Episode</Text>
+          </Pressable>
+
+          <Pressable
+            disabled={isPreviousEpisodesPromptRunning}
+            onPress={() => setPreviousEpisodesPrompt(null)}
+            className="items-center justify-center rounded-xl py-2"
+          >
+            <Text className="text-sm text-text-muted">Cancel</Text>
+          </Pressable>
+        </View>
+      </Sheet>
+
+      <Sheet visible={!!watchActionTarget} onClose={() => setWatchActionTarget(null)} label="Watch options" dismissible={!isWatchActionRunning}>
+        <SheetHeader
+          title={watchActionTarget?.title ?? "Watch options"}
+          detail={watchActionTarget?.subtitle}
+          detailPlacement="stacked"
+          onClose={() => setWatchActionTarget(null)}
+          closeLabel="Close watch options"
+        />
+
+        <View className="gap-2 p-dialog-gutter">
+          {watchActionTarget?.kind === "episode" && watchActionTarget.unwatchOnly ? (
+            isWatchActionRunning ? (
+              <View className="flex-row items-center justify-center gap-2 py-3.5">
+                <BrandLoader compact />
+                <Text className="font-semibold text-text-secondary">Processing...</Text>
+              </View>
+            ) : null
+          ) : (
+            <Pressable
+              disabled={isWatchActionRunning}
+              onPress={() => void handleWatchActionChoice("rewatch")}
+              className="items-center justify-center rounded-xl border border-border-default bg-bg-base py-3.5 active:bg-bg-elevated"
+            >
+              {isWatchActionRunning ? (
+                <View className="flex-row items-center gap-2">
                   <BrandLoader compact />
-                  <Text className="text-xs text-text-secondary">Saving franchise setting...</Text>
+                  <Text className="font-semibold text-text-secondary">Processing...</Text>
                 </View>
-              ) : null}
+              ) : (
+                <Text className="font-semibold text-text-primary">Rewatch</Text>
+              )}
+            </Pressable>
+          )}
 
-              <Pressable
-                disabled={isUpdatingAnimeSettings}
-                onPress={() => setIsFranchiseSettingsModalVisible(false)}
-                className="items-center justify-center rounded-xl border border-border-default bg-bg-elevated py-3"
-                style={({ pressed }) => ({
-                  opacity: isUpdatingAnimeSettings ? 0.45 : pressed ? 0.88 : 1,
-                })}
+          <Pressable
+            disabled={isWatchActionRunning}
+            onPress={() => void handleWatchActionChoice("not_watched")}
+            className="items-center justify-center rounded-xl border border-border-default bg-bg-base py-3.5 active:bg-bg-elevated"
+          >
+            <Text className="font-semibold text-text-secondary">
+              {watchActionTarget?.kind === "show" && show?.mediaType === "anime"
+                ? "Mark This Title Not Watched"
+                : "Mark Not Watched"}
+            </Text>
+          </Pressable>
+
+          {watchActionTarget?.kind === "episode" && watchActionTarget.laterWatchedCount > 0 ? (
+            <Pressable
+              disabled={isWatchActionRunning}
+              onPress={() => void handleWatchActionChoice("not_watched_from")}
+              className="items-center justify-center rounded-xl border border-primary/35 bg-primary/10 py-3 active:bg-primary/15"
+            >
+              <Text className="font-semibold text-primary">
+                Mark This & Later Not Watched
+              </Text>
+              <Text className="mt-0.5 text-xs text-text-secondary">
+                {`Also unwatches ${watchActionTarget.laterWatchedCount} later episode${watchActionTarget.laterWatchedCount === 1 ? "" : "s"}`}
+              </Text>
+            </Pressable>
+          ) : null}
+
+          {watchActionTarget?.kind === "show" && canClearRelatedAnimeWatched ? (
+            <Pressable
+              disabled={isWatchActionRunning}
+              onPress={() => void handleWatchActionChoice("not_watched_related")}
+              className="items-center justify-center rounded-xl border border-primary/35 bg-primary/10 py-3.5 active:bg-primary/15"
+            >
+              <Text className="font-semibold text-primary">
+                Mark Entire Franchise Not Watched
+              </Text>
+            </Pressable>
+          ) : null}
+
+          <Pressable
+            disabled={isWatchActionRunning}
+            onPress={() => setWatchActionTarget(null)}
+            className="items-center justify-center rounded-xl py-2"
+          >
+            <Text className="text-sm text-text-muted">Cancel</Text>
+          </Pressable>
+        </View>
+      </Sheet>
+
+      <Sheet visible={isFranchiseSettingsModalVisible} onClose={() => setIsFranchiseSettingsModalVisible(false)} label="Franchise settings" dismissible={!isUpdatingAnimeSettings}>
+        <SheetHeader
+          title="Franchise on Home"
+          detail={`${cleanedShowTitle} · now ${effectiveFranchiseModeLabel}`}
+          detailPlacement="stacked"
+          onClose={() => setIsFranchiseSettingsModalVisible(false)}
+          closeLabel="Close franchise settings"
+        />
+
+        <View className="gap-2 p-dialog-gutter">
+          <Pressable
+            disabled={isUpdatingAnimeSettings}
+            onPress={() => {
+              void handleSetFranchiseRelationMode("inherit");
+            }}
+            className={`flex-row items-center gap-3 rounded-xl border px-3 py-3 ${
+              franchiseAnimeRelationMode === null
+                ? "border-primary/60 bg-primary/15"
+                : "border-border-default bg-bg-base"
+            }`}
+            style={({ pressed }) => ({
+              opacity: isUpdatingAnimeSettings ? 0.45 : pressed ? 0.9 : 1,
+            })}
+          >
+            <View className="flex-1">
+              <Text
+                className={`text-sm font-semibold ${
+                  franchiseAnimeRelationMode === null
+                    ? "text-primary"
+                    : "text-text-primary"
+                }`}
               >
-                <Text className="text-sm font-semibold text-text-primary">Done</Text>
-              </Pressable>
+                Inherit Global Setting
+              </Text>
+              <Text className="mt-0.5 text-xs text-text-secondary">
+                Follow your Profile franchise preference for this title.
+              </Text>
             </View>
-          </View>
-        </DialogBackdrop>
-      </Modal>
+            <Ionicons
+              name={
+                franchiseAnimeRelationMode === null
+                  ? "radio-button-on"
+                  : "radio-button-off"
+              }
+              size={18}
+              color={franchiseAnimeRelationMode === null ? "#ef4444" : "#71717a"}
+            />
+          </Pressable>
+
+          <Pressable
+            disabled={isUpdatingAnimeSettings}
+            onPress={() => {
+              void handleSetFranchiseRelationMode("core_only");
+            }}
+            className={`flex-row items-center gap-3 rounded-xl border px-3 py-3 ${
+              franchiseAnimeRelationMode === "core_only"
+                ? "border-primary/60 bg-primary/15"
+                : "border-border-default bg-bg-base"
+            }`}
+            style={({ pressed }) => ({
+              opacity: isUpdatingAnimeSettings ? 0.45 : pressed ? 0.9 : 1,
+            })}
+          >
+            <View className="flex-1">
+              <Text
+                className={`text-sm font-semibold ${
+                  franchiseAnimeRelationMode === "core_only"
+                    ? "text-primary"
+                    : "text-text-primary"
+                }`}
+              >
+                Core Franchise Titles
+              </Text>
+              <Text className="mt-0.5 text-xs text-text-secondary">
+                Keep Home focused on the main franchise timeline.
+              </Text>
+            </View>
+            <Ionicons
+              name={
+                franchiseAnimeRelationMode === "core_only"
+                  ? "radio-button-on"
+                  : "radio-button-off"
+              }
+              size={18}
+              color={franchiseAnimeRelationMode === "core_only" ? "#ef4444" : "#71717a"}
+            />
+          </Pressable>
+
+          <Pressable
+            disabled={isUpdatingAnimeSettings}
+            onPress={() => {
+              void handleSetFranchiseRelationMode("all_relations");
+            }}
+            className={`flex-row items-center gap-3 rounded-xl border px-3 py-3 ${
+              franchiseAnimeRelationMode === "all_relations"
+                ? "border-primary/60 bg-primary/15"
+                : "border-border-default bg-bg-base"
+            }`}
+            style={({ pressed }) => ({
+              opacity: isUpdatingAnimeSettings ? 0.45 : pressed ? 0.9 : 1,
+            })}
+          >
+            <View className="flex-1">
+              <Text
+                className={`text-sm font-semibold ${
+                  franchiseAnimeRelationMode === "all_relations"
+                    ? "text-primary"
+                    : "text-text-primary"
+                }`}
+              >
+                All Franchise Titles
+              </Text>
+              <Text className="mt-0.5 text-xs text-text-secondary">
+                Include side stories and related entries on Home.
+              </Text>
+            </View>
+            <Ionicons
+              name={
+                franchiseAnimeRelationMode === "all_relations"
+                  ? "radio-button-on"
+                  : "radio-button-off"
+              }
+              size={18}
+              color={franchiseAnimeRelationMode === "all_relations" ? "#ef4444" : "#71717a"}
+            />
+          </Pressable>
+
+          {isUpdatingAnimeSettings ? (
+            <View className="flex-row items-center justify-center gap-2 py-1">
+              <BrandLoader compact />
+              <Text className="text-xs text-text-secondary">Saving franchise setting...</Text>
+            </View>
+          ) : null}
+
+          <Pressable
+            disabled={isUpdatingAnimeSettings}
+            onPress={() => setIsFranchiseSettingsModalVisible(false)}
+            className="items-center justify-center rounded-xl border border-border-default bg-bg-elevated py-3"
+            style={({ pressed }) => ({
+              opacity: isUpdatingAnimeSettings ? 0.45 : pressed ? 0.88 : 1,
+            })}
+          >
+            <Text className="text-sm font-semibold text-text-primary">Done</Text>
+          </Pressable>
+        </View>
+      </Sheet>
 
       <Modal
         visible={!!removeLibraryPrompt}
@@ -5342,270 +5258,224 @@ export function ShowDetailScreen() {
         </DialogBackdrop>
       </Modal>
 
-      <Modal
-        visible={isStatusMenuVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => {
-          if (!isStatusMenuBusy) {
-            setIsStatusMenuVisible(false);
-          }
-        }}
-      >
-        <DialogBackdrop avoidKeyboard>
-          <Pressable
-            className="absolute inset-0"
-            focusable={false}
-            style={{ outlineWidth: 0, outlineStyle: "solid", outlineColor: "transparent" }}
-            onPress={() => {
-              if (!isStatusMenuBusy) {
-                setIsStatusMenuVisible(false);
-              }
-            }}
-          />
+      <Sheet visible={isStatusMenuVisible} onClose={() => setIsStatusMenuVisible(false)} label="Edit tracking" dismissible={!isStatusMenuBusy} avoidKeyboard>
+        {/* The selected option below already shows the current status. */}
+        <SheetHeader
+          title={showMediaType === "movie" ? "Movie status" : "Edit tracking"}
+          detail={!trackingLoaded ? "Loading..." : cleanedShowTitle}
+          detailPlacement="stacked"
+          onClose={() => setIsStatusMenuVisible(false)}
+          closeLabel="Close tracking editor"
+        />
 
-          <View className="dialog-panel max-w-dialog">
-            <View className="dialog-header flex-row items-start gap-3">
-              <HeaderIconButton
-                icon="close"
-                accessibilityLabel="Close tracking editor"
-                onPress={() => setIsStatusMenuVisible(false)}
-                disabled={isStatusMenuBusy}
-              />
-              <View className="min-w-0 flex-1">
-                <Text className="text-xs font-semibold uppercase tracking-wide text-text-secondary">
-                  {showMediaType === "movie" ? "Edit Movie Status" : "Edit Tracking"}
-                </Text>
-                <Text className="mt-1 text-lg font-black text-text-primary" numberOfLines={2}>
-                  {cleanedShowTitle}
-                </Text>
-                <Text className="mt-2 text-sm text-text-secondary">
-                  {!trackingLoaded
-                    ? "Loading your current tracking state."
-                    : isInWatchlist
-                      ? `Current status: ${activeTrackingOption.label}`
-                      : showMediaType === "movie"
-                        ? "Pick a status to add this movie to your queue."
-                        : "Pick a status to add this title to your watchlist."}
-                </Text>
-                {showMediaType === "anime" ? (
-                  <Text className="mt-1 text-xs text-text-muted">
-                    Franchise titles may auto-follow as part of your timeline.
-                  </Text>
-                ) : null}
-              </View>
-            </View>
-
-            <ScrollView keyboardShouldPersistTaps="handled" className="shrink" contentContainerClassName="gap-2 p-dialog-gutter">
-              {showMediaType !== "movie" ? (
-                <View
-                  className={`rounded-xl border px-3 py-3 ${
-                    tracking?.watchingWithOthers
-                      ? "border-primary/60 bg-primary/15"
-                      : "border-border-default bg-bg-base"
-                  }`}
-                >
-                  <View className="flex-row items-center gap-3">
-                    <View className="flex-1">
-                      <Text
-                        className={`text-sm font-semibold ${
-                          tracking?.watchingWithOthers ? "text-primary" : "text-text-primary"
-                        }`}
-                      >
-                        Watching with others
-                      </Text>
-                      <Text className="mt-0.5 text-xs text-text-secondary">
-                        Keep this show together in one Home section.
-                      </Text>
-                    </View>
-                    <Ionicons
-                      name={tracking?.watchingWithOthers ? "radio-button-on" : "radio-button-off"}
-                      size={18}
-                      color={tracking?.watchingWithOthers ? "#ef4444" : "#71717a"}
-                    />
-                  </View>
-                  {watchingWithNamesDraft.length > 0 ? (
-                    <View className="mt-3 flex-row flex-wrap gap-2">
-                      {watchingWithNamesDraft.map((name) => (
-                        <View
-                          key={name.toLowerCase()}
-                          className="flex-row items-center gap-1.5 rounded-full border border-primary/40 bg-primary/10 py-1 pl-2.5 pr-1.5"
-                        >
-                          <Text className="text-xs font-semibold text-text-primary">{name}</Text>
-                          <Pressable
-                            disabled={isStatusMenuBusy}
-                            onPress={() => handleRemoveWatchingWithName(name)}
-                            accessibilityRole="button"
-                            accessibilityLabel={`Remove ${name}`}
-                            hitSlop={6}
-                            className="rounded-full"
-                            style={({ pressed }) => ({
-                              opacity: isStatusMenuBusy ? 0.45 : pressed ? 0.65 : 1,
-                            })}
-                          >
-                            <Ionicons name="close-circle" size={17} color="#a1a1aa" />
-                          </Pressable>
-                        </View>
-                      ))}
-                    </View>
-                  ) : null}
-                  <View className="mt-3 flex-row items-center gap-2">
-                    <TextInput
-                      ref={watchingWithNameInputRef}
-                      value={watchingWithNameInput}
-                      onChangeText={setWatchingWithNameInput}
-                      onSubmitEditing={handleAddWatchingWithName}
-                      // Native reads submitBehavior; react-native-web only reads blurOnSubmit.
-                      submitBehavior="submit"
-                      blurOnSubmit={false}
-                      placeholder="Add a person's name"
-                      placeholderTextColor="#71717a"
-                      editable={
-                        !isStatusMenuBusy &&
-                        watchingWithNamesDraft.length < MAX_WATCHING_WITH_NAMES
-                      }
-                      accessibilityLabel="Name of person you are watching with"
-                      returnKeyType="done"
-                      className="min-w-0 flex-1 rounded-lg border border-border-default bg-bg-base px-3 py-2.5 text-[14px] text-text-primary"
-                    />
-                    <Pressable
-                      disabled={
-                        isStatusMenuBusy ||
-                        !watchingWithNameInput.trim() ||
-                        watchingWithNamesDraft.length >= MAX_WATCHING_WITH_NAMES
-                      }
-                      onPress={handleAddWatchingWithName}
-                      accessibilityRole="button"
-                      accessibilityLabel="Add person"
-                      accessibilityState={{
-                        disabled:
-                          isStatusMenuBusy ||
-                          !watchingWithNameInput.trim() ||
-                          watchingWithNamesDraft.length >= MAX_WATCHING_WITH_NAMES,
-                      }}
-                      className="rounded-lg border border-primary/50 bg-primary/10 px-3 py-2.5"
-                      style={({ pressed }) => ({
-                        opacity:
-                          isStatusMenuBusy ||
-                          !watchingWithNameInput.trim() ||
-                          watchingWithNamesDraft.length >= MAX_WATCHING_WITH_NAMES
-                            ? 0.45
-                            : pressed
-                              ? 0.75
-                              : 1,
-                      })}
-                    >
-                      <Text className="text-xs font-black uppercase tracking-[0.8px] text-primary">
-                        Add
-                      </Text>
-                    </Pressable>
-                  </View>
-                  <Text className="mt-1.5 text-[11px] text-text-muted">
-                    Add up to five people. Each name can be removed separately.
-                  </Text>
-                  <Pressable
-                    disabled={isStatusMenuBusy}
-                    onPress={handleSetWatchingWithOthers}
-                    accessibilityRole="button"
-                    accessibilityLabel="Save watching with others status"
-                    className="mt-3 items-center rounded-lg bg-primary px-3 py-2.5"
-                    style={({ pressed }) => ({
-                      opacity: isStatusMenuBusy ? 0.45 : pressed ? 0.9 : 1,
-                    })}
+        <SheetScrollView keyboardShouldPersistTaps="handled" className="shrink" contentContainerClassName="gap-2 p-dialog-gutter">
+          {showMediaType !== "movie" ? (
+            <View
+              className={`rounded-xl border px-3 py-3 ${
+                tracking?.watchingWithOthers
+                  ? "border-primary/60 bg-primary/15"
+                  : "border-border-default bg-bg-base"
+              }`}
+            >
+              <View className="flex-row items-center gap-3">
+                <View className="flex-1">
+                  <Text
+                    className={`text-sm font-semibold ${
+                      tracking?.watchingWithOthers ? "text-primary" : "text-text-primary"
+                    }`}
                   >
-                    <Text className="text-xs font-black uppercase tracking-[1px] text-white">
-                      {tracking?.watchingWithOthers ? "Save people" : "Save shared watch"}
-                    </Text>
-                  </Pressable>
-                  {tracking?.watchingWithOthers ? (
-                    <Pressable
-                      disabled={isStatusMenuBusy}
-                      onPress={() => handleSelectStatusFromMenu("watching")}
-                      accessibilityRole="button"
-                      accessibilityLabel={watchedEpisodesCount > 0 ? "Move to regular Watching" : "Move to Haven't started"}
-                      accessibilityState={{ disabled: isStatusMenuBusy }}
-                      className="mt-2 items-center rounded-lg border border-border-default bg-bg-base px-3 py-2.5"
-                      style={({ pressed }) => ({
-                        opacity: isStatusMenuBusy ? 0.45 : pressed ? 0.75 : 1,
-                      })}
+                    Watching with others
+                  </Text>
+                  <Text className="mt-0.5 text-xs text-text-secondary">
+                    Keep this show together in one Home section.
+                  </Text>
+                </View>
+                <Ionicons
+                  name={tracking?.watchingWithOthers ? "radio-button-on" : "radio-button-off"}
+                  size={18}
+                  color={tracking?.watchingWithOthers ? "#ef4444" : "#71717a"}
+                />
+              </View>
+              {watchingWithNamesDraft.length > 0 ? (
+                <View className="mt-3 flex-row flex-wrap gap-2">
+                  {watchingWithNamesDraft.map((name) => (
+                    <View
+                      key={name.toLowerCase()}
+                      className="flex-row items-center gap-1.5 rounded-full border border-primary/40 bg-primary/10 py-1 pl-2.5 pr-1.5"
                     >
-                      <Text className="text-xs font-bold text-text-secondary">
-                        {watchedEpisodesCount > 0 ? "Move to regular Watching" : "Move to Haven't started"}
-                      </Text>
-                    </Pressable>
-                  ) : null}
+                      <Text className="text-xs font-semibold text-text-primary">{name}</Text>
+                      <Pressable
+                        disabled={isStatusMenuBusy}
+                        onPress={() => handleRemoveWatchingWithName(name)}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Remove ${name}`}
+                        hitSlop={6}
+                        className="rounded-full"
+                        style={({ pressed }) => ({
+                          opacity: isStatusMenuBusy ? 0.45 : pressed ? 0.65 : 1,
+                        })}
+                      >
+                        <Ionicons name="close-circle" size={17} color="#a1a1aa" />
+                      </Pressable>
+                    </View>
+                  ))}
                 </View>
               ) : null}
-
-              {statusMenuOptions.map((option) => {
-                const isActive =
-                  isInWatchlist &&
-                  activeTrackingStatusForMenu === option.value &&
-                  !(option.value === "watching" && tracking?.watchingWithOthers);
-                const title = option.label;
-                const description = option.description;
-                return (
-                  <Pressable
-                    key={option.value}
-                    disabled={isStatusMenuBusy}
-                    onPress={() => {
-                      void handleSelectStatusFromMenu(option.value);
-                    }}
-                    className={`flex-row items-center gap-3 rounded-xl border px-3 py-3 ${
-                      isActive
-                        ? "border-primary/60 bg-primary/15"
-                        : "border-border-default bg-bg-base"
-                    }`}
-                    style={({ pressed }) => ({
-                      opacity: isStatusMenuBusy ? 0.45 : pressed ? 0.9 : 1,
-                    })}
-                  >
-                    <View className="flex-1">
-                      <Text
-                        className={`text-sm font-semibold ${
-                          isActive ? "text-primary" : "text-text-primary"
-                        }`}
-                      >
-                        {title}
-                      </Text>
-                      <Text className="mt-0.5 text-xs text-text-secondary">
-                        {description}
-                      </Text>
-                    </View>
-                    <Ionicons
-                      name={isActive ? "radio-button-on" : "radio-button-off"}
-                      size={18}
-                      color={isActive ? "#ef4444" : "#71717a"}
-                    />
-                  </Pressable>
-                );
-              })}
-
-              {isInWatchlist ? (
+              <View className="mt-3 flex-row items-center gap-2">
+                <TextInput
+                  ref={watchingWithNameInputRef}
+                  value={watchingWithNameInput}
+                  onChangeText={setWatchingWithNameInput}
+                  onSubmitEditing={handleAddWatchingWithName}
+                  // Native reads submitBehavior; react-native-web only reads blurOnSubmit.
+                  submitBehavior="submit"
+                  blurOnSubmit={false}
+                  placeholder="Add a person's name"
+                  placeholderTextColor="#71717a"
+                  editable={
+                    !isStatusMenuBusy &&
+                    watchingWithNamesDraft.length < MAX_WATCHING_WITH_NAMES
+                  }
+                  accessibilityLabel="Name of person you are watching with"
+                  returnKeyType="done"
+                  className="min-w-0 flex-1 rounded-lg border border-border-default bg-bg-base px-3 py-2.5 text-[14px] text-text-primary"
+                />
                 <Pressable
-                  disabled={isStatusMenuBusy}
-                  onPress={() => {
-                    void handleRemoveFromStatusMenu();
+                  disabled={
+                    isStatusMenuBusy ||
+                    !watchingWithNameInput.trim() ||
+                    watchingWithNamesDraft.length >= MAX_WATCHING_WITH_NAMES
+                  }
+                  onPress={handleAddWatchingWithName}
+                  accessibilityRole="button"
+                  accessibilityLabel="Add person"
+                  accessibilityState={{
+                    disabled:
+                      isStatusMenuBusy ||
+                      !watchingWithNameInput.trim() ||
+                      watchingWithNamesDraft.length >= MAX_WATCHING_WITH_NAMES,
                   }}
-                  className="items-center justify-center rounded-xl border border-primary/35 bg-primary/10 py-3"
+                  className="rounded-lg border border-primary/50 bg-primary/10 px-3 py-2.5"
                   style={({ pressed }) => ({
-                    opacity: isStatusMenuBusy ? 0.45 : pressed ? 0.85 : 1,
+                    opacity:
+                      isStatusMenuBusy ||
+                      !watchingWithNameInput.trim() ||
+                      watchingWithNamesDraft.length >= MAX_WATCHING_WITH_NAMES
+                        ? 0.45
+                        : pressed
+                          ? 0.75
+                          : 1,
                   })}
                 >
-                  <Text className="font-semibold text-primary">Remove from Library</Text>
+                  <Text className="text-xs font-black uppercase tracking-[0.8px] text-primary">
+                    Add
+                  </Text>
+                </Pressable>
+              </View>
+              <Text className="mt-1.5 text-[11px] text-text-muted">
+                Add up to five people. Each name can be removed separately.
+              </Text>
+              <Pressable
+                disabled={isStatusMenuBusy}
+                onPress={handleSetWatchingWithOthers}
+                accessibilityRole="button"
+                accessibilityLabel="Save watching with others status"
+                className="mt-3 items-center rounded-lg bg-primary px-3 py-2.5"
+                style={({ pressed }) => ({
+                  opacity: isStatusMenuBusy ? 0.45 : pressed ? 0.9 : 1,
+                })}
+              >
+                <Text className="text-xs font-black uppercase tracking-[1px] text-white">
+                  {tracking?.watchingWithOthers ? "Save people" : "Save shared watch"}
+                </Text>
+              </Pressable>
+              {tracking?.watchingWithOthers ? (
+                <Pressable
+                  disabled={isStatusMenuBusy}
+                  onPress={() => handleSelectStatusFromMenu("watching")}
+                  accessibilityRole="button"
+                  accessibilityLabel={watchedEpisodesCount > 0 ? "Move to regular Watching" : "Move to Haven't started"}
+                  accessibilityState={{ disabled: isStatusMenuBusy }}
+                  className="mt-2 items-center rounded-lg border border-border-default bg-bg-base px-3 py-2.5"
+                  style={({ pressed }) => ({
+                    opacity: isStatusMenuBusy ? 0.45 : pressed ? 0.75 : 1,
+                  })}
+                >
+                  <Text className="text-xs font-bold text-text-secondary">
+                    {watchedEpisodesCount > 0 ? "Move to regular Watching" : "Move to Haven't started"}
+                  </Text>
                 </Pressable>
               ) : null}
+            </View>
+          ) : null}
 
-              {isStatusMenuBusy ? (
-                <View className="flex-row items-center justify-center gap-2 py-1">
-                  <BrandLoader compact />
-                  <Text className="text-xs text-text-secondary">Saving...</Text>
+          {statusMenuOptions.map((option) => {
+            const isActive =
+              isInWatchlist &&
+              activeTrackingStatusForMenu === option.value &&
+              !(option.value === "watching" && tracking?.watchingWithOthers);
+            const title = option.label;
+            const description = option.description;
+            return (
+              <Pressable
+                key={option.value}
+                disabled={isStatusMenuBusy}
+                onPress={() => {
+                  void handleSelectStatusFromMenu(option.value);
+                }}
+                className={`flex-row items-center gap-3 rounded-xl border px-3 py-3 ${
+                  isActive
+                    ? "border-primary/60 bg-primary/15"
+                    : "border-border-default bg-bg-base"
+                }`}
+                style={({ pressed }) => ({
+                  opacity: isStatusMenuBusy ? 0.45 : pressed ? 0.9 : 1,
+                })}
+              >
+                <View className="flex-1">
+                  <Text
+                    className={`text-sm font-semibold ${
+                      isActive ? "text-primary" : "text-text-primary"
+                    }`}
+                  >
+                    {title}
+                  </Text>
+                  <Text className="mt-0.5 text-xs text-text-secondary">
+                    {description}
+                  </Text>
                 </View>
-              ) : null}
-            </ScrollView>
-          </View>
-        </DialogBackdrop>
-      </Modal>
+                <Ionicons
+                  name={isActive ? "radio-button-on" : "radio-button-off"}
+                  size={18}
+                  color={isActive ? "#ef4444" : "#71717a"}
+                />
+              </Pressable>
+            );
+          })}
+
+          {isInWatchlist ? (
+            <Pressable
+              disabled={isStatusMenuBusy}
+              onPress={() => {
+                void handleRemoveFromStatusMenu();
+              }}
+              className="items-center justify-center rounded-xl border border-primary/35 bg-primary/10 py-3"
+              style={({ pressed }) => ({
+                opacity: isStatusMenuBusy ? 0.45 : pressed ? 0.85 : 1,
+              })}
+            >
+              <Text className="font-semibold text-primary">Remove from Library</Text>
+            </Pressable>
+          ) : null}
+
+          {isStatusMenuBusy ? (
+            <View className="flex-row items-center justify-center gap-2 py-1">
+              <BrandLoader compact />
+              <Text className="text-xs text-text-secondary">Saving...</Text>
+            </View>
+          ) : null}
+        </SheetScrollView>
+      </Sheet>
 
       {/* Add to List Modal */}
       <ShareModal collection={shareCollection} onClose={() => setShareCollection(null)} />

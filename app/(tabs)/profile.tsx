@@ -1,11 +1,11 @@
-import { DialogBackdrop } from "@/components/DialogBackdrop";
+import { Sheet, SheetScrollView } from "@/components/Sheet";
+import { SheetHeader } from "@/components/SheetHeader";
 import { useDelayedLoading } from "@/hooks/use-delayed-loading";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Image,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
-  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -21,7 +21,6 @@ import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { PosterCardTitle } from "@/components/PosterCardTitle";
 import { PosterQuickActions } from "@/components/PosterQuickActions";
-import { HeaderIconButton } from "@/components/HeaderIconButton";
 import { PAGE_SCROLL_CONTENT_STYLE } from "@/constants/layout";
 import { ScreenWrapper } from "@/components/ScreenWrapper";
 import { BrandLoader } from "@/components/BrandLoader";
@@ -1271,139 +1270,111 @@ export default function ProfileScreen() {
         ) : null}
       </ScrollView>
 
-      <Modal
-        visible={isEditingProfile}
-        transparent
-        animationType="fade"
-        onRequestClose={closeProfileEditor}
-      >
-        <DialogBackdrop avoidKeyboard>
-          <Pressable
-            className="absolute inset-0"
-            onPress={closeProfileEditor}
-            disabled={isSavingProfile}
-          />
+      <Sheet visible={isEditingProfile} onClose={closeProfileEditor} label="Edit profile details" dismissible={!isSavingProfile} avoidKeyboard>
+        <SheetHeader title="Edit profile" onClose={closeProfileEditor} closeLabel="Close profile editor" />
 
-          <View className="dialog-panel max-w-dialog">
-            <View className="dialog-header flex-row items-center gap-3">
-              <HeaderIconButton
-                icon="close"
-                accessibilityLabel="Close profile editor"
-                onPress={closeProfileEditor}
-                disabled={isSavingProfile}
+        <SheetScrollView
+          className="shrink"
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <View className="gap-3 p-dialog-gutter">
+            <View>
+              <Text className="mb-1 text-xs font-semibold uppercase tracking-wide text-text-secondary">
+                Username
+              </Text>
+              <TextInput
+                value={draftUsername}
+                onChangeText={setDraftUsername}
+                editable={!isSavingProfile}
+                maxLength={32}
+                placeholder="Your username"
+                placeholderTextColor="#52525b"
+                className="rounded-lg border-2 border-border-default bg-bg-base px-3 py-2.5 text-text-primary"
               />
-              <View className="min-w-0 flex-1">
-                <Text className="text-xs font-semibold uppercase tracking-wide text-text-secondary">
-                  Profile
-                </Text>
-                <Text className="text-lg font-black text-text-primary">Edit Details</Text>
-              </View>
             </View>
 
-            <ScrollView
-              className="shrink"
-              keyboardShouldPersistTaps="handled"
-              showsVerticalScrollIndicator={false}
-            >
-              <View className="gap-3 p-dialog-gutter">
-                <View>
-                  <Text className="mb-1 text-xs font-semibold uppercase tracking-wide text-text-secondary">
-                    Username
-                  </Text>
-                  <TextInput
-                    value={draftUsername}
-                    onChangeText={setDraftUsername}
-                    editable={!isSavingProfile}
-                    maxLength={32}
-                    placeholder="Your username"
-                    placeholderTextColor="#52525b"
-                    className="rounded-lg border-2 border-border-default bg-bg-base px-3 py-2.5 text-text-primary"
-                  />
-                </View>
-
-                <View>
-                  <View className="mb-1 flex-row items-center justify-between">
-                    <Text className="text-xs font-semibold uppercase tracking-wide text-text-secondary">
-                      Bio
-                    </Text>
-                    <Text className="text-[11px] text-text-secondary">
-                      {draftBio.length}/280
-                    </Text>
-                  </View>
-                  <TextInput
-                    value={draftBio}
-                    onChangeText={setDraftBio}
-                    editable={!isSavingProfile}
-                    maxLength={280}
-                    placeholder="Short bio"
-                    placeholderTextColor="#52525b"
-                    multiline
-                    textAlignVertical="top"
-                    className="min-h-[90px] rounded-lg border-2 border-border-default bg-bg-base px-3 py-2.5 text-text-primary"
-                  />
-                </View>
-
-                <View>
-                  <Text className="mb-1 text-xs font-semibold uppercase tracking-wide text-text-secondary">
-                    Avatar URL
-                  </Text>
-                  <TextInput
-                    value={draftAvatarUrl}
-                    onChangeText={setDraftAvatarUrl}
-                    editable={!isSavingProfile}
-                    placeholder="https://..."
-                    placeholderTextColor="#52525b"
-                    autoCapitalize="none"
-                    className="rounded-lg border-2 border-border-default bg-bg-base px-3 py-2.5 text-text-primary"
-                  />
-                </View>
-
-                <View>
-                  <Text className="mb-1 text-xs font-semibold uppercase tracking-wide text-text-secondary">
-                    Banner URL
-                  </Text>
-                  <TextInput
-                    value={draftBannerUrl}
-                    onChangeText={setDraftBannerUrl}
-                    editable={!isSavingProfile}
-                    placeholder="https://..."
-                    placeholderTextColor="#52525b"
-                    autoCapitalize="none"
-                    className="rounded-lg border-2 border-border-default bg-bg-base px-3 py-2.5 text-text-primary"
-                  />
-                </View>
-
-                {profileError ? <Text className="text-sm text-primary">{profileError}</Text> : null}
-
-                <View className="flex-row gap-2 pt-1">
-                  <Pressable
-                    onPress={closeProfileEditor}
-                    disabled={isSavingProfile}
-                    className="flex-1 items-center justify-center rounded-lg border-2 border-border-default bg-bg-elevated py-3"
-                  >
-                    <Text className="text-sm font-bold text-text-primary">Cancel</Text>
-                  </Pressable>
-                  <Pressable
-                    onPress={handleSaveProfile}
-                    disabled={isSavingProfile}
-                    className="flex-1 flex-row items-center justify-center gap-2 rounded-lg border-2 border-primary bg-primary py-3"
-                    style={{ opacity: isSavingProfile ? 0.6 : 1 }}
-                  >
-                    {isSavingProfile ? (
-                      <BrandLoader compact onPrimary />
-                    ) : (
-                      <>
-                        <Ionicons name="checkmark" size={16} color="#fff" />
-                        <Text className="text-sm font-black uppercase tracking-wide text-white">Save</Text>
-                      </>
-                    )}
-                  </Pressable>
-                </View>
+            <View>
+              <View className="mb-1 flex-row items-center justify-between">
+                <Text className="text-xs font-semibold uppercase tracking-wide text-text-secondary">
+                  Bio
+                </Text>
+                <Text className="text-[11px] text-text-secondary">
+                  {draftBio.length}/280
+                </Text>
               </View>
-            </ScrollView>
+              <TextInput
+                value={draftBio}
+                onChangeText={setDraftBio}
+                editable={!isSavingProfile}
+                maxLength={280}
+                placeholder="Short bio"
+                placeholderTextColor="#52525b"
+                multiline
+                textAlignVertical="top"
+                className="min-h-[90px] rounded-lg border-2 border-border-default bg-bg-base px-3 py-2.5 text-text-primary"
+              />
+            </View>
+
+            <View>
+              <Text className="mb-1 text-xs font-semibold uppercase tracking-wide text-text-secondary">
+                Avatar URL
+              </Text>
+              <TextInput
+                value={draftAvatarUrl}
+                onChangeText={setDraftAvatarUrl}
+                editable={!isSavingProfile}
+                placeholder="https://..."
+                placeholderTextColor="#52525b"
+                autoCapitalize="none"
+                className="rounded-lg border-2 border-border-default bg-bg-base px-3 py-2.5 text-text-primary"
+              />
+            </View>
+
+            <View>
+              <Text className="mb-1 text-xs font-semibold uppercase tracking-wide text-text-secondary">
+                Banner URL
+              </Text>
+              <TextInput
+                value={draftBannerUrl}
+                onChangeText={setDraftBannerUrl}
+                editable={!isSavingProfile}
+                placeholder="https://..."
+                placeholderTextColor="#52525b"
+                autoCapitalize="none"
+                className="rounded-lg border-2 border-border-default bg-bg-base px-3 py-2.5 text-text-primary"
+              />
+            </View>
+
+            {profileError ? <Text className="text-sm text-primary">{profileError}</Text> : null}
+
+            <View className="flex-row gap-2 pt-1">
+              <Pressable
+                onPress={closeProfileEditor}
+                disabled={isSavingProfile}
+                className="flex-1 items-center justify-center rounded-lg border-2 border-border-default bg-bg-elevated py-3"
+              >
+                <Text className="text-sm font-bold text-text-primary">Cancel</Text>
+              </Pressable>
+              <Pressable
+                onPress={handleSaveProfile}
+                disabled={isSavingProfile}
+                className="flex-1 flex-row items-center justify-center gap-2 rounded-lg border-2 border-primary bg-primary py-3"
+                style={{ opacity: isSavingProfile ? 0.6 : 1 }}
+              >
+                {isSavingProfile ? (
+                  <BrandLoader compact onPrimary />
+                ) : (
+                  <>
+                    <Ionicons name="checkmark" size={16} color="#fff" />
+                    <Text className="text-sm font-black uppercase tracking-wide text-white">Save</Text>
+                  </>
+                )}
+              </Pressable>
+            </View>
           </View>
-        </DialogBackdrop>
-      </Modal>
+        </SheetScrollView>
+      </Sheet>
     </ScreenWrapper>
   );
 }
