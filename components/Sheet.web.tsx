@@ -1,0 +1,281 @@
+import { createContext, forwardRef, useContext, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { Modal, Pressable, ScrollView, View, type ScrollViewProps } from "react-native";
+import { Drawer } from "vaul";
+import { Ionicons } from "@expo/vector-icons";
+import { DialogBackdrop, TallDialog } from "@/components/DialogBackdrop";
+import {
+  SHEET_CORNER_RADIUS,
+  useSheetMetrics,
+  type SheetProps,
+  type SheetRouteFrameProps,
+  type SheetSize,
+} from "@/components/sheetLayout";
+
+export { SHEET_CORNER_RADIUS } from "@/components/sheetLayout";
+export type { SheetProps, SheetRouteFrameProps, SheetSize } from "@/components/sheetLayout";
+
+// vaul already lets a scrolled element keep the drag until it reaches its top edge.
+export const SheetScrollView = forwardRef<ScrollView, ScrollViewProps>(function SheetScrollView(props, ref) {
+  return <ScrollView ref={ref} {...props} />;
+});
+
+const SheetDismissContext = createContext<(() => void) | null>(null);
+
+/** Close action for buttons inside a sheet: animates the sheet out before `fallback` runs. */
+export function useSheetDismiss(fallback: () => void) {
+  return useContext(SheetDismissContext) ?? fallback;
+}
+
+/** vaul already leaves scrollable content alone, so the handle needs no extra gesture on web. */
+export function SheetDragHandle({ children }: { children: ReactNode }) {
+  return <>{children}</>;
+}
+
+// vaul's close transition is 500ms.
+const CLOSE_ANIMATION_MS = 500;
+
+// Sheets sit below react-native-web's Modal layer so confirmation dialogs opened from a sheet stay on top.
+const SHEET_Z_INDEX = 900;
+
+const srOnly: CSSProperties = {
+  position: "absolute",
+  width: 1,
+  height: 1,
+  padding: 0,
+  margin: -1,
+  overflow: "hidden",
+  clip: "rect(0, 0, 0, 0)",
+  whiteSpace: "nowrap",
+  border: 0,
+};
+
+function Grabber({ closeLabel, onClose }: { closeLabel?: string; onClose: () => void }) {
+  const bar = <div aria-hidden style={{ width: 40, height: 5, borderRadius: 999, background: "rgba(255,255,255,0.25)" }} />;
+  if (!closeLabel) {
+    return <div style={{ display: "flex", justifyContent: "center", padding: "8px 0 6px", flexShrink: 0 }}>{bar}</div>;
+  }
+  // The close button shares the grabber row so the sheet spends no extra height on a header.
+  return (
+    <div style={{ position: "relative", height: 44, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+      {bar}
+      <button
+        type="button"
+        aria-label={closeLabel}
+        onClick={onClose}
+        style={{
+          position: "absolute",
+          right: 12,
+          width: 32,
+          height: 32,
+          borderRadius: 999,
+          border: "none",
+          background: "rgba(255,255,255,0.1)",
+          cursor: "pointer",
+          padding: 0,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <Ionicons name="close" size={18} color="#e4e4e7" />
+      </button>
+    </div>
+  );
+}
+
+type MobileDrawerProps = {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onClosed?: () => void;
+  label: string;
+  size: SheetSize;
+  dismissible: boolean;
+  background: string;
+  closeLabel?: string;
+  children: ReactNode;
+};
+
+function MobileDrawer({ open, onOpenChange, onClosed, label, size, dismissible, background, closeLabel, children }: MobileDrawerProps) {
+  const { maxHeight, insets } = useSheetMetrics();
+  const onClosedRef = useRef(onClosed);
+  onClosedRef.current = onClosed;
+  const wasOpen = useRef(open);
+
+  // vaul does not report the end of its close animation in non-modal mode, so wait it out.
+  useEffect(() => {
+    if (wasOpen.current && !open) {
+      const timer = setTimeout(() => onClosedRef.current?.(), CLOSE_ANIMATION_MS);
+      wasOpen.current = open;
+      return () => clearTimeout(timer);
+    }
+    wasOpen.current = open;
+  }, [open]);
+
+  return (
+    <Drawer.Root
+      open={open}
+      onOpenChange={onOpenChange}
+      dismissible={dismissible}
+      // Non-modal keeps react-native-web dialogs opened from inside the sheet clickable.
+      modal={false}
+      repositionInputs={false}
+    >
+      <Drawer.Portal>
+        <div
+          aria-hidden
+          onClick={() => {
+            if (dismissible) onOpenChange(false);
+          }}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: SHEET_Z_INDEX,
+            background: "rgba(0,0,0,0.45)",
+            opacity: open ? 1 : 0,
+            transition: "opacity 300ms cubic-bezier(0.32, 0.72, 0, 1)",
+            pointerEvents: open ? "auto" : "none",
+          }}
+        />
+        <Drawer.Content
+          aria-describedby={undefined}
+          style={{
+            position: "fixed",
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: SHEET_Z_INDEX + 1,
+            display: "flex",
+            flexDirection: "column",
+            // The app's global `body > div { min-height: 100% }` would otherwise stretch the portal.
+            minHeight: 0,
+            height: size === "tall" ? maxHeight : "auto",
+            maxHeight,
+            paddingBottom: insets.bottom,
+            background,
+            borderTopLeftRadius: SHEET_CORNER_RADIUS,
+            borderTopRightRadius: SHEET_CORNER_RADIUS,
+            border: "1px solid rgba(255,255,255,0.12)",
+            borderBottom: "none",
+            overflow: "hidden",
+            outline: "none",
+          }}
+        >
+          <Drawer.Title style={srOnly}>{label}</Drawer.Title>
+          <Grabber closeLabel={closeLabel} onClose={() => onOpenChange(false)} />
+          <div style={{ display: "flex", flexDirection: "column", flexGrow: size === "tall" ? 1 : 0, flexShrink: 1, minHeight: 0 }}>
+            <SheetDismissContext.Provider value={() => onOpenChange(false)}>{children}</SheetDismissContext.Provider>
+          </div>
+        </Drawer.Content>
+      </Drawer.Portal>
+    </Drawer.Root>
+  );
+}
+
+/** Corner close button for the centered desktop dialog, which has no grabber row. */
+function DesktopCloseButton({ label, onPress }: { label: string; onPress: () => void }) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      onPress={onPress}
+      className="absolute right-3 top-3 h-8 w-8 items-center justify-center rounded-full bg-white/10 hover:bg-white/20"
+    >
+      <Ionicons name="close" size={18} color="#e4e4e7" />
+    </Pressable>
+  );
+}
+
+export function Sheet({
+  visible,
+  onClose,
+  label,
+  size = "auto",
+  dismissible = true,
+  avoidKeyboard = false,
+  maxWidth = 512,
+  closeLabel,
+  onDismiss,
+  children,
+}: SheetProps) {
+  const { isDesktop } = useSheetMetrics();
+
+  if (isDesktop) {
+    return (
+      <Modal
+        visible={visible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          if (dismissible) onClose();
+        }}
+        onDismiss={onDismiss}
+      >
+        <DialogBackdrop avoidKeyboard={avoidKeyboard}>
+          <Pressable
+            className="absolute inset-0"
+            accessible={false}
+            focusable={false}
+            onPress={dismissible ? onClose : undefined}
+          />
+          <View
+            accessibilityViewIsModal
+            accessibilityLabel={label}
+            className="dialog-panel"
+            style={{ maxWidth, height: size === "tall" ? "85%" : undefined }}
+          >
+            {closeLabel ? <View className="h-3" /> : null}
+            {children}
+            {closeLabel ? <DesktopCloseButton label={closeLabel} onPress={onClose} /> : null}
+          </View>
+        </DialogBackdrop>
+      </Modal>
+    );
+  }
+
+  return (
+    <MobileDrawer
+      open={visible}
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+      onClosed={onDismiss}
+      label={label}
+      size={size}
+      dismissible={dismissible}
+      background="#18181b"
+      closeLabel={closeLabel}
+    >
+      {children}
+    </MobileDrawer>
+  );
+}
+
+export function SheetRouteFrame({ children, onClose, label, maxWidth = 1024, alignEnd, closeLabel }: SheetRouteFrameProps) {
+  const { isDesktop } = useSheetMetrics();
+  const [open, setOpen] = useState(true);
+
+  if (isDesktop) {
+    return (
+      <TallDialog onClose={onClose} alignEnd={alignEnd} maxWidth={maxWidth}>
+        {closeLabel ? <View className="h-3" /> : null}
+        {children}
+        {closeLabel ? <DesktopCloseButton label={closeLabel} onPress={onClose} /> : null}
+      </TallDialog>
+    );
+  }
+
+  return (
+    <MobileDrawer
+      open={open}
+      onOpenChange={setOpen}
+      onClosed={onClose}
+      label={label}
+      size="tall"
+      dismissible
+      background="#09090b"
+      closeLabel={closeLabel}
+    >
+      {children}
+    </MobileDrawer>
+  );
+}

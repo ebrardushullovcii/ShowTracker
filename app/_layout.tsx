@@ -27,6 +27,16 @@ function renderGatedScreen({ children }: PropsWithChildren) {
   return <AuthGate>{children}</AuthGate>;
 }
 
+// Routes presented as drawers over the page that opened them (ADR 0001). SheetRouteFrame draws
+// the drawer, so the route itself is a transparent modal without its own animation. On web the
+// route container is not draggable so it does not compete with the drawer's own gesture.
+const SHEET_ROUTE_OPTIONS = {
+  presentation: "transparentModal" as const,
+  animation: "none" as const,
+  gestureEnabled: false,
+  contentStyle: { backgroundColor: "transparent" },
+};
+
 const SHELL_PATHS = new Set([
   "/home",
   "/discover",
@@ -77,23 +87,9 @@ function RootLayoutContent() {
               <Stack.Protected guard={!isSigningOut}>
                 <Stack.Screen name="(tabs)" />
                 <Stack.Screen name="find" />
-                <Stack.Screen
-                  name="show/[id]"
-                  options={{
-                    presentation: Platform.OS === "ios" ? "modal" : "transparentModal",
-                    contentStyle: {
-                      backgroundColor: Platform.OS === "ios" ? "#09090b" : "transparent",
-                    },
-                  }}
-                />
+                <Stack.Screen name="show/[id]" options={SHEET_ROUTE_OPTIONS} />
               </Stack.Protected>
-              <Stack.Screen
-                name="profile/settings"
-                options={{
-                  presentation: "transparentModal",
-                  contentStyle: { backgroundColor: "transparent" },
-                }}
-              />
+              <Stack.Screen name="profile/settings" options={SHEET_ROUTE_OPTIONS} />
             </Stack>
           </AppErrorBoundary>
         </WatchlistPushProvider>

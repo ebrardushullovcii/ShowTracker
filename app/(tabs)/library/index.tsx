@@ -4,7 +4,6 @@ import {
   Image,
   Platform,
   Pressable,
-  ScrollView,
   Text,
   View,
   useWindowDimensions,
@@ -17,11 +16,8 @@ import { Link, useLocalSearchParams } from "expo-router";
 import { useQuery } from "convex/react";
 import { FlashList } from "@shopify/flash-list";
 import { api } from "@/convex/_generated/api";
-import {
-  ClearFilterChip,
-  DropdownFilterChip,
-  FilterBar,
-} from "@/components/FilterBar";
+import { FilterBar } from "@/components/FilterBar";
+import { FilterControls, type FilterOption } from "@/components/FilterControls";
 import { PageIntro } from "@/components/PageIntro";
 import { ShareButton } from "@/components/sharing/ShareButton";
 import { ShareModal } from "@/components/sharing/ShareModal";
@@ -255,6 +251,12 @@ function LibraryCard({
   return <PosterQuickActions routeId={routeId} tracked>{link}</PosterQuickActions>;
 }
 
+const LIBRARY_YEAR_OPTIONS: FilterOption[] = Array.from({ length: 30 }, (_, index) => {
+  const year = String(new Date().getFullYear() - index);
+  return { value: year, label: year };
+});
+const LIBRARY_RATING_OPTIONS: FilterOption[] = ["8", "7", "6", "5"].map((value) => ({ value, label: `${value}+` }));
+
 export default function LibraryScreen() {
   const params = useLocalSearchParams<{ media?: string | string[] }>();
   const [activeTab, setActiveTab] = useState<LibraryMediaTab>("all");
@@ -264,7 +266,6 @@ export default function LibraryScreen() {
   const [selectedGenres, setSelectedGenres] = useState<string[]>([]);
   const [selectedYear, setSelectedYear] = useState<string>("");
   const [selectedRating, setSelectedRating] = useState<string>("");
-  const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const [visibleCount, setVisibleCount] = useState(8);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const { width } = useWindowDimensions();
@@ -321,6 +322,10 @@ export default function LibraryScreen() {
     });
     return Array.from(genres).sort();
   }, [mediaItems]);
+  const genreFilterOptions = useMemo<FilterOption[]>(
+    () => availableGenres.map((genre) => ({ value: genre, label: genre })),
+    [availableGenres]
+  );
 
   const activeItems = useMemo(() => {
     let items = applyTrackingFilters(mediaItems, {
@@ -373,7 +378,6 @@ export default function LibraryScreen() {
     setSelectedGenres([]);
     setSelectedYear("");
     setSelectedRating("");
-    setOpenDropdown(null);
   };
 
   const hasActiveFilters =
@@ -634,159 +638,22 @@ export default function LibraryScreen() {
                   showScrollAffordance
                 />
 
-                {/* Filter Buttons */}
-                <View className="mb-3">
-                  <View className="flex-row flex-wrap justify-center gap-2">
-                    {/* Genre Button */}
-                    {availableGenres.length > 0 && (
-                      <DropdownFilterChip
-                        onPress={() => setOpenDropdown(openDropdown === "genres" ? null : "genres")}
-                        active={selectedGenres.length > 0}
-                        open={openDropdown === "genres"}
-                        label={selectedGenres.length > 0 ? `${selectedGenres.length} Genre${selectedGenres.length > 1 ? "s" : ""}` : "Genre"}
-                      />
-                    )}
-
-                    {/* Year Button */}
-                    <DropdownFilterChip
-                      onPress={() => setOpenDropdown(openDropdown === "year" ? null : "year")}
-                      active={Boolean(selectedYear)}
-                      open={openDropdown === "year"}
-                      label={selectedYear || "Year"}
-                    />
-
-                    {/* Rating Button */}
-                    <DropdownFilterChip
-                      onPress={() => setOpenDropdown(openDropdown === "rating" ? null : "rating")}
-                      active={Boolean(selectedRating)}
-                      open={openDropdown === "rating"}
-                      label={selectedRating ? `${selectedRating}+` : "Rating"}
-                    />
-
-                    {/* Clear Button */}
-                    {hasActiveFilters && (
-                      <ClearFilterChip onPress={clearFilters} />
-                    )}
-                  </View>
-
-                  {/* Genre Dropdown */}
-                  {openDropdown === "genres" && availableGenres.length > 0 && (
-                    <View className="mt-2 rounded-xl border border-border-default bg-bg-surface p-3">
-                      <Text className="mb-2 text-xs font-bold uppercase text-text-secondary">Select Genres</Text>
-                      <View className="flex-row flex-wrap gap-2">
-                        {availableGenres.map((genre) => (
-                          <Pressable
-                            key={genre}
-                            onPress={() => toggleGenre(genre)}
-                            className={`rounded-full border px-3 py-1.5 ${
-                              selectedGenres.includes(genre)
-                                ? "border-primary bg-primary"
-                                : "border-border-default bg-bg-primary"
-                            }`}
-                          >
-                            <Text className={`text-xs ${selectedGenres.includes(genre) ? "text-white" : "text-text-secondary"}`}>
-                              {genre}
-                            </Text>
-                          </Pressable>
-                        ))}
-                      </View>
-                    </View>
-                  )}
-
-                  {/* Year Dropdown */}
-                  {openDropdown === "year" && (
-                    <View className="mt-2 rounded-xl border border-border-default bg-bg-surface p-3">
-                      <Text className="mb-2 text-xs font-bold uppercase text-text-secondary">Select Year</Text>
-                      <ScrollView horizontal keyboardShouldPersistTaps="handled" showsHorizontalScrollIndicator={false}>
-                        <View className="flex-row gap-2">
-                          <Pressable
-                            onPress={() => { setSelectedYear(""); setOpenDropdown(null); }}
-                            className={`rounded-full border px-4 py-2 ${!selectedYear ? "border-primary bg-primary" : "border-border-default bg-bg-primary"}`}
-                          >
-                            <Text className={`text-sm ${!selectedYear ? "text-white" : "text-text-secondary"}`}>Any</Text>
-                          </Pressable>
-                          {Array.from({ length: 30 }, (_, i) => (new Date().getFullYear() - i).toString()).map((year) => (
-                            <Pressable
-                              key={year}
-                              onPress={() => { setSelectedYear(year); setOpenDropdown(null); }}
-                              className={`rounded-full border px-4 py-2 ${selectedYear === year ? "border-primary bg-primary" : "border-border-default bg-bg-primary"}`}
-                            >
-                              <Text className={`text-sm ${selectedYear === year ? "text-white" : "text-text-secondary"}`}>
-                                {year}
-                              </Text>
-                            </Pressable>
-                          ))}
-                        </View>
-                      </ScrollView>
-                    </View>
-                  )}
-
-                  {/* Rating Dropdown */}
-                  {openDropdown === "rating" && (
-                    <View className="mt-2 rounded-xl border border-border-default bg-bg-surface p-3">
-                      <Text className="mb-2 text-xs font-bold uppercase text-text-secondary">Min Rating</Text>
-                      <View className="flex-row gap-2">
-                        <Pressable
-                          onPress={() => { setSelectedRating(""); setOpenDropdown(null); }}
-                          className={`flex-1 rounded-lg border py-2 ${!selectedRating ? "border-primary bg-primary" : "border-border-default bg-bg-primary"}`}
-                        >
-                          <Text className={`text-center text-sm ${!selectedRating ? "text-white" : "text-text-secondary"}`}>Any</Text>
-                        </Pressable>
-                        {["8", "7", "6", "5"].map((rating) => (
-                          <Pressable
-                            key={rating}
-                            onPress={() => { setSelectedRating(rating); setOpenDropdown(null); }}
-                            className={`flex-1 rounded-lg border py-2 ${selectedRating === rating ? "border-primary bg-primary" : "border-border-default bg-bg-primary"}`}
-                          >
-                            <Text className={`text-center text-sm ${selectedRating === rating ? "text-white" : "text-text-secondary"}`}>
-                              {rating}+
-                            </Text>
-                          </Pressable>
-                        ))}
-                      </View>
-                    </View>
-                  )}
-
-                  {/* Selected Genre Tags */}
-                  {selectedGenres.length > 0 && (
-                    <View className="mt-2 flex-row flex-wrap gap-2">
-                      {selectedGenres.map((genre) => (
-                        <Pressable
-                          key={genre}
-                          onPress={() => toggleGenre(genre)}
-                          className="flex-row items-center gap-1 rounded-full bg-primary px-3 py-1"
-                        >
-                          <Text className="text-xs font-medium text-white">{genre}</Text>
-                          <Text className="text-xs text-white">×</Text>
-                        </Pressable>
-                      ))}
-                    </View>
-                  )}
-
-                  {/* Selected Year & Rating Tags */}
-                  {Boolean(selectedYear || selectedRating) && (
-                    <View className="mt-2 flex-row flex-wrap gap-2">
-                      {Boolean(selectedYear) && (
-                        <Pressable
-                          onPress={() => setSelectedYear("")}
-                          className="flex-row items-center gap-1 rounded-full bg-primary px-3 py-1"
-                        >
-                          <Text className="text-xs font-medium text-white">{selectedYear}</Text>
-                          <Text className="text-xs text-white">×</Text>
-                        </Pressable>
-                      )}
-                      {Boolean(selectedRating) && (
-                        <Pressable
-                          onPress={() => setSelectedRating("")}
-                          className="flex-row items-center gap-1 rounded-full bg-primary px-3 py-1"
-                        >
-                          <Text className="text-xs font-medium text-white">{selectedRating}+ ⭐</Text>
-                          <Text className="text-xs text-white">×</Text>
-                        </Pressable>
-                      )}
-                    </View>
-                  )}
-                </View>
+                <FilterControls
+                  className="mb-3"
+                  genres={genreFilterOptions}
+                  selectedGenres={selectedGenres}
+                  onToggleGenre={toggleGenre}
+                  onClearGenres={() => setSelectedGenres([])}
+                  years={LIBRARY_YEAR_OPTIONS}
+                  selectedYear={selectedYear}
+                  onSelectYear={setSelectedYear}
+                  ratings={LIBRARY_RATING_OPTIONS}
+                  selectedRating={selectedRating}
+                  onSelectRating={setSelectedRating}
+                  hasActiveFilters={hasActiveFilters}
+                  onClearAll={clearFilters}
+                  resultLabel={`${activeItems.length} ${activeItems.length === 1 ? "title" : "titles"}`}
+                />
 
                 {showLibraryLoading ? (
                   <View className="items-center gap-2 rounded-xl border-2 border-border-default bg-bg-surface py-8">

@@ -1,4 +1,5 @@
-import { DialogBackdrop, TallDialog, useDrawerBottomInset } from "@/components/DialogBackdrop";
+import { DialogBackdrop, useDrawerBottomInset } from "@/components/DialogBackdrop";
+import { SheetRouteFrame, SheetScrollView } from "@/components/Sheet";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Linking,
@@ -16,7 +17,7 @@ import { api } from "@/convex/_generated/api";
 import { useSignOut } from "@/components/SignOutProvider";
 import { PAGE_SCROLL_CONTENT_STYLE } from "@/constants/layout";
 import { CardTopGlow } from "@/components/CardTopGlow";
-import { OverlayHeader } from "@/components/OverlayHeader";
+import { SheetHeader } from "@/components/SheetHeader";
 import { BrandLoader } from "@/components/BrandLoader";
 import { WatchlistPushPreference } from "@/components/WatchlistPush";
 import { useAuthActions } from "@convex-dev/auth/react";
@@ -458,9 +459,9 @@ export default function ProfileSettingsScreen() {
   );
 
   return (
-    <TallDialog onClose={close} maxWidth={512}>
+    <SheetRouteFrame onClose={close} label="Profile controls" maxWidth={512} closeLabel="Close settings">
       <View className="min-h-0 flex-1">
-        <OverlayHeader title="Profile Controls" onClose={close} closeAccessibilityLabel="Close settings" />
+        <SheetHeader title="Profile Controls" />
 
         {notice || error ? (
           <View className="gap-1 border-b border-border-default px-page-gutter py-2">
@@ -469,7 +470,7 @@ export default function ProfileSettingsScreen() {
           </View>
         ) : null}
 
-        <ScrollView
+        <SheetScrollView
           className="flex-1"
           contentContainerClassName="px-page-gutter pt-5"
           contentContainerStyle={PAGE_SCROLL_CONTENT_STYLE}
@@ -596,7 +597,7 @@ export default function ProfileSettingsScreen() {
             </View>
           </View>
           {drawerBottomInset > 0 ? <View style={{ height: drawerBottomInset }} /> : null}
-        </ScrollView>
+        </SheetScrollView>
         <Modal visible={showSignOutConfirm} transparent animationType="fade" onRequestClose={closeSignOut}>
           <DialogBackdrop>
             <Pressable className="absolute inset-0" focusable={false} onPress={closeSignOut} />
@@ -656,6 +657,6 @@ export default function ProfileSettingsScreen() {
           </DialogBackdrop>
         </Modal>
       </View>
-    </TallDialog>
+    </SheetRouteFrame>
   );
 }

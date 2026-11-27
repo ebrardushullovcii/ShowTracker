@@ -34,6 +34,9 @@ type DropdownFilterChipProps = {
   active?: boolean;
   open?: boolean;
   onPress: () => void;
+  /** When set, an active chip shows a clear button in place of its chevron. */
+  onClear?: () => void;
+  clearAccessibilityLabel?: string;
   className?: string;
 };
 
@@ -105,7 +108,7 @@ export function FilterBar<T extends string>({
                 onPress={() => onValueChange?.(option.value)}
                 accessibilityRole="button"
                 accessibilityState={{ selected: isActive }}
-                className={`${compact ? "min-h-8 px-2.5 py-1.5" : "min-h-9 px-3 py-2"} flex-row items-center gap-1.5 rounded-full border ${
+                className={`${compact ? "min-h-10 px-3.5 py-2" : "min-h-11 px-4 py-2"} flex-row items-center gap-2 rounded-full border ${
                   isActive
                     ? "border-primary/70 bg-primary/15"
                     : "border-border-default bg-bg-surface"
@@ -115,7 +118,7 @@ export function FilterBar<T extends string>({
                 }
               >
                 <Text
-                  className={`${compact ? "text-[10px]" : "text-[11px]"} font-black uppercase tracking-wide ${
+                  className={`${compact ? "text-[11px]" : "text-xs"} font-black uppercase tracking-wide ${
                     isActive ? "text-text-primary" : "text-text-secondary"
                   }`}
                 >
@@ -123,14 +126,14 @@ export function FilterBar<T extends string>({
                 </Text>
                 {typeof option.count === "number" ? (
                   <View
-                    className={`min-w-5 items-center rounded-full border px-1.5 py-0.5 ${
+                    className={`min-w-6 items-center rounded-full border px-2 py-0.5 ${
                       isActive
                         ? "border-primary/20 bg-primary/25"
                         : "border-border-bright bg-bg-elevated"
                     }`}
                   >
                     <Text
-                      className={`text-[10px] font-black ${
+                      className={`text-[11px] font-black ${
                         isActive ? "text-primary" : "text-text-secondary"
                       }`}
                     >
@@ -180,33 +183,50 @@ export function DropdownFilterChip({
   active = false,
   open = false,
   onPress,
+  onClear,
+  clearAccessibilityLabel,
   className,
 }: DropdownFilterChipProps) {
+  const showClear = active && onClear;
   return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityState={{ expanded: open, selected: active }}
-      className={`min-h-9 flex-row items-center gap-1.5 rounded-full border px-3 py-2 ${
-        active
-          ? "border-primary/70 bg-primary/15"
-          : "border-border-default bg-bg-surface"
+    <View
+      className={`min-h-11 flex-row items-center rounded-full border ${
+        active ? "border-primary/70 bg-primary/15" : "border-border-default bg-bg-surface"
       } ${className ?? ""}`.trim()}
-      style={({ pressed }) => (pressed ? { opacity: 0.84 } : undefined)}
     >
-      <Text
-        className={`text-[11px] font-black uppercase tracking-wide ${
-          active ? "text-text-primary" : "text-text-secondary"
-        }`}
+      <Pressable
+        onPress={onPress}
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open, selected: active }}
+        accessibilityHint="Opens filter options"
+        className={`min-h-11 flex-row items-center gap-1.5 py-2 pl-4 ${showClear ? "pr-1" : "pr-3.5"}`}
+        style={({ pressed }) => (pressed ? { opacity: 0.84 } : undefined)}
       >
-        {label}
-      </Text>
-      <Ionicons
-        name={open ? "chevron-up" : "chevron-down"}
-        size={14}
-        color={active ? "#ef4444" : "#a1a1aa"}
-      />
-    </Pressable>
+        <Text
+          numberOfLines={1}
+          className={`max-w-[160px] text-xs font-black uppercase tracking-wide ${
+            active ? "text-text-primary" : "text-text-secondary"
+          }`}
+        >
+          {label}
+        </Text>
+        {showClear ? null : (
+          <Ionicons name="chevron-down" size={16} color={active ? "#ef4444" : "#a1a1aa"} />
+        )}
+      </Pressable>
+      {showClear ? (
+        <Pressable
+          onPress={onClear}
+          accessibilityRole="button"
+          accessibilityLabel={clearAccessibilityLabel ?? `Clear ${label}`}
+          hitSlop={6}
+          className="mr-1.5 h-8 w-8 items-center justify-center rounded-full bg-primary/25"
+          style={({ pressed }) => (pressed ? { opacity: 0.7 } : undefined)}
+        >
+          <Ionicons name="close" size={16} color="#fafafa" />
+        </Pressable>
+      ) : null}
+    </View>
   );
 }
 
@@ -215,11 +235,11 @@ export function ClearFilterChip({ label = "Clear", onPress }: ClearFilterChipPro
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
-      className="min-h-9 flex-row items-center gap-1.5 rounded-full border border-border-default bg-bg-surface px-3 py-2"
+      className="min-h-11 flex-row items-center gap-1.5 rounded-full border border-border-default bg-bg-surface px-4 py-2"
       style={({ pressed }) => (pressed ? { opacity: 0.84 } : undefined)}
     >
-      <Ionicons name="close" size={13} color="#a1a1aa" />
-      <Text className="text-[11px] font-black uppercase tracking-wide text-text-secondary">
+      <Ionicons name="close" size={16} color="#a1a1aa" />
+      <Text className="text-xs font-black uppercase tracking-wide text-text-secondary">
         {label}
       </Text>
     </Pressable>

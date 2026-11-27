@@ -1,13 +1,6 @@
-import { DialogBackdrop } from "@/components/DialogBackdrop";
-import { HeaderIconButton } from "@/components/HeaderIconButton";
 import { useState } from "react";
-import {
-  Modal,
-  Pressable,
-  ScrollView,
-  Text,
-  View,
-} from "react-native";
+import { Pressable, Text, View } from "react-native";
+import { Sheet, SheetScrollView } from "@/components/Sheet";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
@@ -107,113 +100,101 @@ export function AddToListModal({ visible, onClose, show }: AddToListModalProps) 
   const isLoading = userLists === undefined || showConvexId === undefined;
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="fade"
-      onRequestClose={onClose}
-    >
-      <DialogBackdrop>
-        <Pressable className="absolute inset-0" onPress={onClose} />
-
-        <View className="dialog-panel max-w-dialog">
-          {/* Header */}
-          <View className="dialog-header flex-row items-center gap-3">
-            <HeaderIconButton icon="close" accessibilityLabel="Close add to list" onPress={onClose} />
-            <View className="min-w-0 flex-1">
-              <Text className="text-xs font-semibold uppercase tracking-wide text-text-secondary">
-                Add to List
-              </Text>
-              <Text className="text-lg font-black text-text-primary" numberOfLines={1}>
-                {show?.title || "Select a list"}
-              </Text>
-            </View>
-          </View>
-
-          {/* Content */}
-          <ScrollView
-            className="max-h-[60vh]"
-            showsVerticalScrollIndicator={false}
-          >
-            <View className="gap-2 p-dialog-gutter">
-              {isLoading ? (
-                <View className="items-center py-8">
-                  <BrandLoader compact />
-                  <Text className="mt-2 text-sm text-text-secondary">Loading your lists...</Text>
-                </View>
-              ) : userLists?.length === 0 ? (
-                <View className="items-center py-8">
-                  <Text className="text-4xl mb-2">📋</Text>
-                  <Text className="text-sm font-medium text-text-primary">No lists yet</Text>
-                  <Text className="text-xs text-text-secondary mt-1 text-center">
-                    Create a list first to add shows to it
-                  </Text>
-                </View>
-              ) : (
-                userLists?.map((list) => {
-                  const isInList = listsContainingShow.has(list.id);
-                  const isProcessing = isAdding === list.id || isRemoving === list.id;
-
-                  return (
-                    <Pressable
-                      key={list.id}
-                      onPress={() => handleToggleList(list.id)}
-                      disabled={isProcessing}
-                      className={`flex-row items-center justify-between rounded-xl border p-4 ${
-                        isInList
-                          ? "border-success/50 bg-success/10"
-                          : "border-border-default bg-bg-base"
-                      }`}
-                      style={({ pressed }) => ({
-                        opacity: pressed || isProcessing ? 0.7 : 1,
-                      })}
-                    >
-                      <View className="flex-1">
-                        <Text
-                          className={`font-semibold ${
-                            isInList ? "text-success" : "text-text-primary"
-                          }`}
-                        >
-                          {list.name}
-                        </Text>
-                        <Text className="text-xs text-text-secondary mt-0.5">
-                          {list.itemCount} {list.itemCount === 1 ? "show" : "shows"}
-                        </Text>
-                      </View>
-
-                      {isProcessing ? (
-                        <BrandLoader micro />
-                      ) : isInList ? (
-                        <View className="h-6 w-6 items-center justify-center rounded-full bg-success">
-                          <Ionicons name="checkmark" size={14} color="#fff" />
-                        </View>
-                      ) : (
-                        <Ionicons name="add-circle-outline" size={24} color="#a1a1aa" />
-                      )}
-                    </Pressable>
-                  );
-                })
-              )}
-
-              {error && (
-                <View className="mt-2 rounded-xl bg-primary/10 p-3">
-                  <Text className="text-sm text-primary">{error}</Text>
-                </View>
-              )}
-            </View>
-          </ScrollView>
-
-          {/* Footer */}
-          <View className="border-t border-border-default p-4">
-            <Pressable
-              onPress={onClose}
-              className="items-center justify-center rounded-xl bg-bg-elevated py-3"
-            >
-              <Text className="font-semibold text-text-primary">Done</Text>
-            </Pressable>
-          </View>
+    <Sheet visible={visible} onClose={onClose} label="Add to list" closeLabel="Close add to list">
+      {/* Header */}
+      <View className="sheet-header flex-row items-center gap-3">
+        <View className="min-w-0 flex-1">
+          <Text className="text-xs font-semibold uppercase tracking-wide text-text-secondary">
+            Add to List
+          </Text>
+          <Text className="text-lg font-black text-text-primary" numberOfLines={1}>
+            {show?.title || "Select a list"}
+          </Text>
         </View>
-      </DialogBackdrop>
-    </Modal>
+      </View>
+
+      {/* Content */}
+      <SheetScrollView
+        className="shrink"
+        showsVerticalScrollIndicator={false}
+      >
+        <View className="gap-2 p-dialog-gutter">
+          {isLoading ? (
+            <View className="items-center py-8">
+              <BrandLoader compact />
+              <Text className="mt-2 text-sm text-text-secondary">Loading your lists...</Text>
+            </View>
+          ) : userLists?.length === 0 ? (
+            <View className="items-center py-8">
+              <Text className="text-4xl mb-2">📋</Text>
+              <Text className="text-sm font-medium text-text-primary">No lists yet</Text>
+              <Text className="text-xs text-text-secondary mt-1 text-center">
+                Create a list first to add shows to it
+              </Text>
+            </View>
+          ) : (
+            userLists?.map((list) => {
+              const isInList = listsContainingShow.has(list.id);
+              const isProcessing = isAdding === list.id || isRemoving === list.id;
+
+              return (
+                <Pressable
+                  key={list.id}
+                  onPress={() => handleToggleList(list.id)}
+                  disabled={isProcessing}
+                  className={`flex-row items-center justify-between rounded-xl border p-4 ${
+                    isInList
+                      ? "border-success/50 bg-success/10"
+                      : "border-border-default bg-bg-base"
+                  }`}
+                  style={({ pressed }) => ({
+                    opacity: pressed || isProcessing ? 0.7 : 1,
+                  })}
+                >
+                  <View className="flex-1">
+                    <Text
+                      className={`font-semibold ${
+                        isInList ? "text-success" : "text-text-primary"
+                      }`}
+                    >
+                      {list.name}
+                    </Text>
+                    <Text className="text-xs text-text-secondary mt-0.5">
+                      {list.itemCount} {list.itemCount === 1 ? "show" : "shows"}
+                    </Text>
+                  </View>
+
+                  {isProcessing ? (
+                    <BrandLoader micro />
+                  ) : isInList ? (
+                    <View className="h-6 w-6 items-center justify-center rounded-full bg-success">
+                      <Ionicons name="checkmark" size={14} color="#fff" />
+                    </View>
+                  ) : (
+                    <Ionicons name="add-circle-outline" size={24} color="#a1a1aa" />
+                  )}
+                </Pressable>
+              );
+            })
+          )}
+
+          {error && (
+            <View className="mt-2 rounded-xl bg-primary/10 p-3">
+              <Text className="text-sm text-primary">{error}</Text>
+            </View>
+          )}
+        </View>
+      </SheetScrollView>
+
+      {/* Footer */}
+      <View className="border-t border-border-default p-4">
+        <Pressable
+          onPress={onClose}
+          className="items-center justify-center rounded-xl bg-bg-elevated py-3"
+        >
+          <Text className="font-semibold text-text-primary">Done</Text>
+        </Pressable>
+      </View>
+    </Sheet>
   );
 }
