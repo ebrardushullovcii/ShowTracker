@@ -9,6 +9,7 @@ import {
   useRef,
   useState,
   type ReactNode,
+  type RefObject,
 } from "react";
 import {
   BackHandler,
@@ -20,6 +21,7 @@ import {
   ScrollView,
   StyleSheet,
   View,
+  type LayoutChangeEvent,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
   type ScrollViewProps,
@@ -64,6 +66,10 @@ type SheetGestureState = {
   scrollGesture: NativeGesture;
   scrollY: SharedValue<number>;
   touchingScroll: SharedValue<boolean>;
+  /** Vertical extent of the sheet's scroll view inside the sheet frame. */
+  scrollTop: SharedValue<number>;
+  scrollBottom: SharedValue<number>;
+  frameRef: RefObject<View | null>;
   translateY: SharedValue<number>;
   /** Set when only the grabber and SheetDragHandle regions drag the sheet. */
   handlePan: PanGesture | null;
@@ -82,7 +88,7 @@ export function useSheetDismiss(fallback: () => void) {
  * so a sheet closes the same way a native iOS sheet does.
  */
 export const SheetScrollView = forwardRef<ScrollView, ScrollViewProps>(function SheetScrollView(
-  { onScroll, scrollEventThrottle, ...props },
+  { onScroll, onLayout, scrollEventThrottle, ...props },
   forwardedRef,
 ) {
   const sheet = useContext(SheetGestureContext);
@@ -90,13 +96,13 @@ export const SheetScrollView = forwardRef<ScrollView, ScrollViewProps>(function 
   useImperativeHandle(forwardedRef, () => scrollRef.current as ScrollView);
 
   // A remounted list starts at the top, so the sheet must not keep the old offset.
+  const sheetScrollY = sheet?.scrollY;
   useEffect(() => {
-    if (!sheet) return;
-    const { scrollY } = sheet;
+    if (!sheetScrollY) return;
     return () => {
-      scrollY.value = 0;
+      sheetScrollY.value = 0;
     };
-  }, [sheet]);
+  }, [sheetScrollY]);
 
   const handleScroll = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -113,10 +119,26 @@ export const SheetScrollView = forwardRef<ScrollView, ScrollViewProps>(function 
     [onScroll, sheet],
   );
 
+  const handleLayout = useCallback(
+    (event: LayoutChangeEvent) => {
+      const frame = sheet?.frameRef.current;
+      const host = scrollRef.current?.getNativeScrollRef();
+      if (sheet && frame && host) {
+        host.measureLayout(frame, (_x, y, _width, height) => {
+          sheet.scrollTop.value = y;
+          sheet.scrollBottom.value = y + height;
+        });
+      }
+      onLayout?.(event);
+    },
+    [onLayout, sheet],
+  );
+
   const scrollView = (
     <ScrollView
       ref={scrollRef}
       {...props}
+      onLayout={handleLayout}
       bounces={sheet ? false : props.bounces}
       overScrollMode={sheet ? "never" : props.overScrollMode}
       onScroll={handleScroll}
@@ -217,12 +239,23 @@ function SheetBody({
   const translateY = useSharedValue(offscreen);
   const scrollY = useSharedValue(0);
   const touchingScroll = useSharedValue(false);
+  const scrollTop = useSharedValue(0);
+  const scrollBottom = useSharedValue(0);
+  const frameRef = useRef<View>(null);
   const dragAnchor = useSharedValue(0);
   const closing = useSharedValue(false);
+  const startedAtTop = useSharedValue(true);
   const isPresented = useSharedValue(presented);
   const presentedRef = useRef(presented);
   presentedRef.current = presented;
   const routeClosingRef = useRef(false);
+  // Route drawers stop taking input once they start leaving, so nothing can interrupt the exit.
+  const [exiting, setExiting] = useState(false);
+  const interactive = presented && !exiting;
+  // Parents usually pass an inline onClose; a ref keeps the gesture and context objects stable.
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+  const closeFromRef = useCallback(() => onCloseRef.current(), []);
   const settleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const settle = useCallback(() => {
@@ -264,18 +297,19 @@ function SheetBody({
       if (routeClosingRef.current) return;
       routeClosingRef.current = true;
       isPresented.value = false;
-      hide(onClose);
+      setExiting(true);
+      hide(closeFromRef);
       return;
     }
     if (!presentedRef.current) return;
-    onClose();
+    onCloseRef.current();
     // A parent that refuses to close (for example while saving) leaves the sheet open.
     if (settleTimerRef.current) clearTimeout(settleTimerRef.current);
     settleTimerRef.current = setTimeout(() => {
       settleTimerRef.current = null;
       if (presentedRef.current) settle();
     }, 80);
-  }, [closeAfterAnimation, dismissible, hide, isPresented, onClose, settle]);
+  }, [closeAfterAnimation, closeFromRef, dismissible, hide, isPresented, settle]);
 
   // Android back on a route drawer animates it away like the other close paths.
   useEffect(() => {
@@ -289,30 +323,31 @@ function SheetBody({
 
   const scrollGesture = useMemo(
     () =>
-      Gesture.Native()
-        .onBegin(() => {
-          touchingScroll.value = true;
-        })
-        .onFinalize(() => {
-          touchingScroll.value = false;
-        }),
-    [touchingScroll],
+      // The scroll view only joins the pan so both run at once. Whether a touch started inside it
+      // is decided from its measured frame, because its native gesture begins after the pan does.
+      Gesture.Native(),
+    [],
   );
 
   const makePan = useCallback(
     () =>
       Gesture.Pan()
         // A closing sheet ignores touches, so a drag cannot interrupt its exit animation.
-        .enabled(dismissible && presented)
+        .enabled(dismissible && interactive)
         // Only a downward drag can start moving the sheet; upward drags are scrolls.
         .activeOffsetY(8)
         .failOffsetX([-16, 16])
         .simultaneousWithExternalGesture(scrollGesture)
+        .onBegin((event) => {
+          touchingScroll.value = event.y >= scrollTop.value && event.y <= scrollBottom.value;
+        })
         .onStart(() => {
           dragAnchor.value = 0;
           closing.value = false;
+          startedAtTop.value = !touchingScroll.value || scrollY.value <= 0.5;
         })
         .onUpdate((event) => {
+          if (!isPresented.value) return;
           // Inside scrolled content, the drag scrolls first; the sheet follows once the top is reached.
           if (touchingScroll.value && scrollY.value > 0.5 && translateY.value <= 0) {
             dragAnchor.value = event.translationY;
@@ -321,9 +356,11 @@ function SheetBody({
           translateY.value = Math.max(0, event.translationY - dragAnchor.value);
         })
         .onEnd((event) => {
+          // A fling that started mid-content stops at the top, like a native sheet; only a
+          // deliberate pull past the threshold closes the sheet then.
           const shouldClose =
             translateY.value > DISMISS_DISTANCE ||
-            (translateY.value > 12 && event.velocityY > DISMISS_VELOCITY);
+            (startedAtTop.value && translateY.value > 12 && event.velocityY > DISMISS_VELOCITY);
           if (shouldClose) {
             closing.value = true;
             runOnJS(requestClose)();
@@ -335,7 +372,7 @@ function SheetBody({
             translateY.value = withSpring(0, SETTLE_SPRING);
           }
         }),
-    [closing, dismissible, dragAnchor, isPresented, presented, requestClose, scrollGesture, scrollY, touchingScroll, translateY],
+    [closing, dismissible, dragAnchor, interactive, scrollBottom, scrollTop, startedAtTop, isPresented, requestClose, scrollGesture, scrollY, touchingScroll, translateY],
   );
   // A gesture object attaches to one detector, so the optional drag handle gets its own.
   const pan = useMemo(() => makePan(), [makePan]);
@@ -349,13 +386,22 @@ function SheetBody({
   }));
 
   const gestureState = useMemo(
-    () => ({ scrollGesture, scrollY, touchingScroll, translateY, handlePan: contentDraggable ? null : handlePan }),
-    [contentDraggable, handlePan, scrollGesture, scrollY, touchingScroll, translateY],
+    () => ({
+      scrollGesture,
+      scrollY,
+      touchingScroll,
+      scrollTop,
+      scrollBottom,
+      frameRef,
+      translateY,
+      handlePan: contentDraggable ? null : handlePan,
+    }),
+    [contentDraggable, handlePan, scrollBottom, scrollGesture, scrollTop, scrollY, touchingScroll, translateY],
   );
 
   const surface = (
     <Animated.View
-      pointerEvents={presented ? "auto" : "none"}
+      pointerEvents={interactive ? "auto" : "none"}
       accessibilityViewIsModal
       accessibilityLabel={label}
       onAccessibilityEscape={requestClose}
@@ -372,22 +418,25 @@ function SheetBody({
         sheetStyle,
       ]}
     >
-      {contentDraggable ? (
-        <SheetGrabber closeLabel={closeLabel} onClose={requestClose} />
-      ) : (
-        <GestureDetector gesture={pan}>
-          <View>
-            <SheetGrabber closeLabel={closeLabel} onClose={requestClose} />
-          </View>
-        </GestureDetector>
-      )}
-      <SheetDepthContext.Provider value={depth + 1}>
-        <SheetDismissContext.Provider value={requestClose}>
-          <SheetGestureContext.Provider value={gestureState}>
-            <View style={[styles.content, { flexGrow: size === "tall" ? 1 : 0 }]}>{children}</View>
-          </SheetGestureContext.Provider>
-        </SheetDismissContext.Provider>
-      </SheetDepthContext.Provider>
+      {/* Starts at the surface's top edge, so pan coordinates and measured scroll frames agree. */}
+      <View ref={frameRef} collapsable={false} style={[styles.content, { flexGrow: size === "tall" ? 1 : 0 }]}>
+        {contentDraggable ? (
+          <SheetGrabber closeLabel={closeLabel} onClose={requestClose} />
+        ) : (
+          <GestureDetector gesture={pan}>
+            <View>
+              <SheetGrabber closeLabel={closeLabel} onClose={requestClose} />
+            </View>
+          </GestureDetector>
+        )}
+        <SheetDepthContext.Provider value={depth + 1}>
+          <SheetDismissContext.Provider value={requestClose}>
+            <SheetGestureContext.Provider value={gestureState}>
+              <View style={[styles.content, { flexGrow: size === "tall" ? 1 : 0 }]}>{children}</View>
+            </SheetGestureContext.Provider>
+          </SheetDismissContext.Provider>
+        </SheetDepthContext.Provider>
+      </View>
     </Animated.View>
   );
 

@@ -180,6 +180,8 @@ function MobileDrawer({
             right: 0,
             bottom: 0,
             zIndex: layer + 1,
+            // vaul leaves closed content clickable while it slides away.
+            pointerEvents: open ? "auto" : "none",
             display: "flex",
             flexDirection: "column",
             // The app's global `body > div { min-height: 100% }` would otherwise stretch the portal.
