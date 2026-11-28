@@ -4,11 +4,11 @@ ShowTracker is a fast, minimal, open source tracker for shows, anime, and movies
 
 ## How to work
 
-- Treat a bug report as a request to fix and ship. Use the live URL or screenshots when given, make the smallest correct change, and verify the result in production. Audit-only, read-only and local-only requests keep their stated limits: don't ship from them.
+- **Explicit project exception to global commit/push approval:** treat a bug report as a request to fix and ship. Use the live URL or screenshots when given, make the smallest correct change, and verify the result in production. Audit-only, read-only and local-only requests keep their stated limits: don't ship from them.
 - Delivery: branch (`feat/`, `fix/`, or `docs/`), validate, commit, push, PR, merge to `main` once checks pass. Netlify deploys the web app from `main`. Run `npx convex deploy --yes` when backend behavior changed. When schedule-confidence is involved, sync and run the VPS (commands in `docs/SCHEDULE_CONFIDENCE.md`). Then test the live app.
 - Never push directly to `main`. Follow-ups to an open PR stay on that PR's branch.
 - Local Expo and Convex servers are fine for iteration, but final verification of a production-intended change uses the live app against production Convex.
-- Browser work uses the built-in Browser or Chrome tooling of whichever agent you are running in; prefer Chrome/CDP for console, network, DOM/CSS, and DevTools-level debugging. Do not install or invoke standalone browser-automation frameworks unless the user asks. The `npm run ui:inspect` wrappers are allowed.
+- Prefer Chrome/CDP for console, network, DOM/CSS, and DevTools debugging; do not install standalone browser-automation frameworks unless asked (`npm run ui:inspect` wrappers are allowed).
 - Never commit API keys, tokens, credentials, or machine connection details. Never store images in Convex; store external CDN URLs.
 - Do not recreate removed project skills, skill locks, or generated guidance (ADR 0061).
 
